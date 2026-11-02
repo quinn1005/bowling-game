@@ -1,0 +1,12 @@
+{
+  "name": "gutter-kings",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Physics-based bowling roguelike (browser build).",
+  "scripts": {
+    "serve": "python3 -m http.server 8080 --directory game",
+    "test": "node --test tests/unit.test.js",
+    "bot": "node tests/bot.js 30",
+    "e2e": "node tests/e2e.js && node tests/alleys.e2e.js"
+  }
+}

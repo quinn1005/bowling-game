@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#140e16">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Gutter Kings: a physics bowling roguelike. Hit the target score, buy balls and charms that rewrite the rules.">
+<title>Gutter Kings</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&family=Silkscreen:wght@400;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <div style="min-width:0">
+      <div class="lbl" id="alleyLbl">Lucky Strike Lanes</div>
+      <div class="round" id="round">Qualifier</div>
+    </div>
+    <div class="scorewrap">
+      <div class="lbl" id="target">Target 600</div>
+      <div class="score" id="score">0</div>
+    </div>
+    <div class="bar" id="bar"><i></i></div>
+    <div class="meta">
+      <span class="lbl" id="frameLbl">Frame 1 of 5 · Roll 1</span>
+      <span class="grow"></span>
+      <span class="pill rr" id="rrLbl" title="Re-racks left">↻ 2</span>
+      <span class="pill money" id="money">$4</span>
+      <button class="iconbtn" id="menuBtn" type="button" aria-label="Menu">Menu</button>
+    </div>
+  </header>
+
+  <div class="tally" aria-live="polite">
+    <div class="shot" id="shot">Line up your shot</div>
+    <div class="box chips" id="chipsBox"><small>Chips</small><b id="chips">0</b></div>
+    <span class="x">×</span>
+    <div class="box mult" id="multBox"><small>Mult</small><b id="mult">–</b></div>
+    <span class="x">=</span>
+    <div class="box eq" id="eqBox"><small>Frame</small><b id="fscore">–</b></div>
+  </div>
+
+  <div class="charms" id="charms" role="list" aria-label="Charms"></div>
+
+  <div class="stage" id="stage">
+    <div class="lanebox" id="lanebox">
+      <canvas id="lane" aria-label="Bowling lane. Drag sideways to line up, flick upward to throw, curve the flick to hook."></canvas>
+      <div class="hint" id="hint" hidden><b>Drag sideways</b> to line up<br><b>Flick up</b> to throw · <b>curve it</b> to hook</div>
+      <div class="banner" id="banner" hidden></div>
+      <div class="toast" id="toast" hidden></div>
+      <div class="callbar" id="callbar" hidden>
+        <div class="lbl" style="color:var(--mult)">The League Secretary: call your shot</div>
+        <div class="row">
+          <button class="btn small" type="button" data-call="strike">Strike</button>
+          <button class="btn small" type="button" data-call="spare">Spare</button>
+          <button class="btn small alt" type="button" data-call="open">Open</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dock">
+    <div class="slots" id="bag" role="group" aria-label="Ball bag"></div>
+    <div class="slots" id="cons" role="group" aria-label="Consumables"></div>
+    <button class="rerack" id="rerackBtn" type="button" title="Reset all pins and take your first roll again">Re-<br>rack</button>
+    <div class="rule" id="rule"></div>
+  </div>
+
+  <div class="card" id="card" aria-label="Scorecard"></div>
+
+  <div class="layer" id="layer" hidden><div class="inner" id="layerInner"></div></div>
+  <div class="layer" id="modal" hidden style="z-index:30"><div class="inner" id="modalInner"></div></div>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/data.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/scoring.js"></script>
+<script src="js/run.js"></script>
+<script src="js/frame.js"></script>
+<script src="js/audio.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "name": "Gutter Kings",
+  "short_name": "Gutter Kings",
+  "description": "A physics bowling roguelike.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#140e16",
+  "theme_color": "#140e16",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
