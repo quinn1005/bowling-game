@@ -1,0 +1,30 @@
+name: Sync release notes
+
+# Rewrites the notes of every existing release from CHANGELOG.md.
+on:
+  push:
+    paths: ['CHANGELOG.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for v in $(grep -oP '^## v\K[0-9.]+' CHANGELOG.md); do
+            awk -v v="$v" '$0 == "## v" v {f=1; next} /^## v/ {f=0} f' CHANGELOG.md > notes.md
+            if gh release view "v$v" --repo "${{ github.repository }}" > /dev/null 2>&1; then
+              gh release edit "v$v" --repo "${{ github.repository }}" --title "Gutter Kings v$v" --notes-file notes.md
+              echo "Updated v$v"
+            else
+              echo "No release for v$v, skipping"
+            fi
+          done

@@ -1,0 +1,9 @@
+{
+  "appId": "com.gutterkings.game",
+  "appName": "Gutter Kings",
+  "webDir": "game",
+  "backgroundColor": "#140e16",
+  "android": {
+    "backgroundColor": "#140e16"
+  }
+}

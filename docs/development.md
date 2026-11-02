@@ -19,6 +19,10 @@ What the game has:
 - Points × Mult scoring (the design doc's "Chips" are called Points in game) animated step by step; charms fire left to right.
 - Seeded runs (seed code on the end screen), daily run, run save/continue, meta stats, procedural WebAudio.
 
+## Android build
+
+Same setup as Neon Bastion (`quinn1005/Roguelike-App`): Capacitor wraps `game/` (`capacitor.config.json`), and `.github/workflows/build-apk.yml` builds a portrait, fullscreen debug APK on every push, signed with `keys/debug.keystore`, and publishes it as a GitHub Release `v<VERSION>`. Bump `GK.VERSION` in `game/js/version.js` and `package.json`, and add a `CHANGELOG.md` section (used as the release notes), for every release. Icons and splash come from `resources/`.
+
 ## Code layout (`game/js`, all attach to the global `GK`)
 
 - `core.js` constants, projection, seeded RNG (`GK.stream(seed, tag)` gives independent streams).

@@ -172,7 +172,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         <button class="btn alt" data-a="daily">Daily run${done ? ' · best ' + esc(done) : ''}</button>
         <div class="row2"><button class="btn alt small" data-a="how">How to play</button><button class="btn alt small" data-a="sound">${GK.sfx.muted ? 'Sound off' : 'Sound on'}</button></div>
       </div>
-      <p class="dim">Runs ${meta.runs} · Wins ${meta.wins} · Best alley ${meta.bestAlley ? (meta.bestAlley > 8 ? 'Champion' : meta.bestAlley) : '–'} · Best frame ${fmt(meta.bestFrame)}</p>
+      <p class="dim">Runs ${meta.runs} · Wins ${meta.wins} · Best alley ${meta.bestAlley ? (meta.bestAlley > 8 ? 'Champion' : meta.bestAlley) : '–'} · Best frame ${fmt(meta.bestFrame)}${GK.VERSION ? ' · v' + GK.VERSION : ''}</p>
     </div>`, r => UI.on(r, '[data-a]', el => h[el.dataset.a](el)));
   };
 

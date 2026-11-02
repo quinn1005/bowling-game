@@ -1,0 +1,110 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: ['**']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Read version
+        id: ver
+        run: |
+          VERSION=$(sed -n "s/.*VERSION = '\(.*\)'.*/\1/p" game/js/version.js)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Building version $VERSION (code ${{ github.run_number }})"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Create Android project
+        run: npx cap add android
+
+      - name: Generate icons and splash screens
+        run: npx @capacitor/assets generate --android --iconBackgroundColor '#140e16' --iconBackgroundColorDark '#140e16' --splashBackgroundColor '#140e16' --splashBackgroundColorDark '#140e16'
+
+      - name: Portrait + fullscreen
+        run: |
+          sed -i 's/<activity/<activity android:screenOrientation="sensorPortrait"/' android/app/src/main/AndroidManifest.xml
+          sed -i 's#<item name="windowNoTitle">true</item>#<item name="windowNoTitle">true</item>\n        <item name="android:windowFullscreen">true</item>#' android/app/src/main/res/values/styles.xml
+          grep -n screenOrientation android/app/src/main/AndroidManifest.xml
+
+      - name: Set app version
+        run: |
+          sed -i 's/versionCode [0-9]*/versionCode ${{ github.run_number }}/' android/app/build.gradle
+          sed -i 's/versionName "[^"]*"/versionName "${{ steps.ver.outputs.version }}"/' android/app/build.gradle
+          grep -n "versionCode\|versionName" android/app/build.gradle
+
+      - name: Sign every build with the same key (so updates install over old versions)
+        run: |
+          cat >> android/app/build.gradle <<'GRADLE'
+
+          android {
+              signingConfigs {
+                  stable {
+                      storeFile rootProject.file('../keys/debug.keystore')
+                      storePassword 'android'
+                      keyAlias 'androiddebugkey'
+                      keyPassword 'android'
+                  }
+              }
+              buildTypes {
+                  debug { signingConfig signingConfigs.stable }
+              }
+          }
+          GRADLE
+          tail -16 android/app/build.gradle
+
+      - name: Sync web assets
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Verify the APK is signed with the stable key
+        run: |
+          expected=$(keytool -list -v -keystore keys/debug.keystore -storepass android | grep -m1 'SHA256:' | awk '{print $2}')
+          actual=$(keytool -printcert -jarfile android/app/build/outputs/apk/debug/app-debug.apk | grep -m1 'SHA256:' | awk '{print $2}')
+          echo "expected: $expected"
+          echo "actual:   $actual"
+          test -n "$expected" && test "$expected" = "$actual"
+
+      - name: Name the APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk gutter-kings-v${{ steps.ver.outputs.version }}.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gutter-kings-v${{ steps.ver.outputs.version }}
+          path: gutter-kings-v${{ steps.ver.outputs.version }}.apk
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          awk -v v="${{ steps.ver.outputs.version }}" '$0 == "## v" v {f=1; next} /^## v/ {f=0} f' CHANGELOG.md > release-notes.md
+          test -s release-notes.md || echo "Gutter Kings v${{ steps.ver.outputs.version }}" > release-notes.md
+          cat release-notes.md
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          name: Gutter Kings v${{ steps.ver.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          body_path: release-notes.md
+          files: gutter-kings-v${{ steps.ver.outputs.version }}.apk

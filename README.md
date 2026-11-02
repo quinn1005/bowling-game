@@ -14,6 +14,16 @@ On Android Chrome, use "Add to Home screen" to install it as a full-screen app t
 
 **Controls:** three steps per throw. Drag to set your starting spot and tap to lock it, drag to set the angle and tap to lock it, then tap to stop the moving power bar (the green zone is a PERFECT throw; past it the ball wobbles). On a keyboard: ←/→ adjust, Space/Enter sets, Esc goes back, 1–3 picks a ball, R re-racks.
 
+### Get the installable APK
+
+Every push runs the **Build Android APK** workflow (`.github/workflows/build-apk.yml`), which publishes a **GitHub Release** named after the version in `game/js/version.js` (for example `v0.3.0`) with `gutter-kings-v0.3.0.apk` attached. Old releases stay on the repo's **Releases** page, so every version is kept.
+
+1. On GitHub, open the repo's **Releases** page (signed in, since the repo is private).
+2. Download the `.apk` from the version you want.
+3. Open it on your phone and allow installing from unknown sources.
+
+All builds are signed with the same key (`keys/debug.keystore`), so a new version installs over the old one and keeps your save. To release a new version, bump `VERSION` in `game/js/version.js` (and `package.json`) and add a section to `CHANGELOG.md` before pushing. Pushing without a version bump rebuilds the APK and updates that version's existing release.
+
 ## Develop
 
 No build step. See `docs/development.md` for the code layout and `docs/design.md` for the design.

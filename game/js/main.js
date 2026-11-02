@@ -528,7 +528,8 @@
   fit();
   title();
   requestAnimationFrame(loop);
-  if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !/[?&]nosw\b/.test(location.search)) {
+  // No service worker inside the Android app: the APK already ships every file, and a cache could serve stale files after an update.
+  if (!window.Capacitor && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !/[?&]nosw\b/.test(location.search)) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 })();

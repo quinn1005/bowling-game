@@ -1,12 +1,22 @@
 {
   "name": "gutter-kings",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
-  "description": "Physics-based bowling roguelike (browser build).",
+  "description": "Gutter Kings - a physics bowling roguelike",
   "scripts": {
     "serve": "python3 -m http.server 8080 --directory game",
     "test": "node --test tests/unit.test.js",
     "bot": "node tests/bot.js 30",
-    "e2e": "node tests/controls.e2e.js && node tests/e2e.js && node tests/alleys.e2e.js"
+    "e2e": "node tests/controls.e2e.js && node tests/e2e.js && node tests/alleys.e2e.js",
+    "android:add": "npx cap add android",
+    "android:sync": "npx cap sync android"
+  },
+  "dependencies": {
+    "@capacitor/android": "7.6.9",
+    "@capacitor/core": "7.6.9"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "3.0.5",
+    "@capacitor/cli": "7.6.9"
   }
 }
