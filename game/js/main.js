@@ -469,6 +469,7 @@
 
   // ---------- input ----------
   // Four timed steps, each a tap to stop a sweeping slider: start spot → angle → power → hook.
+  // There is no going back: once a slider is stopped, that part of the throw is locked in.
   // The last tap throws. Tuned to be demanding: the sliders are quick and the PERFECT zone narrow.
   let step = 'pos', aimAng = 0, posT0 = performance.now(), angT0 = 0, powerT0 = 0, dialT0 = 0, lockedPower = null;
   const PZONE = [0.83, 0.89], POS_PERIOD = 1.0, ANG_PERIOD = 0.8, POWER_PERIOD = 0.8, DIAL_PERIOD = 0.7;
@@ -513,7 +514,7 @@
     $('ctrl').classList.toggle('off', !on);
     $('stepLbl').textContent = on ? STEP_TEXT[step][0] : phase === 'call' ? 'Call your shot first' : phase === 'rolling' ? 'Rolling…' : phase === 'replay' ? 'Replay · tap to skip' : '';
     $('setBtn').textContent = STEP_TEXT[step][1];
-    $('setBtn').disabled = !on; $('backBtn').disabled = !on || step === 'pos';
+    $('setBtn').disabled = !on;
     $('pbar').hidden = !(on && step === 'power');
     $('hbar').hidden = !(on && step === 'hook');
     $('sbar').hidden = !(on && (step === 'pos' || step === 'angle'));
@@ -531,10 +532,6 @@
     else if (step === 'angle') { setStep('power'); sfx.tick(660); }
     else if (step === 'power') lockPower();
     else releaseHook();
-  }
-  function backStep() {
-    if (phase !== 'aim') return;
-    if (step === 'hook') setStep('power'); else if (step === 'power') setStep('angle'); else if (step === 'angle') setStep('pos');
   }
   function lockPower() {
     const p = powerNow(), z = zone();
@@ -574,7 +571,6 @@
     confirmStep();
   });
   $('setBtn').addEventListener('pointerdown', e => { e.preventDefault(); confirmStep(); });
-  $('backBtn').addEventListener('click', backStep);
   window.addEventListener('keydown', e => {
     if (!$('modal').hidden || !$('layer').hidden) return;
     if (phase === 'replay' && (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape')) { e.preventDefault(); endReplay(); return; }
@@ -583,7 +579,6 @@
     if (phase !== 'aim') return;
     if (/^[1-9]$/.test(e.key) && +e.key <= run.bag.length) pickBall(+e.key - 1);
     else if (e.key === 'r' || e.key === 'R') $('rerackBtn').click();
-    else if (e.key === 'Escape' || e.key === 'Backspace') backStep();
     else if (e.key === ' ' || e.key === 'Enter') {
       // Space/Enter always means "set" during aiming, even if a dock button still has focus.
       if (document.activeElement && document.activeElement.tagName === 'BUTTON') document.activeElement.blur();

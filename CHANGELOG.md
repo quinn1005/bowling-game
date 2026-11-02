@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.2
+
+### Changed
+- **No more do-overs mid-throw.** The Back button is gone (and Esc no longer steps back). Once you stop a slider, that part of your throw is locked in, so a mistimed start, angle or power tap sticks.
+
 ## v0.5.1
 
 ### Changed

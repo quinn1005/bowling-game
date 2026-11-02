@@ -47,12 +47,13 @@ const shots = process.argv[2];
     await page.waitForFunction(() => GK.debug.phase !== 'rolling', null, { timeout: 30000 });
     if (await page.evaluate(() => GK.debug.phase) === 'replay') await page.evaluate(() => GK.debug.skipReplay());
   }
-  // keyboard path + back button
+  // keyboard path; there is no Back button and Escape does not undo a locked step
   await page.waitForFunction(() => GK.debug.phase === 'aim', null, { timeout: 30000 });
+  if (await page.$('#backBtn')) throw new Error('Back button should be gone');
   await page.keyboard.press('Space');
-  await page.click('#backBtn');
-  if (!/start/.test(await label())) throw new Error('back did not return to start step');
-  await page.keyboard.press('Space'); await page.waitForTimeout(150); await page.keyboard.press('Space');
+  await page.keyboard.press('Escape');
+  if (!/angle/.test(await label())) throw new Error('a locked start step was undone');
+  await page.waitForTimeout(150); await page.keyboard.press('Space');
   await page.waitForTimeout(300); await page.keyboard.press('Space');
   await page.waitForTimeout(200); await page.keyboard.press('Space');
   if (await page.evaluate(() => GK.debug.phase) !== 'rolling') throw new Error('keyboard throw failed');
