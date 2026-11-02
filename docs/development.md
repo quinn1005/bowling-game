@@ -18,6 +18,9 @@ What the game has:
 - Controls: drag to set the start spot, drag to set the angle, time a fast power bar (narrow green PERFECT zone; overpowered throws wobble), then stop a sweeping hook dial. PERFECT throws in a row build Groove (+1 Mult per stack).
 - Oil patterns per alley (`GK.OIL` / `GK.oilAt` in `core.js`) drive the hook in physics and are drawn on the lane as a blue sheen.
 - Leagues, Ascension levels and feat unlocks (`meta.js`). Locked balls/charms never appear in the shop. Racks have 13 spots; 11-13 are optional back-row pins.
+- Reactive oil: `rs.wear` (`GK.newWear`, `GK.oilEff` in `core.js`) is a boards × 6in grid kept per round; `Sim.wearLine` strips oil under the ball and adds carrydown past the pattern. The renderer redraws its oil layer after each roll (`setWear`).
+- Mishaps (`GK.MISHAPS` in `frame.js`): 5% pinsetter fumble after roll 1 (drops 1-2 standing pins, counted as down), 6% ball jams in the return (`rs.stuck`) until a different ball is thrown.
+- Ball return (right of the approach) replaces the bag buttons: tap a ball to select it (`Renderer.drawReturn` / `returnHit`). Lane TV with pixel cartoons for strikes, doubles, turkeys, spares, splits and the 7-10 (`TV_SCENES` in `render.js`).
 - Slow-motion replays of strikes and 7-10 conversions, end-of-run story with best-frame replay, crowd reactions, daily result sharing.
 - Points × Mult scoring (the design doc's "Chips" are called Points in game) animated step by step; charms fire left to right.
 - Seeded runs (seed code on the end screen), daily run, run save/continue, meta stats, procedural WebAudio.

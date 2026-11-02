@@ -117,7 +117,8 @@ var GK = globalThis.GK = globalThis.GK || {};
   UI.rule = function (run, sel) {
     const b = run.bag[sel]; if (!b) { $('rule').textContent = ''; return; }
     const d = GK.BALLS[b.type];
-    $('rule').innerHTML = '<b>' + esc(d.full) + (b.ed ? ' (' + GK.EDITIONS[b.ed].name + ')' : '') + '.</b> ' + esc(d.desc);
+    const st = run.rs && run.rs.stuck && run.bag.length > 1 && run.bag[run.rs.stuck.idx] ? ' <span style="color:var(--mult)">' + esc(GK.BALLS[run.bag[run.rs.stuck.idx].type].name) + ' is stuck in the return.</span>' : '';
+    $('rule').innerHTML = '<b>' + esc(d.full) + (b.ed ? ' (' + GK.EDITIONS[b.ed].name + ')' : '') + '.</b> ' + esc(d.desc) + ' <span class="lbl">Tap a ball on the return to switch.</span>' + st;
   };
 
   function mark(f, live) {
@@ -230,7 +231,9 @@ var GK = globalThis.GK = globalThis.GK || {};
     UI.modal(`<div class="panel" style="text-align:left">
       <h2>How to play</h2>
       <p><b>Throw in 4 steps:</b> 1) drag on the lane to slide your starting spot, then tap. 2) Drag to swing the aim arrow, then tap. 3) Tap to stop the fast power bar. The thin green zone is a PERFECT throw; past it, the ball wobbles off line. 4) Tap to stop the hook dial: left curves the ball left, right curves it right. Keyboard: ←/→ adjust, Space sets, Esc goes back.</p>
-      <p><b>Oil:</b> the blue sheen on the lane is oil. The ball skids through oil and hooks on dry boards. Every alley has its own pattern.</p>
+      <p><b>Your balls</b> sit on the ball return at the right of the approach. Tap one to pick it. Now and then a ball jams in the return and you have to throw a different one before it comes back.</p>
+      <p><b>Oil:</b> the blue sheen on the lane is oil. The ball skids through oil and hooks on dry boards. Every alley has its own pattern, and it breaks down as you bowl: throw the same line again and again and it dries out (the boards turn brown) and your ball hooks earlier. The lane is re-oiled each round.</p>
+      <p><b>The pinsetter</b> is old. Once in a while it fumbles after your first ball and drops a pin or two you left standing. Lucky you.</p>
       <p><b>Groove:</b> PERFECT throws in a row build Groove. Each stack adds +1 Mult to every frame until you miss the zone.</p>
       <p><b>Score:</b> every frame scores <span style="color:var(--chips)">Points</span> × <span style="color:var(--mult)">Mult</span>. The shot sets the base (Strike, Spare, Split conversion, Double, Turkey…). Each pin adds Points. Pins knocking over pins, late wobblers and kickback bangs add bonus Points.</p>
       <p><b>Rounds:</b> reach the target within your frames. Each alley has a Qualifier, a Heat and a Boss Match. Miss a target and the run ends.</p>

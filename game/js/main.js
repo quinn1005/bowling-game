@@ -10,7 +10,7 @@
   GK._meta = meta;
   sfx.setMuted(!!meta.muted);
   // Replays: frames recorded while a roll plays, so strikes and the best frame can be shown again.
-  let recFrames = [], lastRec = null, bestReplay = null, replay = null, crowd = { mood: 'idle', t: 0 };
+  let recFrames = [], lastRec = null, bestReplay = null, replay = null, crowd = { mood: 'idle', t: 0 }, tv = null;
   try { fast = localStorage.getItem('gk-fast') === '1'; } catch (e) {}
 
   const cv = $('lane');
@@ -42,8 +42,8 @@
     if (!run) return;
     UI.hud(run); UI.charms(run, tapCharm); UI.card(run);
     sel = Math.min(sel, run.bag.length - 1);
+    if (run.rs && GK.isStuck(run, sel)) sel = GK.firstFreeBall(run, sel);
     const canAct = phase === 'aim';
-    UI.bag(run, sel, canAct, i => { sel = i; refresh(); });
     UI.cons(run, canAct, tapCons);
     UI.rule(run, sel);
     $('rerackBtn').disabled = !(canAct && GK.canRerack(run));
@@ -104,6 +104,7 @@
     GK.save(run);
     sim = GK.beginFrame(run);
     sim.onEvent = onSimEvent;
+    R.setWear(run.rs.wear);
     pickGlow();
     step = 'pos';
     resetTally();
@@ -182,6 +183,7 @@
     lastRec = { frames: recFrames, alley: run.alley, champ: GK.isChamp(run), lane: laneOf(), def: GK.alleyDef(run), preview: run.rs.cur && run.rs.cur.ball, glow, dark: laneOf().dark };
     recFrames = [];
     UI.card(run); refresh();
+    R.setWear(run.rs.wear);
     if (out.rec.perfect === true) { R.pop(aimX, 20, 18, 'GROOVE ×' + run.rs.groove, '#7be38a'); feats({ t: 'throw', streak: run.stats.pstreak, run }); }
     for (const n of out.notes) {
       UI.toast(n.text, 1800);
@@ -189,6 +191,9 @@
       if (n.t === 'mechanic') { R.pop(0, C.ZH + 12, 30, 'THE MECHANIC RESETS ' + n.pins.length, '#ff5a6e'); sfx.crack(); }
       if (n.t === 'split') UI.shot(n.text);
       if (n.t === 'pay') sfx.coin();
+      if (n.t === 'stuck') { sfx.nope(); R.pop(12, -20, 20, 'JAMMED!', '#ff5a6e'); }
+      if (n.t === 'unstuck') sfx.tick(660);
+      if (n.t === 'respot') { sfx.crack(); R.pop(0, C.ZH + 10, 34, 'PINSETTER FUMBLE!', '#ffd447'); R.shake = 3; }
     }
     if (out.rec.gutterBall) cheer('groan');
     if (out.next === 'aim') {
@@ -236,6 +241,11 @@
     d();
   }
   function cheer(mood) { crowd = { mood, t: 0 }; }
+  function tvShow(kind, leave710) {
+    const k = kind === 'split' ? (leave710 ? 'seven10' : 'split') : kind;
+    if (!['strike', 'double', 'turkey', 'spare', 'split', 'seven10'].includes(k)) return;
+    tv = { kind: k, t: 0, v: Math.floor(Math.random() * 2) };
+  }
 
   const stepText = st => st.op === 'chips' ? '+' + fmt(st.v) + ' Points' : st.op === 'mult' ? '+' + (Math.round(st.v * 10) / 10) + ' Mult' : st.op === 'xmult' ? '×' + (Math.round(st.v * 100) / 100) + ' Mult' : st.op === 'money' ? '+$' + st.v : '';
   const stepCol = st => st.op === 'chips' ? '#39c6d6' : st.op === 'money' ? '#f2c94c' : '#ff5a6e';
@@ -247,6 +257,7 @@
     const res = GK.scoreCurrent(run, kind);
     if (GK.isStrikeKind(kind)) { R.shake = 6; sfx.strike(); R.flash = 0.35; }
     else if (GK.isSpareKind(kind)) sfx.spare();
+    tvShow(kind, res.ctx.leave710);
     const pinsSum = rs.cur.rolls.reduce((a, r) => a + r.pins, 0);
     UI.banner(s.name.toUpperCase(), kind === 'open' ? pinsSum + ' pins' : '');
     const d = fast ? 120 : 260;
@@ -463,6 +474,11 @@
   // Tuned to be demanding: the power bar sweeps fast and the PERFECT zone is narrow.
   let step = 'pos', aimAng = 0, powerT0 = 0, dialT0 = 0, lockedPower = null;
   const PZONE = [0.83, 0.89], POWER_PERIOD = 0.8, DIAL_PERIOD = 0.7;
+  function pickBall(i) {
+    if (!run || !run.bag[i]) return;
+    if (GK.isStuck(run, i)) { sfx.nope(); UI.toast(GK.BALLS[run.bag[i].type].full + ' is stuck in the ball return. Throw another ball first.'); return; }
+    sel = i; sfx.tick(760); refresh();
+  }
   function rectInfo() { const r = cv.getBoundingClientRect(); return { r, k: r.width / C.W }; }
   function pt(e) { const { r } = rectInfo(); return { x: e.clientX - r.left, y: e.clientY - r.top, t: performance.now() }; }
   const aimLim = () => C.LHW - C.BALL_R - 0.5 - (C.LHW - (laneOf().lhw || C.LHW));
@@ -541,6 +557,11 @@
     if (phase === 'replay') { e.preventDefault(); endReplay(); return; }
     if (phase !== 'aim') return;
     if (step === 'power' || step === 'hook') { e.preventDefault(); confirmStep(); return; }
+    {
+      const rr = cv.getBoundingClientRect(), bx = (e.clientX - rr.left) / rr.width * C.W, by = (e.clientY - rr.top) / rr.height * C.H;
+      const hit = R.returnHit(bx, by);
+      if (hit >= 0) { e.preventDefault(); pickBall(hit); return; }
+    }
     cv.setPointerCapture(e.pointerId);
     const p = pt(e);
     gesture = { moved: false, x0: p.x, y0: p.y, aim0: aimX, ang0: aimAng };
@@ -576,7 +597,7 @@
       else if (step === 'angle') aimAng = GK.clamp(aimAng + d * 0.004, -lim, lim);
       e.preventDefault();
     }
-    else if (/^[1-9]$/.test(e.key) && +e.key <= run.bag.length) { sel = +e.key - 1; refresh(); }
+    else if (/^[1-9]$/.test(e.key) && +e.key <= run.bag.length) pickBall(+e.key - 1);
     else if (e.key === 'r' || e.key === 'R') $('rerackBtn').click();
     else if (e.key === 'Escape' || e.key === 'Backspace') backStep();
     else if (e.key === ' ' || e.key === 'Enter') {
@@ -589,6 +610,8 @@
   GK.debug.throw = prm => throwBall(Object.assign({ aimX, aim: 0, spin: 0, speed: 340 }, prm));
   GK.debug.skipReplay = () => endReplay();
   GK.debug.select = i => { sel = i; refresh(); };
+  GK.debug.pickBall = i => pickBall(i);
+  GK.debug.tv = k => tvShow(k, false);
   GK.debug.jump = (alley, round) => { busyToken++; UI.hideLayer(); UI.hideModal(); run.alley = alley; run.round = round; toIntro(); };
 
   // ---------- loop ----------
@@ -621,6 +644,7 @@
     if (phase === 'aim' && step === 'power') $('pneedle').style.left = (powerNow() * 100) + '%';
     if (phase === 'aim' && step === 'hook') $('hneedle').style.left = ((dialNow() + 1) * 50) + '%';
     crowd.t += realDt; if (crowd.mood !== 'idle' && crowd.t > 2.4) crowd = { mood: 'idle', t: 0 };
+    if (tv) { tv.t += realDt; if (tv.t > 3.4) tv = null; }
     R.tick(realDt);
     const rs = run && run.rs;
     const thrown = rs && rs.cur && rs.cur.ball && phase !== 'aim' ? rs.cur.ball : null;
@@ -628,7 +652,9 @@
     const wide = run ? GK.flags(run, rs ? rs.stolen : -1).wide : 1;
     const rp = replay && replay.frames[replay.i];
     R.draw({
-      sim: rp || sim, replay: !!rp, crowd, phase: rp ? 'replay' : phase, aimX, aimAng, step, time: now / 1000,
+      sim: rp || sim, replay: !!rp, crowd, tv,
+      ret: run && run.rs && !rp ? { balls: run.bag, sel, stuck: run.rs.stuck && run.bag.length > 1 ? run.rs.stuck.idx : -1, inPlay: phase === 'rolling' && run.rs.cur ? run.rs.cur.ballIdx : -1 } : null,
+      phase: rp ? 'replay' : phase, aimX, aimAng, step, time: now / 1000,
       preview: rp && replay.rec.preview ? { type: replay.rec.preview.type, ed: replay.rec.preview.ed, r: C.BALL_R } : thrown ? { type: thrown.type, ed: thrown.ed, r: C.BALL_R * wide } : b ? { type: b.type, ed: b.ed, r: (b.type === 'cluster' ? 2.3 : C.BALL_R) * wide } : null,
       dark: rp ? replay.rec.dark : run && laneOf().dark, strobe: !rp && rs && rs.boss === 'strobe', glow: rp ? replay.rec.glow : glow,
       tilt: rs && rs.boss === 'ringmaster' ? rs.tilts[rs.frameIdx % rs.tilts.length] : 0

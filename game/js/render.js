@@ -11,6 +11,112 @@ var GK = globalThis.GK = globalThis.GK || {};
   }
   function quad(g, a, b, c, d, fill) { g.fillStyle = fill; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(c.x, c.y); g.lineTo(d.x, d.y); g.closePath(); g.fill(); }
 
+  // ---------- TV cartoons (screen is ~38×26 px) ----------
+  // Each scene draws frame t (seconds) of a short loop. v picks a variant.
+  const px = (cx, x, y, w, h, c) => { cx.fillStyle = c; cx.fillRect(Math.round(x), Math.round(y), w, h); };
+  function caption(cx, sx, sy, sw, sh, txt, col, t) {
+    if (t < 0.25) return;
+    cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'center';
+    const y = sy + sh - 2, x = sx + sw / 2 + (t < 0.4 ? (0.4 - t) * 60 : 0);
+    cx.fillStyle = '#000'; cx.fillText(txt, x + 1, y + 1); cx.fillStyle = col; cx.fillText(txt, x, y);
+  }
+  // A tiny pin: 3×8 with a red band. lean in radians.
+  function tinyPin(cx, x, y, lean, face) {
+    cx.save(); cx.translate(x, y); cx.rotate(lean || 0);
+    px(cx, -1, -8, 3, 3, '#f2ebe0'); px(cx, -1, -5, 3, 1, '#c4243a'); px(cx, -2, -4, 5, 4, '#f2ebe0');
+    if (face) { px(cx, -1, -7, 1, 1, '#000'); px(cx, 1, -7, 1, 1, '#000'); }
+    cx.restore();
+  }
+  function bowler(cx, x, y, pose, shirt) {
+    px(cx, x - 1, y - 12, 3, 3, '#e8c39a');
+    px(cx, x - 2, y - 9, 5, 5, shirt);
+    px(cx, x - 2, y - 4, 2, 4, '#2a2a4a'); px(cx, x + 1, y - 4, 2, 4, '#2a2a4a');
+    if (pose === 0) { px(cx, x - 4, y - 12, 2, 4, '#e8c39a'); px(cx, x + 3, y - 12, 2, 4, '#e8c39a'); }
+    else if (pose === 1) { px(cx, x - 5, y - 8, 3, 2, '#e8c39a'); px(cx, x + 3, y - 12, 2, 4, '#e8c39a'); }
+    else { px(cx, x - 4, y - 12, 2, 4, '#e8c39a'); px(cx, x + 3, y - 8, 3, 2, '#e8c39a'); }
+  }
+  const TV_SCENES = {
+    strike(cx, sx, sy, sw, sh, t, v) {
+      px(cx, sx, sy, sw, sh, v % 2 ? '#2a1446' : '#14324a');
+      if (v % 2 === 0) {
+        // ball smashes three pins that fly off spinning
+        px(cx, sx, sy + 17, sw, 2, '#d8a56b');
+        const bx = sx - 6 + Math.min(t, 0.7) / 0.7 * 26;
+        cx.fillStyle = '#2b4fb8'; cx.beginPath(); cx.arc(bx, sy + 14, 3, 0, 7); cx.fill();
+        [[24, -1], [28, 0.4], [32, 1]].forEach(([x, d], i) => {
+          if (t < 0.65) tinyPin(cx, sx + x, sy + 17, 0, true);
+          else { const k = t - 0.65; tinyPin(cx, sx + x + d * 18 * k, sy + 17 - 40 * k + 35 * k * k, k * 9 * (d || 1), true); }
+        });
+        if (t > 0.7 && t < 1.2) { cx.fillStyle = '#fff'; for (let k = 0; k < 8; k++) { const a = k * 0.8; px(cx, sx + 26 + Math.cos(a) * (t - 0.7) * 30, sy + 12 + Math.sin(a) * (t - 0.7) * 20, 1, 1, '#ffd447'); } }
+        caption(cx, sx, sy, sw, sh, 'STRIKE!', '#ffd447', t);
+      } else {
+        // the bowler's victory dance
+        const pose = Math.floor(t * 6) % 3, hop = Math.abs(Math.sin(t * 9)) * 3;
+        bowler(cx, sx + sw / 2, sy + 19 - hop, pose, '#ff5a6e');
+        for (let k = 0; k < 5; k++) px(cx, sx + ((k * 9 + t * 40) % sw), sy + ((k * 7 + t * 25) % 14), 1, 1, ['#ffd447', '#7be38a', '#39c6d6'][k % 3]);
+        caption(cx, sx, sy, sw, sh, 'X X X', '#ffd447', t);
+      }
+    },
+    double(cx, sx, sy, sw, sh, t) {
+      px(cx, sx, sy, sw, sh, '#1d3a2a');
+      // two balls roll in and bump: high five!
+      const k = Math.min(1, t / 0.8), off = (1 - k) * 16;
+      cx.fillStyle = '#2b4fb8'; cx.beginPath(); cx.arc(sx + sw / 2 - 5 - off, sy + 12, 4, 0, 7); cx.fill();
+      cx.fillStyle = '#d9609a'; cx.beginPath(); cx.arc(sx + sw / 2 + 5 + off, sy + 12, 4, 0, 7); cx.fill();
+      if (t > 0.8) { px(cx, sx + sw / 2 - 1, sy + 4 - (t - 0.8) * 4, 2, 2, '#fff'); px(cx, sx + sw / 2 - 4, sy + 6, 1, 1, '#ffd447'); px(cx, sx + sw / 2 + 3, sy + 6, 1, 1, '#ffd447'); }
+      caption(cx, sx, sy, sw, sh, 'DOUBLE!', '#7be38a', t);
+    },
+    turkey(cx, sx, sy, sw, sh, t) {
+      px(cx, sx, sy, sw, sh, '#3a2410');
+      // a turkey struts across, gobbling
+      const x = sx + 4 + ((t * 14) % (sw - 6)), bob = Math.floor(t * 8) % 2;
+      ['#c4243a', '#ffb547', '#7be38a', '#c4243a'].forEach((c, i) => px(cx, x - 6 + i * 2, sy + 6 - (i % 2), 2, 6, c));
+      px(cx, x - 4, sy + 9, 8, 6, '#8a5a2a'); px(cx, x + 3, sy + 6 - bob, 3, 4, '#8a5a2a');
+      px(cx, x + 5, sy + 7 - bob, 2, 1, '#ffb547'); px(cx, x + 5, sy + 8 - bob, 1, 2, '#c4243a');
+      px(cx, x - 2, sy + 15, 1, 3, '#ffb547'); px(cx, x + 1, sy + 15, 1, 3, '#ffb547');
+      if (Math.floor(t * 3) % 2) { cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'left'; cx.fillStyle = '#fff'; cx.fillText('GOBBLE', sx + 1, sy + 7); }
+      caption(cx, sx, sy, sw, sh, 'TURKEY!', '#ffb547', t);
+    },
+    spare(cx, sx, sy, sw, sh, t, v) {
+      px(cx, sx, sy, sw, sh, '#2a2a3a');
+      px(cx, sx, sy + 18, sw, 2, '#d8a56b');
+      if (v % 2 === 0) {
+        // the last pin waves a white flag, then faints
+        const faint = t > 1.6 ? Math.min(1.5, (t - 1.6) * 3) : 0;
+        tinyPin(cx, sx + sw / 2, sy + 18, faint, true);
+        if (!faint) { const wv = Math.sin(t * 10) * 2; px(cx, sx + sw / 2 + 3, sy + 4, 1, 10, '#a8949f'); px(cx, sx + sw / 2 + 4, sy + 4 + wv * 0.3, 6, 4, '#fff'); }
+        else { cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'center'; cx.fillStyle = '#fff'; cx.fillText('x_x', sx + sw / 2 + 8, sy + 9); }
+      } else {
+        // the bowler fist-pumps
+        const pose = Math.floor(t * 5) % 2 ? 1 : 2;
+        bowler(cx, sx + sw / 2, sy + 18, pose, '#39c6d6');
+      }
+      caption(cx, sx, sy, sw, sh, 'SPARE /', '#39c6d6', t);
+    },
+    split(cx, sx, sy, sw, sh, t) {
+      px(cx, sx, sy, sw, sh, '#3a1430');
+      px(cx, sx, sy + 18, sw, 2, '#d8a56b');
+      // a pin does the splits (and regrets it)
+      const k = Math.min(1, t / 0.7), x = sx + sw / 2, y = sy + 15 + k * 2;
+      px(cx, x - 1, y - 9, 3, 3, '#f2ebe0'); px(cx, x - 1, y - 6, 3, 1, '#c4243a'); px(cx, x - 2, y - 5, 5, 4, '#f2ebe0');
+      px(cx, x - 2 - k * 7, y - 1, 3 + k * 7, 2, '#f2ebe0'); px(cx, x + 1, y - 1, 3 + k * 7, 2, '#f2ebe0');
+      px(cx, x - 1, y - 8, 1, 1, '#000'); px(cx, x + 1, y - 8, 1, 1, '#000');
+      if (t > 0.8) { px(cx, x - 1, y - 5 + 1, 3, 1, '#000'); cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'center'; cx.fillStyle = '#ffd447'; if (Math.floor(t * 4) % 2) cx.fillText('OUCH', x, sy + 6); }
+      caption(cx, sx, sy, sw, sh, 'SPLIT!', '#ff9ef0', t);
+    },
+    seven10(cx, sx, sy, sw, sh, t) {
+      px(cx, sx, sy, sw, sh, '#140a2a');
+      px(cx, sx, sy + 18, sw, 2, '#d8a56b');
+      // the 7 and 10 pins run to each other and hug, hearts pop
+      const k = Math.min(1, t / 0.9);
+      tinyPin(cx, sx + 4 + k * 13, sy + 18, Math.sin(t * 20) * 0.2 * (1 - k), true);
+      tinyPin(cx, sx + sw - 4 - k * 13, sy + 18, Math.sin(t * 20 + 1) * 0.2 * (1 - k), true);
+      if (t > 0.9) for (let i = 0; i < 3; i++) { const yy = sy + 8 - ((t - 0.9) * 10 + i * 4) % 10, xx = sx + sw / 2 - 3 + i * 3; px(cx, xx, yy, 1, 1, '#ff5a6e'); px(cx, xx + 2, yy, 1, 1, '#ff5a6e'); px(cx, xx, yy + 1, 3, 1, '#ff5a6e'); px(cx, xx + 1, yy + 2, 1, 1, '#ff5a6e'); }
+      for (let i = 0; i < 6; i++) { const a = i + t * 2; px(cx, sx + sw / 2 + Math.cos(a) * 15, sy + 9 + Math.sin(a) * 7, 1, 1, '#ffd447'); }
+      caption(cx, sx, sy, sw, sh, '7-10!!', '#ffd447', t);
+    }
+  };
+
   class Renderer {
     constructor(canvas) {
       this.cv = canvas; canvas.width = W; canvas.height = H;
@@ -60,7 +166,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       const rng = GK.makeRng(GK.hash(this.signText));
       for (let i = 0; i < 260; i++) { const x = (rng() * 2 - 1) * LHW, z = rng() * C.ZBACK, q = P(x, z); g.fillStyle = 'rgba(80,40,10,0.18)'; g.fillRect(Math.round(q.x), Math.round(q.y), 1, 1); }
       quad(g, P(-LHW, C.ZH - 12), P(LHW, C.ZH - 12), P(LHW, C.ZBACK), P(-LHW, C.ZBACK), 'rgba(255,236,200,0.18)');
-      this.drawOil(g, LHW, nb);
+      this.rebuildOil();
       for (const s of [-1, 1]) quad(g, P(s * LHW - 0.3, 0), P(s * LHW + 0.3, 0), P(s * LHW + 0.3, C.ZBACK), P(s * LHW - 0.3, C.ZBACK), '#5a3a22');
       for (const bd of [3, 5, 8, 11, 14]) for (const s of [-1, 1]) { const q = P(s * (LHW - (bd - 0.5) * 1.064), 22); g.fillStyle = '#4a2c18'; g.fillRect(Math.round(q.x), Math.round(q.y), 1, 1); }
       [5, 10, 15, 20, 25, 30, 35].forEach((bd, i) => {
@@ -89,41 +195,114 @@ var GK = globalThis.GK = globalThis.GK || {};
       g.fillStyle = T.subc; g.fillText(this.subText, W / 2, 37);
     }
 
-    // Visible oil: a blue sheen board by board, strongest where the pattern is oiliest, with
-    // lighter buffer streaks running down the lane like real conditioned lanes under the lights.
+    // Visible oil, redrawn after every roll from the round's wear grid: a blue sheen board by
+    // board, buffer streaks and glints, and a faint brown track where the ball has dried the line.
+    setWear(wear) { this.wear = wear || null; this.rebuildOil(); }
+    rebuildOil() {
+      if (!this.oilCv) { this.oilCv = document.createElement('canvas'); this.oilCv.width = W; this.oilCv.height = H; }
+      const g = this.oilCv.getContext('2d'); g.clearRect(0, 0, W, H);
+      this.drawOil(g, this.lhw || C.LHW, Math.round((this.lhw || C.LHW) * 2 / 1.064));
+    }
     drawOil(g, LHW, nb) {
-      const pat = this.oil, len = Math.min(C.ZBACK, (GK.OIL[pat] || GK.OIL.house).len);
+      const pat = this.oil, wear = this.wear;
       const tones = [[70, 140, 255], [100, 170, 255], [55, 115, 225], [130, 190, 255]];
       const bw = 2 * LHW / nb, rng = GK.makeRng(GK.hash(pat + nb));
+      const oil = (x, z) => GK.oilEff(pat, wear, x, z, LHW);
       for (let i = 0; i < nb; i++) {
         const x0 = -LHW + i * bw, x1 = x0 + bw, xm = (x0 + x1) / 2;
         const tone = tones[(i * 3 + (i >> 2)) % tones.length];
-        for (let z = 0; z < len; z += 6) {
-          const o = GK.oilAt(pat, xm, z + 3, LHW);
-          if (o < 0.03) continue;
-          const a = (0.07 + 0.3 * o) * (0.85 + rng() * 0.3);
-          quad(g, P(x0, z), P(x1, z), P(x1, z + 6), P(x0, z + 6), 'rgba(' + tone[0] + ',' + tone[1] + ',' + tone[2] + ',' + a.toFixed(3) + ')');
+        for (let z = 0; z < C.ZH - 6; z += 6) {
+          const o = oil(xm, z + 3), jit = 0.85 + rng() * 0.3;
+          if (o >= 0.03) quad(g, P(x0, z), P(x1, z), P(x1, z + 6), P(x0, z + 6), 'rgba(' + tone[0] + ',' + tone[1] + ',' + tone[2] + ',' + ((0.07 + 0.3 * o) * jit).toFixed(3) + ')');
+          const wi = wear ? GK.wearIdx(xm, z + 3, LHW) : -1, wv = wi >= 0 ? wear[wi] : 0;
+          if (wv > 0.12) quad(g, P(x0, z), P(x1, z), P(x1, z + 6), P(x0, z + 6), 'rgba(150,90,40,' + Math.min(0.32, wv * 0.6).toFixed(3) + ')');
         }
       }
-      // buffer streaks and glints
       for (let k = 0; k < 9; k++) {
         const x = -LHW + (k + 0.5) * 2 * LHW / 9 + (rng() - 0.5) * 2;
-        for (let z = 2; z < len - 4; z += 2) {
-          const o = GK.oilAt(pat, x, z, LHW); if (o < 0.25) continue;
+        for (let z = 2; z < C.ZH - 10; z += 2) {
+          const o = oil(x, z); if (o < 0.25) continue;
           const q = P(x, z); g.fillStyle = 'rgba(200,230,255,' + (0.08 + 0.18 * o).toFixed(3) + ')'; g.fillRect(Math.round(q.x), Math.round(q.y), 1, 1);
         }
       }
       for (let k = 0; k < 120; k++) {
-        const x = (rng() * 2 - 1) * LHW, z = rng() * len, o = GK.oilAt(pat, x, z, LHW);
+        const x = (rng() * 2 - 1) * LHW, z = rng() * (C.ZH - 10), o = oil(x, z);
         if (o < 0.4) continue;
         const q = P(x, z); g.fillStyle = 'rgba(235,248,255,' + (0.3 + 0.4 * o).toFixed(2) + ')'; g.fillRect(Math.round(q.x), Math.round(q.y), 1, 1);
       }
     }
 
+    // Ball return on the right of the approach: the bag's balls sit on the rails; tap one to pick it.
+    drawReturn(ret, time) {
+      if (!ret) return;
+      const cx = this.cx, n = ret.balls.length;
+      const hx = 168, hy = 286, bottom = 348;
+      this.retPos = [];
+      // rails
+      cx.fillStyle = '#2a2230'; cx.fillRect(hx + 3, hy + 12, 26, bottom - hy - 4);
+      cx.fillStyle = '#6a5a70'; cx.fillRect(hx + 4, hy + 12, 2, bottom - hy - 4); cx.fillRect(hx + 26, hy + 12, 2, bottom - hy - 4);
+      cx.fillStyle = '#4a3e52'; cx.fillRect(hx + 3, bottom + 6, 26, 3);
+      // hood
+      cx.fillStyle = '#140e16'; cx.fillRect(hx - 1, hy - 1, 34, 16);
+      cx.fillStyle = '#5a2a3a'; cx.fillRect(hx, hy, 32, 14);
+      cx.fillStyle = '#8a3a4e'; cx.fillRect(hx, hy, 32, 3);
+      cx.fillStyle = '#0a060c'; cx.fillRect(hx + 6, hy + 6, 20, 8);
+      cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'center'; cx.fillStyle = '#ffd27a';
+      let slot = 0;
+      for (let i = 0; i < n; i++) {
+        const b = ret.balls[i], def = GK.BALLS[b.type] || GK.BALLS.house;
+        const stuck = ret.stuck === i, inPlay = ret.inPlay === i;
+        if (inPlay) continue;
+        let x = hx + 16, y = bottom - slot * 12, r = 5;
+        if (stuck) { x = hx + 16 + Math.round(Math.sin(time * 20) * 0.6); y = hy + 11; r = 4; }
+        else slot++;
+        if (ret.sel === i && !stuck) { this.circle(x, y, r + 2.2, (Math.floor(time * 3) % 2) ? '#ffd27a' : '#ffb547'); }
+        this.circle(x, y, r + 0.8, '#0e0a10');
+        if (b.ed === 'holo') this.circle(x, y, r + 0.8, `hsl(${(time * 300) % 360},90%,70%)`);
+        this.circle(x, y, r, def.col);
+        this.circle(x - r * 0.35, y - r * 0.35, r * 0.3, def.hi);
+        if (!stuck) this.retPos.push({ i, x, y, r: r + 3 });
+        else {
+          cx.fillStyle = (Math.floor(time * 4) % 2) ? '#ff5a6e' : '#ffd27a';
+          cx.fillText('STUCK', hx + 16, hy - 3);
+        }
+      }
+    }
+    returnHit(px, py) {
+      for (const p of this.retPos || []) if (Math.hypot(px - p.x, py - p.y) <= p.r) return p.i;
+      return -1;
+    }
+
+    // TV beside the lane. Idle it shows the alley's channel; after a strike, spare or split it
+    // plays a short pixel cartoon.
+    drawTV(tv, time) {
+      const cx = this.cx, X = 3, Y = 47, w = 44, h = 32;
+      cx.fillStyle = '#0a060c'; cx.fillRect(X + 18, Y + h, 8, 5); cx.fillRect(X + 12, Y + h + 4, 20, 2);
+      cx.fillStyle = '#3a2f36'; cx.fillRect(X, Y, w, h);
+      cx.fillStyle = '#5a4a52'; cx.fillRect(X, Y, w, 2);
+      const sx = X + 3, sy = Y + 3, sw = w - 6, sh = h - 6;
+      cx.save(); cx.beginPath(); cx.rect(sx, sy, sw, sh); cx.clip();
+      const t = tv ? tv.t : 0, kind = tv && t < 3.2 ? tv.kind : null;
+      if (!kind) {
+        cx.fillStyle = '#1a2a3a'; cx.fillRect(sx, sy, sw, sh);
+        cx.fillStyle = this.theme ? this.theme.sign : '#ffb547';
+        cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'center';
+        cx.fillText('LANE', sx + sw / 2, sy + 11); cx.fillText('TV', sx + sw / 2, sy + 20);
+        if (Math.floor(time * 1.3) % 6 === 0) for (let k = 0; k < 60; k++) { cx.fillStyle = Math.random() < 0.5 ? '#fff' : '#555'; cx.fillRect(sx + Math.floor(Math.random() * sw), sy + Math.floor(Math.random() * sh), 1, 1); }
+      } else {
+        TV_SCENES[kind](cx, sx, sy, sw, sh, t, tv.v || 0, this);
+      }
+      // scanlines + glass glare
+      cx.fillStyle = 'rgba(0,0,0,0.18)'; for (let y = sy; y < sy + sh; y += 2) cx.fillRect(sx, y, sw, 1);
+      cx.fillStyle = 'rgba(255,255,255,0.08)'; cx.fillRect(sx + 1, sy + 1, sw - 2, 3);
+      cx.restore();
+      cx.fillStyle = (tv && tv.t < 3.2) ? '#ff3a3a' : '#3a5a3a'; cx.fillRect(X + w - 4, Y + h - 2, 2, 1);
+    }
+
     // A few spectators in the front corners: they jump on strikes, clap spares, slump on gutters.
     drawCrowd(cr, time) {
       const cx = this.cx, mood = cr ? cr.mood : 'idle', t = cr ? cr.t : 0;
-      const people = [[8, '#c84a5a', '#3a2a2a'], [21, '#4a7ac8', '#e8c39a'], [34, '#e0b028', '#6b4320'], [166, '#2fb36a', '#e8c39a'], [179, '#b06bff', '#3a2a2a'], [192, '#ff7a59', '#c8956a']];
+      const people = [[8, '#c84a5a', '#3a2a2a'], [21, '#4a7ac8', '#e8c39a'], [34, '#e0b028', '#6b4320']];
       people.forEach(([x, shirt, skin], i) => {
         let dy = Math.round(Math.sin(time * 2 + i) * 0.6), arms = false, slump = false;
         if (mood === 'cheer') { dy = -Math.round(Math.abs(Math.sin(t * 11 + i * 1.3)) * 5); arms = true; }
@@ -136,8 +315,8 @@ var GK = globalThis.GK = globalThis.GK || {};
         cx.fillStyle = '#140e16'; cx.fillRect(x - 2, by - 7 + (slump ? 2 : 0), 5, 2);
         if (arms) { cx.fillStyle = skin; cx.fillRect(x - 6, by - 6, 2, 6); cx.fillRect(x + 5, by - 6, 2, 6); }
       });
-      if (mood === 'cheer' && t < 1.6) { cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'center'; cx.fillStyle = '#ffd27a'; cx.fillText('YEAH!', 21, H - 24 - Math.round(t * 6)); cx.fillText('WOO!', 179, H - 24 - Math.round(t * 6)); }
-      if (mood === 'groan' && t < 1.6) { cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'center'; cx.fillStyle = '#a8949f'; cx.fillText('ohh…', 21, H - 22); cx.fillText('ugh', 179, H - 22); }
+      if (mood === 'cheer' && t < 1.6) { cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'center'; cx.fillStyle = '#ffd27a'; cx.fillText('YEAH!', 21, H - 24 - Math.round(t * 6)); }
+      if (mood === 'groan' && t < 1.6) { cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'center'; cx.fillStyle = '#a8949f'; cx.fillText('ohh…', 21, H - 22); }
     }
 
     drawPin(p, sim, time, glowOnly) {
@@ -274,6 +453,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       const sx = this.shake > 0 ? Math.round((Math.random() - 0.5) * this.shake) : 0, sy = this.shake > 0 ? Math.round((Math.random() - 0.5) * this.shake) : 0;
       cx.setTransform(1, 0, 0, 1, sx, sy);
       cx.drawImage(this.bg, 0, 0);
+      if (this.oilCv) cx.drawImage(this.oilCv, 0, 0);
       if (!sim) return;
       this.drawTilt(st.tilt, time);
       if (st.phase === 'aim') this.drawGuide(st);
@@ -314,6 +494,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       }
       this.drawMonitor(sim, time);
       this.drawCrowd(st.crowd, time);
+      this.drawReturn(st.ret, time);
+      this.drawTV(st.tv, time);
       if (st.replay) { cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'left'; cx.fillStyle = (Math.floor(time * 2) % 2) ? '#ff5a6e' : '#ffd27a'; cx.fillText('● REPLAY', 6, 50); }
 
       cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'center';

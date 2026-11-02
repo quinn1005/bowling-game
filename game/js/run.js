@@ -91,7 +91,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     const fl = GK.flags(run, stolen);
     const framesMax = GK.C.FRAMES + fl.frames;
     const rs = {
-      target: GK.roundTarget(run), total: 0, frames: [], frameIdx: 0, streak: 0, groove: 0,
+      target: GK.roundTarget(run), total: 0, frames: [], frameIdx: 0, streak: 0, groove: 0, wear: GK.newWear(), stuck: null,
       framesMax, reracks: GK.C.RERACKS + fl.reracks, stolen, loadedNext: false,
       boss, tilts: [], king: null, kingTotal: 0
     };
@@ -329,7 +329,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     try { if (run && !run.over && !run.won) localStorage.setItem(SAVE_KEY, JSON.stringify(run)); else localStorage.removeItem(SAVE_KEY); } catch (e) {}
   };
   GK.load = function () {
-    try { const s = localStorage.getItem(SAVE_KEY); if (!s) return null; const r = JSON.parse(s); if (!r || r.v !== 1) return null; r.rack = GK.padRack(r.rack); r.league = r.league || 'open'; r.asc = r.asc || 0; r.history = r.history || []; r.stats = Object.assign({ perfects: 0, pstreak: 0, bestPStreak: 0 }, r.stats); return r; } catch (e) { return null; }
+    try { const s = localStorage.getItem(SAVE_KEY); if (!s) return null; const r = JSON.parse(s); if (!r || r.v !== 1) return null; r.rack = GK.padRack(r.rack); if (r.rs && !r.rs.wear) r.rs.wear = GK.newWear(); r.league = r.league || 'open'; r.asc = r.asc || 0; r.history = r.history || []; r.stats = Object.assign({ perfects: 0, pstreak: 0, bestPStreak: 0 }, r.stats); return r; } catch (e) { return null; }
   };
   GK.clearSave = function () { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} };
   GK.meta = function () {

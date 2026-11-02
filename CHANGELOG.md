@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.5.0
+
+### New
+- **Ball return.** Your balls now sit on a ball return at the right side of the approach. Tap a ball on the return to throw it (number keys still work). The old ball buttons under the lane are gone, which leaves more room for the lane.
+- **Jammed balls.** Now and then (6% of throws) the ball you just threw gets stuck in the return. It flashes STUCK in the hood, and you have to throw a different ball before it comes back.
+- **Pinsetter fumbles.** Once in a while (5% of frames) the pinsetter fumbles after your first ball and drops one or two of the pins you left standing. They count as knocked down by that ball, so a fumble can even turn into a strike.
+- **Lane TV.** A TV beside the lane plays short pixel cartoons: pins flying off and a victory dance for strikes, two balls high-fiving for a Double, a strutting turkey for a Turkey, a pin waving a white flag (then fainting) or a fist pump for spares, a pin doing the splits for split conversions, and the 7 and 10 pins hugging for a 7-10.
+- **Oil breaks down.** Every ball strips oil from the boards it rolls over and carries a little past the end of the pattern. Throw the same line over and over and it dries out: the boards lose their blue sheen and turn brown, and your ball starts hooking earlier. The lane is freshly oiled every round.
+
 ## v0.4.0
 
 ### New

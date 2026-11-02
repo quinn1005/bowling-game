@@ -49,6 +49,23 @@ var GK = globalThis.GK = globalThis.GK || {};
     else if (pat === 'long') across = 1 - 0.2 * u;
     return Math.max(0, Math.min(1, taper * across));
   };
+  // Reactive oil: a wear grid (boards × 6in cells) kept for the whole round. Each pass of the ball
+  // strips oil from the boards it rolls over (the line dries out and hooks earlier) and pushes a
+  // little oil past the end of the pattern (carrydown, so the back end hooks less).
+  GK.WEAR = { NB: 40, DZ: 6, NZ: 60 };
+  GK.newWear = () => new Array(GK.WEAR.NB * GK.WEAR.NZ).fill(0);
+  GK.wearIdx = function (x, z, lhw) {
+    const W = GK.WEAR, L = lhw || C.LHW;
+    if (z < 0 || Math.abs(x) >= L) return -1;
+    const zi = Math.floor(z / W.DZ); if (zi >= W.NZ) return -1;
+    return zi * W.NB + Math.floor((x + L) / (2 * L) * W.NB);
+  };
+  GK.oilEff = function (pat, wear, x, z, lhw) {
+    const base = GK.oilAt(pat, x, z, lhw);
+    if (!wear || pat === 'ice') return base;
+    const i = GK.wearIdx(x, z, lhw);
+    return i < 0 ? base : Math.max(0, Math.min(1, base - wear[i]));
+  };
   // Racks are always RACK_SIZE long: spots 1-10 default to standard pins, 11-13 to empty.
   GK.padRack = function (rack) {
     const r = (rack || []).slice(0, GK.RACK_SIZE);

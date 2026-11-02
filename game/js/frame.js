@@ -10,7 +10,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     const fi = rs.frameIdx;
     const rng = GK.stream(run.seed, 'phys:' + run.alley + ':' + run.round + ':' + fi);
     const sim = new GK.Sim({
-      lane: GK.laneFor(run), rng, rack: run.rack,
+      lane: GK.laneFor(run), rng, rack: run.rack, wear: rs.wear || (rs.wear = GK.newWear()),
       layout: rs.boss === 'astronaut' ? 'random' : 'std',
       winter: rs.boss === 'winter',
       tilt: rs.boss === 'ringmaster' ? rs.tilts[fi % rs.tilts.length] : 0
@@ -24,11 +24,22 @@ var GK = globalThis.GK = globalThis.GK || {};
     return sim;
   };
 
+  // Chances for the alley's machinery to act up.
+  GK.MISHAPS = { respot: 0.05, stuck: 0.06 };
+  // A ball stuck in the return can't be thrown until you throw a different ball.
+  GK.isStuck = (run, i) => !!(run.rs && run.rs.stuck && run.rs.stuck.idx === i && run.bag.length > 1);
+  GK.firstFreeBall = (run, pref) => {
+    if (!GK.isStuck(run, pref) && run.bag[pref]) return pref;
+    for (let i = 0; i < run.bag.length; i++) if (!GK.isStuck(run, i)) return i;
+    return 0;
+  };
+
   GK.needsCall = run => run.rs.boss === 'secretary' && run.rs.cur && run.rs.cur.rollIdx === 0 && !run.rs.cur.call;
 
   // prm: { aimX, aim, spin, speed, path }
   GK.launch = function (run, sim, ballIdx, prm) {
     const rs = run.rs, cur = rs.cur, fl = GK.flags(run, rs.stolen), eq = GK.equipMods(run);
+    ballIdx = GK.firstFreeBall(run, ballIdx);
     const ball = run.bag[ballIdx] || run.bag[0];
     cur.snap = sim.snapshot();
     cur.ballIdx = ballIdx;
@@ -68,8 +79,29 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (rng() < 0.25) {
         const i = cur.ballIdx;
         if (run.bag.length > 1) run.bag.splice(i, 1); else run.bag[0] = { type: 'house', ed: null };
+        if (rs.stuck) { if (rs.stuck.idx === i) rs.stuck = null; else if (rs.stuck.idx > i) rs.stuck.idx--; }
         notes.push({ t: 'shatter', text: GK.BALLS[cur.ball.type].full + ' shattered!' });
         cur.shattered = true;
+      }
+    }
+    // Ball return: the stuck ball comes back once another ball has been thrown;
+    // otherwise there's a small chance this ball jams.
+    if (rs.stuck && rs.stuck.idx !== cur.ballIdx) { notes.push({ t: 'unstuck', text: GK.BALLS[run.bag[rs.stuck.idx] ? run.bag[rs.stuck.idx].type : 'house'].full + ' is back in the ball return' }); rs.stuck = null; }
+    if (!rs.stuck && run.bag.length > 1 && !cur.shattered) {
+      const rr = GK.stream(run.seed, 'stuck:' + run.stats.throws);
+      if (rr() < GK.MISHAPS.stuck) { rs.stuck = { idx: cur.ballIdx }; notes.push({ t: 'stuck', text: GK.BALLS[cur.ball.type].full + ' is stuck in the ball return! Throw a different ball first.', idx: cur.ballIdx }); }
+    }
+    // Pinsetter fumble: after the first roll it sometimes drops pins it was meant to respot.
+    if (cur.rollIdx === 0) {
+      const left = sim.standing();
+      const rr = GK.stream(run.seed, 'respot:' + run.alley + ':' + run.round + ':' + rs.frameIdx + ':' + run.stats.throws);
+      if (left.length && rr() < GK.MISHAPS.respot) {
+        const n = Math.min(left.length, 1 + (rr() < 0.4 ? 1 : 0));
+        const drop = rr.shuffle(left.slice()).slice(0, n);
+        drop.forEach(p => { sim.topple(p, { x: rr() - 0.5, z: 1 }, 'drop'); p.fallT = 0.3; p.counted = true; });
+        rec.down.push(...drop.map(p => ({ n: p.n, type: p.type, by: 'drop' })));
+        rec.pins += drop.length; rec.dropped = drop.length; run.stats.pins += drop.length;
+        notes.push({ t: 'respot', text: 'The pinsetter fumbled and dropped ' + (n > 1 ? n + ' pins' : 'a pin') + '!', pins: drop.map(p => p.n) });
       }
     }
     cur.rolls.push(rec);

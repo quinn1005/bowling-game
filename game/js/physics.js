@@ -36,6 +36,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       this.hookDry = L.ice ? 0 : L.lowg ? 130 : 200;
       this.hookOil = L.ice ? 0 : 22;
       this.oil = o.oil || L.oil || 'house';
+      this.wear = o.wear || null;
       this.ballFric = L.ice ? 0.01 : 0.12;
       this.pinDecel = L.ice ? 650 : L.lowg ? 900 : 1400;
       this.fallDecel = L.ice ? 110 : L.lowg ? 240 : 520;
@@ -226,7 +227,7 @@ var GK = globalThis.GK = globalThis.GK || {};
           const gx = Math.sign(b.x) * (lhw + this.gut / 2);
           b.x += (gx - b.x) * Math.min(1, dt * 12); b.vx = 0; b.z += b.vz * dt;
         } else {
-          const oil = GK.oilAt(this.oil, b.x, b.z, lhw), dry = oil < 0.5;
+          const oil = GK.oilEff(this.oil, this.wear, b.x, b.z, lhw);
           let ax = b.spin * (this.hookOil + (this.hookDry - this.hookOil) * (1 - oil));
           if (this.warp) ax += this.warp * Math.sin(b.z / 38 + this.warpPh);
           ax += this.tilt;
@@ -239,6 +240,7 @@ var GK = globalThis.GK = globalThis.GK || {};
           const f = Math.max(0, 1 - this.ballFric * (0.25 + 0.75 * (1 - oil)) * dt);
           b.vx *= f; b.vz *= f;
           b.x += b.vx * dt; b.z += b.vz * dt;
+          if (this.wear && this.oil !== 'ice') this.wearLine(b, lhw);
           const bouncy = (b.type === 'bouncer' || this.bumpers) && !b.shard;
           if (bouncy && b.z < C.ZBACK && Math.abs(b.x) > lhw - b.r * 0.4 && Math.sign(b.vx) === Math.sign(b.x)) {
             b.x = Math.sign(b.x) * (lhw - b.r * 0.4); b.vx = -b.vx * 0.85 - Math.sign(b.x) * 15;
@@ -380,6 +382,25 @@ var GK = globalThis.GK = globalThis.GK || {};
         const blastsDone = this.blasts.every(b => b.done);
         this.settleT = ballsDone && quiet && blastsDone ? this.settleT + dt : 0;
         if (this.settleT > 0.4 || this.throwT > 10) this.rolling = false;
+      }
+    }
+
+    // Strip oil from the cells this ball rolls over (once per cell per pass), carry some downlane.
+    wearLine(b, lhw) {
+      const i = GK.wearIdx(b.x, b.z, lhw);
+      if (i < 0 || i === b.lastCell) return;
+      b.lastCell = i;
+      const W = this.wear, nb = GK.WEAR.NB, k = Math.min(1.5, b.m / 6) * Math.min(1.4, b.r / C.BALL_R);
+      const base = GK.oilAt(this.oil, b.x, b.z, lhw);
+      if (base > 0.05) {
+        const bi = i % nb;
+        for (const [d, amt] of [[0, 0.07], [-1, 0.035], [1, 0.035]]) {
+          if (bi + d < 0 || bi + d >= nb) continue;
+          const j = i + d;
+          W[j] = Math.min(base, W[j] + amt * base * k);
+        }
+      } else if (b.z < C.ZH - 20) {
+        W[i] = Math.max(-0.35, W[i] - 0.025 * k);
       }
     }
 

@@ -261,3 +261,46 @@ test('new charms: Shoes of Destiny, Chain Gang and Rebound', () => {
   const rb = GK.scoreFrame({ kind: 'open', rolls: [roll({ down: pins(6), pins: 6, rebounded: true })] }, GK.newRun({ seed: 1 }));
   assert.strictEqual(rb.chips, 15);
 });
+
+test('reactive oil: throwing the same line dries it out and the ball hooks more', () => {
+  const wear = GK.newWear(), xs = [];
+  for (let t = 0; t < 6; t++) {
+    const s = new GK.Sim({ rng: GK.makeRng(1), lane: { oil: 'house' }, rack: new Array(10).fill('none'), wear });
+    s.launch({ type: 'house' }, { aimX: 6, aim: 0, spin: -0.35, speed: 330 });
+    for (let i = 0; i < 240 * 1.3; i++) s.step();
+    xs.push(s.balls[0].x);
+  }
+  assert.ok(xs[5] < xs[0] - 2, 'later throws hook further: ' + xs.map(x => x.toFixed(1)).join(' '));
+  assert.ok(wear.some(w => w > 0) && wear.some(w => w < 0), 'oil is stripped and carried down');
+  assert.ok(GK.oilEff('house', wear, 6, 100) < GK.oilAt('house', 6, 100));
+});
+
+test('ball return: a stuck ball cannot be thrown until another ball is', () => {
+  const run = GK.newRun({ seed: 21 });
+  GK.startRound(run);
+  run.rs.stuck = { idx: 0 };
+  assert.ok(GK.isStuck(run, 0));
+  assert.strictEqual(GK.firstFreeBall(run, 0), 1);
+  const sim = GK.beginFrame(run);
+  GK.launch(run, sim, 0, { aimX: 2, aim: 0, spin: 0, speed: 380 });
+  assert.strictEqual(run.rs.cur.ballIdx, 1, 'launch swaps away from the stuck ball');
+  sim.simulate();
+  const prev = GK.MISHAPS.stuck; GK.MISHAPS.stuck = 0;
+  try { GK.afterRoll(run, sim); } finally { GK.MISHAPS.stuck = prev; }
+  assert.strictEqual(run.rs.stuck, null, 'the stuck ball comes back after another ball is thrown');
+});
+
+test('pinsetter fumble: drops leftover pins after the first roll and counts them', () => {
+  const run = GK.newRun({ seed: 5 });
+  GK.startRound(run);
+  const prev = GK.MISHAPS.respot; GK.MISHAPS.respot = 1;
+  try {
+    const sim = GK.beginFrame(run);
+    GK.launch(run, sim, 0, { aimX: 14, aim: 0, spin: 0, speed: 250 });
+    sim.simulate();
+    const out = GK.afterRoll(run, sim);
+    const note = out.notes.find(n => n.t === 'respot');
+    assert.ok(note, 'fumble happened');
+    assert.ok(out.rec.dropped >= 1 && out.rec.down.filter(d => d.by === 'drop').length === out.rec.dropped);
+  } finally { GK.MISHAPS.respot = prev; }
+});
