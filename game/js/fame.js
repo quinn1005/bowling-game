@@ -148,7 +148,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       r(27, 46, 11, 1, '#f0ece4');
       p(24, 41, skinD); p(40, 41, skinD); r(26, 47, 13, 1, '#d09088');
     } else if (who === 'levi') {
-      const hair = '#2a1c14', hairD = '#1a110c', hairL = '#4a3424', skin = '#f2d4bc', skinD = '#dab49c', skinL = '#fbe4d2', stub = '#c4a08a';
+      const hair = '#2a1c14', hairD = '#1a110c', hairL = '#4a3424', skin = '#f2d4bc', skinD = '#dab49c', skinL = '#fbe4d2';
       const sh = '#3a8ad0', shD = '#2c6eaa', shL = '#5aa4e4', tee = '#4aa8e6', teeD = '#3a8ccc';
       backdrop('#24345a', '#162038');
       torso(32, 59, 32, sh, shD, shL);
@@ -163,15 +163,9 @@ var GK = globalThis.GK = globalThis.GK || {};
       neck(32, 47, 61, 7, skin, skinD);
       // hair: a tight cap behind the head
       ell(32, 22, 13.5, 11, hair);
-      const rows = face({ cx: 32, top: 18, bot: 53, rx: 12, skin, skinD, skinL, chin: 0.55 });
+      face({ cx: 32, top: 18, bot: 53, rx: 12, skin, skinD, skinL, chin: 0.55 });
       chinShadow(32, 54, 6, skinD);
       ell(19.5, 35, 2, 4, skin); ell(44.5, 35, 2, 4, skinD);
-      // light stubble along the jaw, chin and upper lip
-      for (let y = 40; y < 54; y++) for (let x = 22; x < 43; x++) {
-        const inFace = rows[y] != null && Math.abs(x - 32 + 0.5) < rows[y] - 0.5;
-        const zone = y >= 47 || x < 25 || x > 39 || (y >= 41 && y <= 42 && x > 27 && x < 37);
-        if (inFace && zone && hash(x, y) % 5 < 2) p(x, y, stub);
-      }
       // pulled back tight into a top bun: the hairline sits high, a few loose strands at the temples
       for (let y = 14; y < 24; y++) {
         const hw = 12.5 * Math.sqrt(Math.max(0, 1 - ((y - 22) / 9) ** 2));
