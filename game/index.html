@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<meta name="theme-color" content="#140e16">
+<meta name="theme-color" content="#0f0b14">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -13,28 +13,28 @@
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600;700&family=Silkscreen:wght@400;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Rubik:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <div class="app" id="app">
   <header class="top">
-    <div style="min-width:0">
+    <div class="titleblock">
       <div class="lbl" id="alleyLbl">Lucky Strike Lanes</div>
       <div class="round" id="round">Qualifier</div>
     </div>
     <div class="scorewrap">
-      <div class="lbl" id="target">Target 600</div>
+      <div class="lbl" id="target">Target 500</div>
       <div class="score" id="score">0</div>
     </div>
     <div class="bar" id="bar"><i></i></div>
     <div class="meta">
-      <span class="lbl" id="frameLbl">Frame 1 of 5 · Roll 1</span>
+      <span class="pill frame" id="frameLbl">Frame 1 of 5 · Roll 1</span>
       <span class="grow"></span>
       <span class="pill groove" id="grooveLbl" title="Groove: PERFECT throws in a row, +1 Mult each" hidden>♪ 0</span>
       <span class="pill rr" id="rrLbl" title="Re-racks left">↻ 2</span>
       <span class="pill money" id="money">$4</span>
-      <button class="iconbtn" id="menuBtn" type="button" aria-label="Menu">Menu</button>
+      <button class="iconbtn" id="menuBtn" type="button" aria-label="Menu"><span></span><span></span><span></span></button>
     </div>
   </header>
 
@@ -51,11 +51,12 @@
 
   <div class="stage" id="stage">
     <div class="lanebox" id="lanebox">
-      <canvas id="lane" aria-label="Bowling lane. Tap to stop each moving slider in turn: start spot, angle, power, then hook. The last tap throws."></canvas>
+      <canvas id="lane" aria-label="Bowling lane. Tap to stop each moving slider in turn: start spot, angle, power, then hook. The last tap throws. Tap a ball on the ball return to switch balls."></canvas>
       <div class="banner" id="banner" hidden></div>
       <div class="toast" id="toast" hidden></div>
+      <div class="coach" id="coach" hidden role="status"><b>Tip</b><p></p><span>Tap to close</span></div>
       <div class="callbar" id="callbar" hidden>
-        <div class="lbl" style="color:var(--mult)">The League Secretary: call your shot</div>
+        <div class="lbl">The League Secretary: call your shot</div>
         <div class="row">
           <button class="btn small" type="button" data-call="strike">Strike</button>
           <button class="btn small" type="button" data-call="spare">Spare</button>
@@ -67,10 +68,10 @@
 
   <div class="ctrl" id="ctrl">
     <div class="cmid">
-      <span class="stepLbl" id="stepLbl">1 · Tap to stop the start slider</span>
-      <div class="pbar" id="pbar" hidden aria-hidden="true"><i id="pzone"></i><b id="pneedle"></b></div>
-      <div class="sbar" id="sbar" hidden aria-hidden="true"><i></i><span id="sbarLbl">start</span><b id="sneedle"></b></div>
-      <div class="hbar" id="hbar" hidden aria-hidden="true"><i></i><span class="hl">← hook</span><span class="hr">hook →</span><b id="hneedle"></b></div>
+      <span class="stepLbl" id="stepLbl">Tap to stop the start slider</span>
+      <div class="meter sbar" id="sbar" hidden aria-hidden="true"><i></i><span id="sbarLbl">start</span><b id="sneedle"></b></div>
+      <div class="meter pbar" id="pbar" hidden aria-hidden="true"><i id="pzone"></i><span>power</span><b id="pneedle"></b></div>
+      <div class="meter hbar" id="hbar" hidden aria-hidden="true"><i></i><span class="hl">← hook</span><span class="hr">hook →</span><b id="hneedle"></b></div>
     </div>
     <button class="cbtn" id="setBtn" type="button">Set start</button>
   </div>
@@ -78,14 +79,14 @@
   <div class="dock">
     <div class="slots" id="bag" role="group" aria-label="Ball bag" hidden></div>
     <div class="slots" id="cons" role="group" aria-label="Consumables"></div>
-    <button class="rerack" id="rerackBtn" type="button" title="Reset all pins and take your first roll again">Re-<br>rack</button>
-    <div class="rule" id="rule"></div>
+    <button class="rerack" id="rerackBtn" type="button" title="Reset all pins and take your first roll again">↻ Re-rack</button>
   </div>
+  <div class="rule" id="rule" hidden></div>
 
   <div class="card" id="card" aria-label="Scorecard"></div>
 
   <div class="layer" id="layer" hidden><div class="inner" id="layerInner"></div></div>
-  <div class="layer" id="modal" hidden style="z-index:30"><div class="inner" id="modalInner"></div></div>
+  <div class="layer modal" id="modal" hidden><div class="inner" id="modalInner"></div></div>
 </div>
 
 <script src="js/version.js"></script>

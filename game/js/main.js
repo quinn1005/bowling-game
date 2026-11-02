@@ -9,6 +9,8 @@
   let meta = GK.meta();
   GK._meta = meta;
   sfx.setMuted(!!meta.muted);
+  GK.music.setOn(meta.music !== false);
+  GK.haptic.setOn(meta.haptics !== false);
   // Replays: frames recorded while a roll plays, so strikes and the best frame can be shown again.
   let recFrames = [], lastRec = null, bestReplay = null, replay = null, crowd = { mood: 'idle', t: 0 }, tv = null;
   try { fast = localStorage.getItem('gk-fast') === '1'; } catch (e) {}
@@ -20,11 +22,8 @@
   // ---------- sizing ----------
   function fit() {
     const r = $('stage').getBoundingClientRect();
-    // Integer scaling in device pixels keeps the pixel art crisp (no moiré on the boards).
-    const dpr = window.devicePixelRatio || 1;
-    let s = Math.min(r.width / C.W, r.height / C.H);
-    const si = Math.floor(s * dpr) / dpr;
-    if (si >= s * 0.82) s = si;
+    // The lane renders at high resolution, so it can scale to fill the space exactly.
+    const s = Math.min(r.width / C.W, r.height / C.H);
     $('lanebox').style.width = Math.floor(C.W * s) + 'px';
     $('lanebox').style.height = Math.floor(C.H * s) + 'px';
   }
@@ -61,7 +60,8 @@
   }
   const newRunScreen = () => UI.bagSelect(meta, o => startRun(o), title);
   function title() {
-    phase = 'menu'; run = null; sim = null; replay = null;
+    phase = 'menu'; run = null; sim = null; replay = null; coach(null);
+    GK.music.stop();
     UI.hideModal();
     UI.title(meta, saveDesc(GK.load()), {
       continue: () => { const s = GK.load(); if (s) resume(s); },
@@ -69,6 +69,7 @@
       daily: () => startRun({ bag: 'classic', seed: GK.dailySeed(), daily: true }),
       how: () => UI.how(),
       collection: () => UI.collection(meta),
+      practice: () => UI.practiceSetup(startPractice, title),
       sound: el => { sfx.init(); sfx.setMuted(!sfx.muted); meta.muted = sfx.muted; GK.saveMeta(meta); el.textContent = sfx.muted ? 'Sound off' : 'Sound on'; }
     });
   }
@@ -83,6 +84,8 @@
     sfx.init();
     run = s; sel = 0; bestReplay = null;
     if (run.phase === 'shop' && run.shop) { themeRound(); showShop(); return; }
+    if (run.phase === 'shop' && run.event) { themeRound(); showEvent(run.event); return; }
+    if (run.phase === 'round' && run.rs && run.rs.cur) { themeRound(); UI.hideLayer(); resumeFrame(); return; }
     if (run.phase === 'round' && run.rs && (run.rs.frameIdx > 0 || run.rs.total > 0)) {
       themeRound(); UI.hideLayer(); beginFrame(); return;
     }
@@ -96,29 +99,56 @@
     sim = null; resetTally(); setPhase('intro');
     UI.shot(GK.roundName(run) + ' · target ' + fmt(run.rs.target));
     if (GK.isBoss(run)) sfx.boss();
-    UI.intro(run, () => { UI.hideLayer(); beginFrame(); UI.banner(GK.roundName(run).toUpperCase(), 'Target ' + fmt(run.rs.target), 1300); });
+    UI.intro(run, () => { UI.hideLayer(); beginFrame(); UI.banner(GK.roundName(run).toUpperCase(), 'Target ' + fmt(run.rs.target), 1800); },
+      GK.canSkip(run) ? () => { const r = GK.skipRound(run); sfx.coin(); UI.toast(r.msg, 3200); GK.save(run); toIntro(); } : null);
   }
 
   // ---------- frames ----------
+  // Rebuild a frame that was saved mid-way. A throw that was already in the air is replayed.
+  function resumeFrame() {
+    playMusic();
+    sim = GK.beginFrame(run, true);
+    sim.onEvent = onSimEvent;
+    R.setWear(run.rs.wear); pickGlow(); resetTally();
+    const cur = run.rs.cur;
+    step = 'pos'; posT0 = performance.now();
+    if (cur.pending) {
+      const pd = cur.pending; sel = GK.firstFreeBall(run, pd.ballIdx);
+      setPhase('aim'); throwBall(Object.assign({}, pd.prm));
+      UI.toast('Picking up where you left off: your last throw is still rolling', 2600);
+      return;
+    }
+    UI.shot('Frame ' + (run.rs.frameIdx + 1) + ' · roll ' + (cur.rollIdx + 1));
+    setPhase(GK.needsCall(run) ? 'call' : 'aim');
+  }
+  const playMusic = () => { if (run) GK.music.play(GK.isChamp(run) ? 7 : GK.baseAlley(run), GK.isBoss(run)); };
   function beginFrame() {
-    GK.save(run);
+    playMusic();
     sim = GK.beginFrame(run);
+    GK.save(run);
     sim.onEvent = onSimEvent;
     R.setWear(run.rs.wear);
     pickGlow();
     step = 'pos'; posT0 = performance.now();
     resetTally();
     const rs = run.rs;
+    hint('step_pos');
+    if (GK.isBoss(run) && rs.frameIdx === 0) hint('boss');
     UI.shot('Frame ' + (rs.frameIdx + 1) + ' · line up your shot');
     if (rs.loadedNext) UI.toast('Loaded Ball: this frame gets ×3 Mult');
     if (rs.boss === 'bookie' && rs.cur.bet) UI.toast('The Bookie takes ' + GK.money(rs.cur.bet) + ' as a bet');
     if (rs.boss === 'ringmaster') UI.toast('The lane tilts ' + (rs.tilts[rs.frameIdx % rs.tilts.length] > 0 ? 'right' : 'left'));
     if (rs.boss === 'astronaut') UI.toast('The rack respawned somewhere new');
+    if (rs.cur.rent) UI.toast('The Landlord collects $2 rent');
+    if (rs.cur.rentMiss) UI.toast('You can\'t pay the rent: this frame gets -2 Mult');
+    if (rs.boss === 'janitor' && rs.frameIdx > 0) UI.toast('The Janitor mopped fresh oil over your line');
+    if (rs.cur.laneEvent) { const ev = GK.LANE_EVENTS[rs.cur.laneEvent]; UI.toast(ev.name + ': ' + ev.desc, 3200); hint('laneEvent'); }
     setPhase(GK.needsCall(run) ? 'call' : 'aim');
   }
   function pickGlow() {
     glow = null;
     if (!laneOf().dark || !sim) return;
+    if (laneOf().fog) { glow = new Set(); return; }
     const rng = GK.stream(run.seed, 'glow:' + run.alley + ':' + run.round + ':' + run.rs.frameIdx + ':' + run.stats.throws);
     glow = new Set(rng.shuffle(sim.pins.map(p => p.n)).slice(0, 4));
   }
@@ -144,6 +174,7 @@
     const b = run.bag[sel];
     if (b.type === 'snake' && !prm.path) prm.path = GK.snakePath(prm.aimX, prm.aim, laneOf().lhw || C.LHW);
     GK.launch(run, sim, sel, prm);
+    GK.save(run);
     hitStop = 0; step = 'pos'; posT0 = performance.now(); recFrames = [];
     UI.shot(GK.BALLS[b.type].full + ' away');
     setPhase('rolling');
@@ -152,7 +183,7 @@
   function onSimEvent(e) {
     switch (e.t) {
       case 'clack': sfx.clack(e.v); break;
-      case 'first': hitStop = 0.07; R.shake = Math.min(4, R.shake + 2); break;
+      case 'first': hitStop = 0.07; R.shake = Math.min(4, R.shake + 2); GK.haptic('light'); break;
       case 'down':
         if (e.by === 'pin') R.pop(e.x, e.z, 18, '+3', '#39c6d6');
         else if (e.by === 'late') R.pop(e.x, e.z, 18, '+4 late', '#39c6d6');
@@ -160,8 +191,8 @@
         if (e.type === 'glass') sfx.shatter();
         if (run && sim.roll && sim.roll.ball === 'feather' && e.by === 'pin') R.pop(e.x + 3, e.z, 26, '+2 mult', '#ff5a6e');
         break;
-      case 'gutter': if (e.main) { sfx.gutter(); if (e.early) R.pop(e.x, e.z, 10, 'GUTTER', '#ff5a6e'); } break;
-      case 'explode': sfx.boom(); R.shake = 7; R.flash = 0.6; R.burst(e.x, e.z, '#ffd447', 14, 70); break;
+      case 'gutter': if (e.main) { sfx.gutter(); GK.haptic('medium'); if (e.early) R.pop(e.x, e.z, 10, 'GUTTER', '#ff5a6e'); } break;
+      case 'explode': sfx.boom(); GK.haptic('heavy'); R.shake = 7; R.flash = 0.6; R.burst(e.x, e.z, '#ffd447', 14, 70); break;
       case 'ghost': sfx.ghost(); R.pop(e.x, e.z, 22, 'boo', '#e8f0ff'); break;
       case 'swallow': sfx.swallow(); R.burst(e.x, e.z, '#b06bff', 6, 30); break;
       case 'ballBounce': sfx.bounce(); R.pop(e.x, e.z, 10, e.post ? 'BONK' : 'BOUNCE', '#7be38a'); break;
@@ -180,10 +211,12 @@
     sfx.roll(0);
     const token = ++busyToken;
     const out = GK.afterRoll(run, sim);
+    if (out.next === 'aim') GK.save(run);
     lastRec = { frames: recFrames, alley: run.alley, champ: GK.isChamp(run), lane: laneOf(), def: GK.alleyDef(run), preview: run.rs.cur && run.rs.cur.ball, glow, dark: laneOf().dark };
     recFrames = [];
     UI.card(run); refresh();
     R.setWear(run.rs.wear);
+    if (run.rs.wear.some(w => w > 0.3)) hint('oil');
     if (out.rec.perfect === true) { R.pop(aimX, 20, 18, 'GROOVE ×' + run.rs.groove, '#7be38a'); feats({ t: 'throw', streak: run.stats.pstreak, run }); }
     for (const n of out.notes) {
       UI.toast(n.text, 1800);
@@ -191,9 +224,9 @@
       if (n.t === 'mechanic') { R.pop(0, C.ZH + 12, 30, 'THE MECHANIC RESETS ' + n.pins.length, '#ff5a6e'); sfx.crack(); }
       if (n.t === 'split') UI.shot(n.text);
       if (n.t === 'pay') sfx.coin();
-      if (n.t === 'stuck') { sfx.nope(); R.pop(12, -20, 20, 'JAMMED!', '#ff5a6e'); }
+      if (n.t === 'stuck') { sfx.nope(); GK.haptic('medium'); hint('stuck'); R.pop(12, -20, 20, 'JAMMED!', '#ff5a6e'); }
       if (n.t === 'unstuck') sfx.tick(660);
-      if (n.t === 'respot') { sfx.crack(); R.pop(0, C.ZH + 10, 34, 'PINSETTER FUMBLE!', '#ffd447'); R.shake = 3; }
+      if (n.t === 'respot') { sfx.crack(); hint('respot'); R.pop(0, C.ZH + 10, 34, 'PINSETTER FUMBLE!', '#ffd447'); R.shake = 3; }
     }
     if (out.rec.gutterBall) cheer('groan');
     if (out.next === 'aim') {
@@ -240,11 +273,66 @@
     if (phase === 'replay') phase = 'busy';
     d();
   }
+  // ---------- tutorial hints ----------
+  // Each hint shows once (remembered in meta); the first run's first frame walks through the steps.
+  const HINTS = {
+    step_pos: 'Tap anywhere on the lane to stop the ball where you want to start. The bar under the lane slides with it.',
+    step_angle: 'Now the arrow swings. Tap when it points where you want your ball to go.',
+    step_power: 'Tap inside the thin green zone for a PERFECT throw. Late taps go too hard and the ball wobbles.',
+    step_hook: 'Last, the hook dial. Left curves the ball left, right curves it right. Stop it near the middle to roll straight.',
+    groove: 'PERFECT! Throw PERFECT again and again to build Groove: +1 Mult per stack on every frame.',
+    oil: 'See the boards turning brown? You are drying out your line. The ball will start hooking earlier there.',
+    stuck: 'Your ball jammed in the ball return. Tap a different ball on the return; the stuck one comes back after.',
+    respot: 'The old pinsetter fumbles now and then. Free pins!',
+    laneEvent: 'Lane surprises like this can happen at the start of any frame except in Boss Matches.',
+    boss: 'Boss Match! Read the boss rule on the intro card. Bosses change how the whole round plays.',
+    shop: 'The Pro Shop: charms trigger left to right after every frame, so their order matters. Tap your charms below to sell or move them.'
+  };
+  let coachT = 0;
+  function hint(key) {
+    if (!HINTS[key] || meta.hintsOff) return;
+    meta.hints = meta.hints || {};
+    if (meta.hints[key]) return;
+    meta.hints[key] = true; GK.saveMeta(meta);
+    coach(HINTS[key]);
+  }
+  function coach(text) {
+    const el = $('coach'); if (!el) return;
+    clearTimeout(coachT);
+    if (!text) { el.hidden = true; return; }
+    el.querySelector('p').textContent = text; el.hidden = false;
+    el.classList.remove('in'); void el.offsetWidth; el.classList.add('in');
+    coachT = setTimeout(() => { el.hidden = true; }, 9000);
+  }
+  $('coach').addEventListener('click', () => coach(null));
+
+  // ---------- practice lane ----------
+  function startPractice(alley) {
+    sfx.init();
+    run = GK.newRun({ seed: (Date.now() >>> 0), bag: 'classic' });
+    run.practice = true; run.alley = alley; run.round = 0; run.maxBag = 4;
+    run.bag = ['house', 'feather', 'lead', 'split'].map(type => ({ type, ed: null }));
+    GK.startRound(run);
+    run.rs.target = Infinity; run.rs.framesMax = 999; run.rs.reracks = 99; run.rs.boss = null;
+    sel = 0; bestReplay = null;
+    themeRound(); UI.hideLayer();
+    UI.banner('PRACTICE', GK.alleyDef(run).name + ' · ' + GK.OIL[laneOf().oil || 'house'].name, 1800);
+    beginFrame();
+  }
+
   function cheer(mood) { crowd = { mood, t: 0 }; }
+  // Big TV: replays the latest cartoon on a loop (or the idle channel).
+  let tvBig = null, lastTv = null;
+  function openTV() {
+    sfx.tick(600);
+    tvBig = { t: 0 };
+    UI.tvModal(() => { tvBig = null; });
+  }
   function tvShow(kind, leave710) {
     const k = kind === 'split' ? (leave710 ? 'seven10' : 'split') : kind;
     if (!['strike', 'double', 'turkey', 'spare', 'split', 'seven10'].includes(k)) return;
     tv = { kind: k, t: 0, v: Math.floor(Math.random() * 2) };
+    lastTv = { kind: k, v: tv.v };
   }
 
   const stepText = st => st.op === 'chips' ? '+' + fmt(st.v) + ' Points' : st.op === 'mult' ? '+' + (Math.round(st.v * 10) / 10) + ' Mult' : st.op === 'xmult' ? '×' + (Math.round(st.v * 100) / 100) + ' Mult' : st.op === 'money' ? '+$' + st.v : '';
@@ -255,7 +343,7 @@
     const rs = run.rs, s = GK.SHOTS[kind];
     const live = () => token === busyToken && run && run.rs === rs;
     const res = GK.scoreCurrent(run, kind);
-    if (GK.isStrikeKind(kind)) { R.shake = 6; sfx.strike(); R.flash = 0.35; }
+    if (GK.isStrikeKind(kind)) { R.shake = 6; sfx.strike(); R.flash = 0.35; GK.haptic('success'); }
     else if (GK.isSpareKind(kind)) sfx.spare();
     tvShow(kind, res.ctx.leave710);
     const pinsSum = rs.cur.rolls.reduce((a, r) => a + r.pins, 0);
@@ -298,6 +386,7 @@
 
   // Check feats against an event; announce and save anything newly unlocked.
   function feats(ev) {
+    if (run && run.practice) return;
     const got = GK.checkFeats(meta, ev);
     if (!got.length) return;
     GK.saveMeta(meta);
@@ -308,6 +397,7 @@
   }
 
   function bumpMeta() {
+    if (run && run.practice) return;
     const reached = GK.isChamp(run) ? 9 : run.alley + 1;
     meta.bestAlley = Math.max(meta.bestAlley, run.won ? 9 : reached);
     if (run.daily) {
@@ -346,21 +436,51 @@
     feats({ t: 'reach', run });
     bumpMeta();
     GK.openShop(run);
+    GK.applyShopTags(run);
+    run.event = GK.rollEvent(run);
     GK.save(run);
     setPhase('menu');
     const tk = busyToken;
-    setTimeout(() => tk === busyToken && UI.payout(payRun, lines, score, showShop), 700);
+    setTimeout(() => tk === busyToken && UI.payout(payRun, lines, score, () => run.event ? showEvent(run.event) : showShop()), 700);
   }
   function roundLost() {
     sfx.lose();
     run.over = true; bumpMeta(); GK.clearSave();
+    if (GK.isEndless(run)) { meta.bestEndless = Math.max(meta.bestEndless || 0, run.alley - GK.ALLEY_COUNT); GK.saveMeta(meta); }
     setPhase('menu');
     UI.banner('RUN OVER', fmt(run.rs.total) + ' / ' + fmt(run.rs.target), 1500);
     const tk = busyToken;
     setTimeout(() => tk === busyToken && showEnd(false), 1200);
   }
+  // Between-round event: one offer, take it or walk away, then on to the shop.
+  function showEvent(ev) {
+    const done = r => {
+      if (r && r.ok === false) { sfx.nope(); UI.toast(r.msg || 'Can\'t do that'); return; }
+      if (r && r.msg) { sfx.buy(); UI.toast(r.msg, 2600); }
+      run.event = null; GK.save(run); UI.hideModal(); showShop();
+    };
+    UI.eventScreen(run, ev, {
+      take: () => {
+        if (ev.id === 'lane_mech') return drillFlow(true, r => done(r));
+        const r = GK.takeEvent(run, ev);
+        if (r.need === 'replace') return UI.ballPicker(run, 'Leave a ball behind', r.msg, i => done(GK.takeEvent(run, ev, i)), UI.hideModal);
+        done(r);
+      },
+      leave: () => done(null)
+    });
+  }
+  // Pick a ball, then a layout. free = the lane mechanic's favour.
+  function drillFlow(free, after) {
+    UI.ballPicker(run, 'Re-drill a ball', free ? 'Pick a ball for the free re-drill.' : 'Pick a ball to re-drill for ' + (GK.drillCost(run) ? '$' + GK.drillCost(run) : 'free') + '.', bi => {
+      UI.drillPicker(run, bi, id => { UI.hideModal(); after(free ? GK.takeEvent(run, run.event || { id: 'lane_mech' }, { ball: bi, drill: id }) : GK.redrill(run, bi, id)); }, UI.hideModal);
+    }, UI.hideModal);
+  }
   function showEnd(won) {
     UI.end(run, won, meta, {
+      endless: won ? () => {
+        GK.startEndless(run); GK.openShop(run); GK.applyShopTags(run); GK.save(run);
+        themeRound(); UI.toast('Endless mode: the alleys come around again, and the targets keep climbing.', 3200); showShop();
+      } : null,
       again: newRunScreen, title,
       best: bestReplay ? () => {
         const rec = bestReplay;
@@ -374,6 +494,7 @@
   // ---------- shop ----------
   function showShop() {
     phase = 'shop';
+    hint('shop');
     UI.hud(run); UI.charms(run, tapCharm);
     UI.shop(run, {
       buy: i => {
@@ -385,6 +506,7 @@
         after(r);
       },
       member: () => after(GK.buyMember(run)),
+      drill: () => drillFlow(false, r => after(r)),
       reroll: () => after(GK.reroll(run)),
       info: () => UI.runInfo(run),
       next: () => { UI.hideLayer(); run.phase = 'intro'; toIntro(); },
@@ -399,7 +521,7 @@
       },
       ball: i => {
         const b = run.bag[i];
-        UI.detail(UI.info('ball', b.type, b.ed), [
+        UI.detail(UI.info('ball', b.type, b.ed, b), [
           { label: 'Sell for $' + GK.ballSell(b), fn: () => { const r = GK.sellBall(run, i); if (!r.ok) { UI.hideModal(); sfx.nope(); return UI.toast(r.msg); } sfx.coin(); UI.hideModal(); showShop(); }, cls: 'danger', disabled: run.bag.length <= 1 },
           { label: 'Close', fn: UI.hideModal, cls: 'alt' }
         ]);
@@ -457,6 +579,14 @@
       fast: () => fast,
       replays: el => { meta.replays = meta.replays === false; GK.saveMeta(meta); el.textContent = meta.replays === false ? 'Replays: off' : 'Replays: on'; },
       replaysOn: () => meta.replays !== false,
+      music: el => { meta.music = meta.music === false; GK.saveMeta(meta); GK.music.setOn(meta.music !== false); if (meta.music !== false) playMusic(); el.textContent = meta.music === false ? 'Music: off' : 'Music: on'; },
+      musicOn: () => meta.music !== false,
+      haptics: el => { meta.haptics = meta.haptics === false; GK.saveMeta(meta); GK.haptic.setOn(meta.haptics !== false); el.textContent = meta.haptics === false ? 'Vibration: off' : 'Vibration: on'; },
+      hapticsOn: () => meta.haptics !== false,
+      hints: el => { meta.hintsOff = !meta.hintsOff; if (!meta.hintsOff) meta.hints = {}; GK.saveMeta(meta); el.textContent = meta.hintsOff ? 'Hints: off' : 'Hints: on'; },
+      hintsOn: () => !meta.hintsOff,
+      practice: () => !!(run && run.practice),
+      freshOil: () => { if (run && run.rs) { run.rs.wear = GK.newWear(); R.setWear(run.rs.wear); UI.toast('Fresh oil on the lane'); } UI.hideModal(); },
       title: () => { busyToken++; if (run && !run.over && !run.won) GK.save(run); UI.hideLayer(); title(); },
       abandon: () => {
         UI.detail({ name: 'Abandon run?', k: 'Are you sure', desc: 'This run will end and its save will be deleted.', col: '#ff5a6e' }, [
@@ -477,6 +607,8 @@
     if (!run || !run.bag[i]) return;
     if (GK.isStuck(run, i)) { sfx.nope(); UI.toast(GK.BALLS[run.bag[i].type].full + ' is stuck in the ball return. Throw another ball first.'); return; }
     sel = i; sfx.tick(760); refresh();
+    const b = run.bag[i], d = GK.BALLS[b.type];
+    UI.toast(d.full + (b.ed ? ' (' + GK.EDITIONS[b.ed].name + ')' : '') + ': ' + d.desc);
   }
   const aimLim = () => C.LHW - C.BALL_R - 0.5 - (C.LHW - (laneOf().lhw || C.LHW));
   const angLim = () => 0.085 * Math.max(1, GK.equipMods(run).aim);
@@ -503,6 +635,7 @@
   };
   function setStep(s2) {
     step = s2;
+    hint('step_' + s2);
     if (s2 === 'pos') posT0 = performance.now();
     if (s2 === 'angle') angT0 = performance.now();
     if (s2 === 'power') powerT0 = performance.now();
@@ -536,7 +669,7 @@
   function lockPower() {
     const p = powerNow(), z = zone();
     let label;
-    if (p >= z[0] && p <= z[1]) { label = 'PERFECT!'; sfx.coin(); }
+    if (p >= z[0] && p <= z[1]) { label = 'PERFECT!'; sfx.coin(); GK.haptic('medium'); hint('groove'); }
     else if (p > z[1]) { label = 'TOO HARD'; sfx.tick(220); }
     else { label = p < 0.45 ? 'SOFT' : 'GOOD'; sfx.tick(440); }
     lockedPower = { p, label, perfect: label === 'PERFECT!' };
@@ -561,6 +694,10 @@
   cv.addEventListener('pointerdown', e => {
     sfx.init();
     if (phase === 'replay') { e.preventDefault(); endReplay(); return; }
+    {
+      const rr = cv.getBoundingClientRect(), bx = (e.clientX - rr.left) / rr.width * C.W, by = (e.clientY - rr.top) / rr.height * C.H;
+      if (run && R.tvHit(bx, by)) { e.preventDefault(); openTV(); return; }
+    }
     if (phase !== 'aim') return;
     e.preventDefault();
     if (step === 'pos' || step === 'angle') {
@@ -590,6 +727,8 @@
   GK.debug.skipReplay = () => endReplay();
   GK.debug.select = i => { sel = i; refresh(); };
   GK.debug.pickBall = i => pickBall(i);
+  GK.debug.showEvent = ev => { UI.hideModal(); showEvent(ev); };
+  GK.debug.showEnd = won => { busyToken++; UI.hideModal(); showEnd(won); };
   GK.debug.tv = k => tvShow(k, false);
   GK.debug.jump = (alley, round) => { busyToken++; UI.hideLayer(); UI.hideModal(); run.alley = alley; run.round = round; toIntro(); };
 
@@ -626,6 +765,12 @@
     if (phase === 'aim' && step === 'hook') $('hneedle').style.left = ((dialNow() + 1) * 50) + '%';
     crowd.t += realDt; if (crowd.mood !== 'idle' && crowd.t > 2.4) crowd = { mood: 'idle', t: 0 };
     if (tv) { tv.t += realDt; if (tv.t > 3.4) tv = null; }
+    if (tvBig) {
+      tvBig.t += realDt;
+      const c = document.getElementById('tvBig');
+      if (c) { const g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height); GK.drawTVScene(g, c.width, c.height, lastTv && lastTv.kind, lastTv ? tvBig.t % 3.4 : 0, lastTv && lastTv.v, R.theme); }
+      else tvBig = null;
+    }
     R.tick(realDt);
     const rs = run && run.rs;
     const thrown = rs && rs.cur && rs.cur.ball && phase !== 'aim' ? rs.cur.ball : null;
@@ -637,6 +782,7 @@
       ret: run && run.rs && !rp ? { balls: run.bag, sel, stuck: run.rs.stuck && run.bag.length > 1 ? run.rs.stuck.idx : -1, inPlay: phase === 'rolling' && run.rs.cur ? run.rs.cur.ballIdx : -1 } : null,
       phase: rp ? 'replay' : phase, aimX, aimAng, step, time: now / 1000,
       preview: rp && replay.rec.preview ? { type: replay.rec.preview.type, ed: replay.rec.preview.ed, r: C.BALL_R } : thrown ? { type: thrown.type, ed: thrown.ed, r: C.BALL_R * wide } : b ? { type: b.type, ed: b.ed, r: (b.type === 'cluster' ? 2.3 : C.BALL_R) * wide } : null,
+      fog: !rp && run && laneOf().fog,
       dark: rp ? replay.rec.dark : run && laneOf().dark, strobe: !rp && rs && rs.boss === 'strobe', glow: rp ? replay.rec.glow : glow,
       tilt: rs && rs.boss === 'ringmaster' ? rs.tilts[rs.frameIdx % rs.tilts.length] : 0
     });

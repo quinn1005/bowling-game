@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.6.0
+
+### New look
+- **New fonts.** Bungee (a bowling-alley sign face) for titles and Rubik for everything else, replacing the hard-to-read pixel fonts.
+- **Bigger lane.** The header, score boxes, charm row, controls and scorecard are all more compact, and the lane now scales to fill the space, so it takes up much more of the screen.
+- **Sharper, richer graphics.** The lane is drawn at 3× resolution: glossy lane lighting with a warm pool of light on the pin deck, rounded gutters, smoother pins with soft shadows, shaded balls with a reflection on the lane, a glowing neon sign and marquee bulbs, themed art above the pins for every alley, a patterned carpet, a vignette, and a redrawn crowd.
+- **Polished UI.** Rounded panels and buttons, clearer meters for every slider, a menu button, and new pill counters for frames, Groove, re-racks and money.
+- **Smoother animations everywhere.** Banners slide in and fade out, score boxes pulse smoothly, charms bounce when they fire, screens fade in, and the progress bar glides.
+- **Pop-ups stay up longer.** Messages now queue instead of replacing each other and stay up long enough to read (longer messages stay longer). Score pops on the lane last about twice as long.
+
+### New features
+- **Boss pools.** Every alley now has two bosses and each run meets one of them. New bosses: The Janitor, The Landlord, The Fog Machine, The Enforcer, The Snow Golem, The Strongman, The Comet and The Gutter Rats.
+- **Skip a round.** Skip a Qualifier or Heat for its reward tag (cash, a shop coupon, a free charm, two shot level-ups, a Lane Trick or a free re-drill). You get no score, pay or shop for that round.
+- **Events between rounds.** Sometimes you meet the Lost & Found, a vending machine, a shady bowler or the lane mechanic before the shop.
+- **Ball drilling.** Re-drill a ball at the Pro Shop: Strong (hooks more), Control (hooks less) or Skid-flare (skids through oil, snaps on dry boards).
+- **Lane surprises.** Now and then a frame starts with a power flicker, a sticky approach or a fresh oil top-up (never in Boss Matches).
+- **Endless mode.** After beating the Gutter King, keep bowling: the alleys come around again with targets that keep climbing. Your best Endless depth shows on the title screen.
+- **Practice lane.** Free bowling on any alley with no target and no shop, to learn each oil pattern. "Fresh oil" in the menu resets the lane.
+- **Tutorial tips.** Your first throws walk you through each slider, and tips pop up the first time you see Groove, a dried-out line, a jammed ball, a pinsetter fumble, a lane surprise, a boss or the shop. Turn them off (or reset them) in the menu.
+- **Music.** A generated chiptune loop for every alley, faster and louder in Boss Matches. Toggle it in the menu.
+- **Vibration.** A short buzz on PERFECT taps, first contact, strikes, gutters and explosions (Android app and Android browsers). Toggle it in the menu.
+- **Big TV.** Tap the lane TV to watch its cartoons full size.
+
+### Fixed
+- **No more do-overs by quitting.** The game now saves after every throw. Quitting mid-frame and continuing puts you back exactly where you were, and a throw that was already rolling plays out again.
+- The Midway Carnival posts no longer bat the ball repeatedly into the gutter, and the Ringmaster's tilt is now strong but beatable by angling against it.
+- The Enforcer can't push your money below $0.
+
 ## v0.5.2
 
 ### Changed

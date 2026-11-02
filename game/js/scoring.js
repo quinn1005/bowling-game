@@ -156,6 +156,7 @@ var GK = globalThis.GK = globalThis.GK || {};
 
     // 4. round modifiers
     const bs = mk('boss', 0);
+    if (f.rentMiss) bs.mult(-2, 'Missed rent (The Landlord)');
     if (f.leagueMult) bs.mult(f.leagueMult, f.leagueName || 'League');
     if (f.groove) bs.mult(f.groove, 'Groove ×' + f.groove);
     if (f.loaded) bs.xmult(3, 'Loaded Ball');

@@ -15,15 +15,35 @@ var GK = globalThis.GK = globalThis.GK || {};
     $('mult').textContent = m == null ? '–' : (Math.round(m * 100) / 100).toLocaleString('en-US');
     $('fscore').textContent = f == null ? '–' : fmt(f);
   };
-  let bannerT = 0;
+  // Banners slam in, then fade out. Pop-ups stay up long enough to read (scaled by length).
+  let bannerT = 0, bannerOut = 0;
   UI.banner = (t, sub, ms) => {
     const el = $('banner'); el.innerHTML = esc(t) + (sub ? '<small>' + esc(sub) + '</small>' : '');
-    el.hidden = false; el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
-    clearTimeout(bannerT); if (ms) bannerT = setTimeout(() => { el.hidden = true; }, ms);
+    clearTimeout(bannerT); clearTimeout(bannerOut);
+    el.hidden = false; el.classList.remove('show', 'out'); void el.offsetWidth; el.classList.add('show');
+    if (ms) bannerT = setTimeout(UI.hideBanner, ms * 1.4);
   };
-  UI.hideBanner = () => { $('banner').hidden = true; };
-  let toastT = 0;
-  UI.toast = (t, ms = 1600) => { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, ms); };
+  UI.hideBanner = () => {
+    const el = $('banner'); if (el.hidden) return;
+    el.classList.remove('show'); el.classList.add('out');
+    clearTimeout(bannerOut); bannerOut = setTimeout(() => { el.hidden = true; el.classList.remove('out'); }, 340);
+  };
+  // Toasts queue up instead of replacing each other, so nothing flashes by unread.
+  const toastQ = []; let toastBusy = false, toastLast = '';
+  const readMs = t => Math.max(2600, 1400 + String(t).length * 45);
+  UI.toast = (t, ms) => {
+    if (t === toastLast && toastBusy) return;
+    if (toastQ.length >= 4) toastQ.shift();
+    toastQ.push([t, Math.max(ms || 0, readMs(t))]);
+    if (!toastBusy) nextToast();
+  };
+  function nextToast() {
+    const el = $('toast'), item = toastQ.shift();
+    if (!item) { toastBusy = false; toastLast = ''; return; }
+    toastBusy = true; toastLast = item[0];
+    el.textContent = item[0]; el.hidden = false; el.classList.remove('out', 'show'); void el.offsetWidth; el.classList.add('show');
+    setTimeout(() => { el.classList.remove('show'); el.classList.add('out'); setTimeout(() => { el.hidden = true; nextToast(); }, 300); }, item[1]);
+  }
 
   // ---------- item descriptions ----------
   UI.info = function (kind, id, ed, inst) {
@@ -31,7 +51,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       const d = GK.CHARMS[id];
       return { name: d.name, k: GK.RARITY[d.rarity].name + ' charm', desc: inst ? GK.charmDesc(inst) : GK.charmDesc(GK.charmInst(id)), col: GK.RARITY[d.rarity].col, glyph: GK.TAG_GLYPH[d.tag], ed };
     }
-    if (kind === 'ball') { const b = GK.BALLS[id]; return { name: b.full, k: 'Ball', desc: b.desc, col: b.col, ed }; }
+    if (kind === 'ball') { const b = GK.BALLS[id], dr = inst && inst.drill && inst.drill !== 'stock' ? GK.DRILLS[inst.drill] : null; return { name: b.full, k: 'Ball', desc: b.desc + (dr ? ' Drilled: ' + dr.name + ' (' + dr.desc + ')' : ''), col: b.col, ed }; }
     if (kind === 'cons') { const c = GK.CONS[id]; return { name: c.name, k: GK.CONS_KIND[c.kind].name, desc: c.desc, col: GK.CONS_KIND[c.kind].col }; }
     if (kind === 'equip') { const e = GK.EQUIP[id]; return { name: e.name, k: 'Equipment · ' + e.slot, desc: e.desc + ' Replaces your current ' + e.slot + '.', col: '#c88f6a' }; }
     if (kind === 'member') { const m = GK.MEMBERSHIPS[id]; return { name: m.name, k: 'Alley Membership', desc: m.desc, col: '#f2c94c' }; }
@@ -42,20 +62,20 @@ var GK = globalThis.GK = globalThis.GK || {};
   // ---------- HUD ----------
   UI.hud = function (run) {
     const def = GK.alleyDef(run), rs = run.rs;
-    $('alleyLbl').textContent = GK.isChamp(run) ? 'The Championship' : 'Alley ' + (run.alley + 1) + ' of 8 · ' + def.name;
-    const boss = GK.isBoss(run) ? ' <span>· ' + esc(def.boss.name) + '</span>' : '';
-    $('round').innerHTML = esc(GK.roundName(run)) + boss;
+    $('alleyLbl').textContent = run.practice ? 'Practice lane · ' + def.name : GK.isChamp(run) ? 'The Championship' : GK.isEndless(run) ? def.name : 'Alley ' + (run.alley + 1) + ' of 8 · ' + def.name;
+    const boss = GK.isBoss(run) && !run.practice ? ' <span>· ' + esc(GK.bossDef(run).name) + '</span>' : '';
+    $('round').innerHTML = run.practice ? 'Practice' : esc(GK.roundName(run)) + boss;
     $('money').textContent = GK.money(run.money);
     if (rs) {
       const champ = rs.boss === 'champion';
-      $('target').textContent = champ ? 'Beat the King · ' + fmt(rs.kingTotal) : 'Target ' + fmt(rs.target);
-      $('score').innerHTML = fmt(rs.total) + '<small> / ' + fmt(rs.target) + '</small>';
+      $('target').textContent = run.practice ? 'Free bowl' : champ ? 'Beat the King · ' + fmt(rs.kingTotal) : 'Target ' + fmt(rs.target);
+      $('score').innerHTML = fmt(rs.total) + (run.practice ? '' : '<small> / ' + fmt(rs.target) + '</small>');
       const pct = GK.clamp(rs.total / rs.target, 0, 1) * 100;
       $('bar').firstElementChild.style.width = pct + '%';
       $('bar').classList.toggle('done', pct >= 100);
       const roll = rs.cur ? rs.cur.rollIdx + 1 : 1;
-      $('frameLbl').textContent = 'Frame ' + Math.min(rs.framesMax, rs.frameIdx + 1) + ' of ' + rs.framesMax + ' · Roll ' + roll;
-      $('rrLbl').textContent = '↻ ' + rs.reracks;
+      $('frameLbl').textContent = run.practice ? 'Frame ' + (rs.frameIdx + 1) + ' · Roll ' + roll : 'Frame ' + Math.min(rs.framesMax, rs.frameIdx + 1) + ' of ' + rs.framesMax + ' · Roll ' + roll;
+      $('rrLbl').textContent = '↻ ' + (run.practice ? '∞' : rs.reracks);
       $('rrLbl').title = rs.reracks + ' re-racks left this round';
     }
   };
@@ -131,9 +151,12 @@ var GK = globalThis.GK = globalThis.GK || {};
   }
   UI.card = function (run) {
     const rs = run.rs, card = $('card'); if (!rs) return;
-    card.innerHTML = ''; card.style.setProperty('--n', rs.framesMax);
+    // Long rounds (practice) show a sliding window of the last few frames.
+    const show = Math.min(rs.framesMax, 7), from = rs.framesMax > 7 ? Math.max(0, rs.frameIdx - show + 1) : 0;
+    card.innerHTML = ''; card.style.setProperty('--n', show);
     let tot = 0, ktot = 0;
-    for (let i = 0; i < rs.framesMax; i++) {
+    for (let i = 0; i < from; i++) { if (rs.frames[i]) { tot += rs.frames[i].score; if (rs.frames[i].king != null) ktot += rs.frames[i].king; } }
+    for (let i = from; i < from + show; i++) {
       const f = rs.frames[i], el = document.createElement('div');
       el.className = 'cell' + (i === rs.frameIdx && !f ? ' now' : '');
       let marks = ['', ''];
@@ -172,10 +195,10 @@ var GK = globalThis.GK = globalThis.GK || {};
         ${save ? '<button class="btn" data-a="continue" data-focus>Continue run</button><p class="dim" style="margin-top:-4px">' + esc(save) + '</p>' : ''}
         <button class="btn ${save ? 'alt' : ''}" data-a="new" ${save ? '' : 'data-focus'}>New run</button>
         <button class="btn alt" data-a="daily">Daily run${done ? ' · best ' + esc(done) : ''}</button>
-        <button class="btn alt small" data-a="collection">Feats &amp; unlocks · ${nFeats}/${GK.FEATS.length}</button>
+        <div class="row2"><button class="btn alt small" data-a="practice">Practice lane</button><button class="btn alt small" data-a="collection">Feats · ${nFeats}/${GK.FEATS.length}</button></div>
         <div class="row2"><button class="btn alt small" data-a="how">How to play</button><button class="btn alt small" data-a="sound">${GK.sfx.muted ? 'Sound off' : 'Sound on'}</button></div>
       </div>
-      <p class="dim">Runs ${meta.runs} · Wins ${meta.wins} · Best alley ${meta.bestAlley ? (meta.bestAlley > 8 ? 'Champion' : meta.bestAlley) : '–'} · Best frame ${fmt(meta.bestFrame)}${GK.VERSION ? ' · v' + GK.VERSION : ''}</p>
+      <p class="dim">Runs ${meta.runs} · Wins ${meta.wins} · Best alley ${meta.bestAlley ? (meta.bestAlley > 8 ? 'Champion' : meta.bestAlley) : '–'} · Best frame ${fmt(meta.bestFrame)}${meta.bestEndless ? ' · Endless ' + meta.bestEndless : ''}${GK.VERSION ? ' · v' + GK.VERSION : ''}</p>
     </div>`, r => UI.on(r, '[data-a]', el => h[el.dataset.a](el)));
   };
 
@@ -238,28 +261,80 @@ var GK = globalThis.GK = globalThis.GK || {};
       <p><b>Score:</b> every frame scores <span style="color:var(--chips)">Points</span> × <span style="color:var(--mult)">Mult</span>. The shot sets the base (Strike, Spare, Split conversion, Double, Turkey…). Each pin adds Points. Pins knocking over pins, late wobblers and kickback bangs add bonus Points.</p>
       <p><b>Rounds:</b> reach the target within your frames. Each alley has a Qualifier, a Heat and a Boss Match. Miss a target and the run ends.</p>
       <p><b>Re-racks:</b> after a bad first roll, spend a re-rack to reset all pins and take roll one again.</p>
+      <p><b>Bosses</b> change every run: each alley has a pool of bosses and you meet one of them.</p>
+      <p><b>Skipping:</b> you can skip a Qualifier or Heat. You get no score, pay or shop, but you take that round's reward tag (cash, a coupon, a free charm and more).</p>
+      <p><b>Between rounds</b> you may run into the Lost &amp; Found, a vending machine, a shady bowler or the lane mechanic.</p>
+      <p><b>Drilling:</b> the Pro Shop can re-drill a ball: Strong (more hook), Control (less hook) or Skid-flare (skids through oil, snaps on dry boards).</p>
+      <p><b>Lane surprises:</b> now and then a frame starts with a power flicker, a sticky approach or a fresh oil top-up.</p>
+      <p><b>Lane TV:</b> tap the TV beside the lane to watch its cartoons big. Beat the Gutter King to unlock <b>Endless mode</b>, and use the <b>Practice lane</b> on the title screen to learn each oil pattern.</p>
       <p><b>Shop:</b> charms trigger left to right after every frame, so order matters. Balls change the physics. Scorecards level up shots, Lane Tricks change your pins and balls, and the Black Market is powerful but costs you.</p>
       <p><b>Money:</b> clear a round to get paid, plus $1 per unused frame and $1 interest per $5 you hold (max $4).</p>
       <button class="btn" data-a="ok">Got it</button>
     </div>`, r => UI.on(r, '[data-a=ok]', () => { UI.hideModal(); if (onBack) onBack(); }));
   };
 
-  UI.intro = function (run, onGo) {
+  UI.intro = function (run, onGo, onSkip) {
     const def = GK.alleyDef(run), rs = run.rs, boss = GK.isBoss(run);
     const first = run.round === 0;
     const oil = GK.OIL[(def.lane && def.lane.oil) || 'house'];
     const tags = [run.league && run.league !== 'open' ? GK.LEAGUES[run.league].name : '', run.asc ? 'Ascension ' + run.asc : ''].filter(Boolean).join(' · ');
     UI.layer(`<div class="panel">
-      <div class="lbl">${GK.isChamp(run) ? 'Final' : 'Alley ' + (run.alley + 1) + ' of 8'} · ${esc(def.name)}${tags ? ' · ' + esc(tags) : ''}</div>
+      <div class="lbl">${GK.isChamp(run) ? 'Final' : GK.isEndless(run) ? 'Endless' : 'Alley ' + (run.alley + 1) + ' of 8'} · ${esc(def.name)}${tags ? ' · ' + esc(tags) : ''}</div>
       <h2>${esc(GK.roundName(run))}</h2>
       <p>Target <b style="color:var(--marquee)">${fmt(rs.target)}</b> in ${rs.framesMax} frames · ${rs.reracks} re-rack${rs.reracks === 1 ? '' : 's'}</p>
       ${first || GK.isChamp(run) ? '<p class="dim">' + esc(def.laneDesc) + '</p>' : ''}
       <p class="dim"><b style="color:var(--chips)">Oil: ${esc(oil.name)}.</b> ${esc(oil.desc)}</p>
-      ${boss ? `<div class="boss"><b>${esc(def.boss.name)}</b><p>${esc(def.boss.desc)}</p>${rs.stolen >= 0 && run.charms[rs.stolen] ? '<p class="dim">Stolen: ' + esc(GK.CHARMS[run.charms[rs.stolen].id].name) + '</p>' : ''}</div>` : ''}
+      ${boss ? `<div class="boss"><b>${esc(GK.bossDef(run).name)}</b><p>${esc(GK.bossDef(run).desc)}</p>${rs.stolen >= 0 && run.charms[rs.stolen] ? '<p class="dim">Stolen: ' + esc(GK.CHARMS[run.charms[rs.stolen].id].name) + '</p>' : ''}</div>` : ''}
       ${!GK.isChamp(run) && run.round === 1 && GK.rules(run).heatMech ? '<div class="boss"><b>Ascension</b><p>The Mechanic stands 1 pin back up after your first roll.</p></div>' : ''}
       ${!GK.isChamp(run) ? '<p class="dim">Reward: $' + GK.ROUND_PAY[run.round] + ' + $1 per unused frame + interest</p>' : ''}
       <button class="btn" data-a="go" data-focus>${boss ? 'Face the boss' : 'Bowl'}</button>
-    </div>`, r => UI.on(r, '[data-a=go]', onGo));
+      ${onSkip ? (() => { const t = GK.TAGS[GK.skipTag(run)]; return `<div class="boss info"><b>Skip this round?</b><p>No score, no pay and no shop, but you get the <b>${esc(t.name)}</b>: ${esc(t.desc)}</p></div><button class="btn alt small" data-a="skip">Skip for the ${esc(t.name)}</button>`; })() : ''}
+    </div>`, r => { UI.on(r, '[data-a=go]', onGo); if (onSkip) UI.on(r, '[data-a=skip]', onSkip); });
+  };
+
+  // Between rounds: a small encounter with one offer.
+  UI.eventScreen = function (run, ev, h) {
+    const E = GK.EVENTS[ev.id];
+    let offer = '', take = 'Take it';
+    if (ev.id === 'lost_found') { const b = GK.BALLS[ev.ball]; offer = '<div class="boss info"><b>' + esc(b.full) + '</b><p>' + esc(b.desc) + '</p></div>'; take = 'Take the ' + b.name + ' ball'; }
+    if (ev.id === 'vending') { offer = '<p class="dim">You never know what\'s in there until it drops.</p>'; take = 'Pay $3'; }
+    if (ev.id === 'shady') { const c = GK.CHARMS[ev.charm]; offer = '<div class="boss"><b>' + esc(c.name) + '</b><p>' + esc(GK.charmDesc(GK.charmInst(ev.charm))) + '</p></div>'; take = 'Take the charm'; }
+    if (ev.id === 'lane_mech') { take = 'Re-drill a ball'; }
+    UI.layer(`<div class="panel solid">
+      <div class="lbl">Between rounds</div>
+      <h2>${esc(E.name)}</h2>
+      <p>${esc(E.desc)}</p>
+      ${offer}
+      <div class="row2"><button class="btn" data-a="take" data-focus>${esc(take)}</button><button class="btn alt" data-a="leave">Walk away</button></div>
+    </div>`, r => { UI.on(r, '[data-a=take]', h.take); UI.on(r, '[data-a=leave]', h.leave); });
+  };
+
+  UI.drillPicker = function (run, bi, onPick, onCancel) {
+    const b = run.bag[bi], cur = b.drill || 'stock';
+    UI.modal(`<div class="panel">
+      <div class="lbl">Re-drill · ${esc(GK.BALLS[b.type].full)}</div>
+      <h2>Pick a layout</h2>
+      <div class="choices">${Object.entries(GK.DRILLS).map(([id, d]) => `<button class="choice" data-d="${id}" aria-pressed="${id === cur}"><b>${esc(d.name)}${id === cur ? ' · current' : ''}</b><span>${esc(d.desc)}</span></button>`).join('')}</div>
+      <button class="btn alt" data-a="no">Cancel</button>
+    </div>`, r => { UI.on(r, '[data-d]', el => onPick(el.dataset.d)); UI.on(r, '[data-a=no]', onCancel); });
+  };
+
+  UI.practiceSetup = function (onGo, onBack) {
+    UI.layer(`<div class="panel">
+      <h2>Practice lane</h2>
+      <p class="dim">Free bowling with no target and no shop. Pick a lane to learn its oil. Your House, Featherweight, Lead and Split balls are on the return.</p>
+      <div class="choices">${GK.ALLEYS.map((a, i) => { const o = GK.OIL[a.lane.oil || 'house']; return `<button class="choice" data-p="${i}"><b>${esc(a.name)}</b><span>${esc(o.name)}: ${esc(o.desc)}</span></button>`; }).join('')}</div>
+      <button class="btn alt" data-a="back">Back</button>
+    </div>`, r => { UI.on(r, '[data-p]', el => onGo(+el.dataset.p)); UI.on(r, '[data-a=back]', onBack); });
+  };
+
+  // Tap the lane TV to watch its cartoons big.
+  UI.tvModal = function (onClose) {
+    UI.modal(`<div class="panel">
+      <div class="lbl">Lane TV</div>
+      <canvas class="tvbig" id="tvBig" width="456" height="312"></canvas>
+      <button class="btn" data-a="ok">Close</button>
+    </div>`, r => UI.on(r, '[data-a=ok]', () => { UI.hideModal(); if (onClose) onClose(); }));
   };
 
   UI.payout = function (run, lines, score, onGo) {
@@ -273,7 +348,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     </div>`, r => UI.on(r, '[data-a=go]', onGo));
   };
 
-  const roundLabel = h => h.champ ? 'Championship' : 'A' + (h.alley + 1) + ' ' + GK.ROUND_NAMES[h.round];
+  const roundLabel = h => h.champ ? 'Championship' : (h.alley > GK.ALLEY_COUNT ? 'E' + (h.alley - GK.ALLEY_COUNT) : 'A' + (h.alley + 1)) + ' ' + GK.ROUND_NAMES[h.round];
   // End of run: what happened round by round, the best frame (with a replay) and a share line.
   UI.end = function (run, won, meta, h) {
     const s = run.stats, rs = run.rs, hist = run.history || [], b = run.best;
@@ -285,7 +360,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       <p>${won ? 'You beat the Championship. The crown is yours.' : 'You finished ' + esc(GK.roundName(run)) + ' at ' + esc(GK.alleyDef(run).name) + ' with ' + fmt(rs ? rs.total : 0) + ' of ' + fmt(rs ? rs.target : 0) + '.'}</p>
       ${won && run.asc < GK.MAX_ASC ? '<p style="color:var(--good)">Ascension ' + (run.asc + 1) + ' unlocked.</p>' : ''}
       <h3>Your run</h3>
-      <div class="story">${hist.map(x => `<div><span>${esc(roundLabel(x))}</span><b class="${x.won ? 'w' : 'l'}">${fmt(x.total)} / ${fmt(x.target)}</b></div>`).join('')}</div>
+      <div class="story">${hist.map(x => `<div><span>${esc(roundLabel(x))}</span><b class="${x.skipped ? 's' : x.won ? 'w' : 'l'}">${x.skipped ? 'skipped' : fmt(x.total) + ' / ' + fmt(x.target)}</b></div>`).join('')}</div>
       ${b ? `<p class="dim">Best frame: <b>${esc(GK.SHOTS[b.kind].name)}</b> for ${fmt(b.score)} in ${esc(roundLabel(b))}, frame ${b.frame + 1}.</p>` : ''}
       <div class="lines">
         <div><span>Strikes / Spares / Splits</span><b>${s.strikes} / ${s.spares} / ${s.splits}</b></div>
@@ -294,12 +369,14 @@ var GK = globalThis.GK = globalThis.GK || {};
         <div><span>League · Ascension</span><b>${esc(GK.LEAGUES[run.league || 'open'].name)} · ${run.asc || 0}</b></div>
         <div><span>Seed</span><b>${GK.seedCode(run.seed)}${run.daily ? ' (daily)' : ''}</b></div>
       </div>
+      ${h.endless ? '<button class="btn good" data-a="endless">Keep bowling: Endless mode</button><p class="dim">The alleys come around again with targets that keep climbing. See how far your build goes.</p>' : ''}
       ${h.best ? '<button class="btn alt" data-a="best">Watch your best frame</button>' : ''}
       ${share ? '<div class="share" id="shareTxt">' + esc(share) + '</div><button class="btn alt small" data-a="copy">Copy daily result</button>' : ''}
       <div class="row2"><button class="btn" data-a="again" data-focus>New run</button><button class="btn alt" data-a="title">Title</button></div>
     </div>`, r => {
       UI.on(r, '[data-a=again]', h.again); UI.on(r, '[data-a=title]', h.title);
       if (h.best) UI.on(r, '[data-a=best]', h.best);
+      if (h.endless) UI.on(r, '[data-a=endless]', h.endless);
       UI.on(r, '[data-a=copy]', el => {
         const done = () => { el.textContent = 'Copied'; };
         try { navigator.clipboard.writeText(share).then(done, () => selectShare()); } catch (e) { selectShare(); }
@@ -372,7 +449,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   UI.ballPicker = function (run, title, desc, onDone, onCancel) {
     UI.modal(`<div class="panel">
       <h2>${esc(title)}</h2><p class="dim">${esc(desc)}</p>
-      <div class="choices">${run.bag.map((b, i) => `<button class="choice" data-b="${i}"><b><i class="sw" style="display:inline-block;vertical-align:-2px;background:${GK.BALLS[b.type].col}"></i> ${esc(GK.BALLS[b.type].full)}${b.ed ? ' · ' + GK.EDITIONS[b.ed].name : ''}</b><span>${esc(GK.BALLS[b.type].desc)}</span></button>`).join('')}</div>
+      <div class="choices">${run.bag.map((b, i) => `<button class="choice" data-b="${i}"><b><i class="sw" style="display:inline-block;vertical-align:-2px;background:${GK.BALLS[b.type].col}"></i> ${esc(GK.BALLS[b.type].full)}${b.ed ? ' · ' + GK.EDITIONS[b.ed].name : ''}</b><span>${esc(GK.BALLS[b.type].desc)}${b.drill && b.drill !== 'stock' ? ' · ' + esc(GK.DRILLS[b.drill].name) : ''}</span></button>`).join('')}</div>
       <button class="btn alt" data-a="no">Cancel</button>
     </div>`, r => { UI.on(r, '[data-b]', el => onDone(+el.dataset.b)); UI.on(r, '[data-a=no]', onCancel); });
   };
@@ -386,7 +463,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       return `<div class="item${it.sold ? ' sold' : ''}" style="--rc:${inf.col}">
         <span class="k">${esc(inf.k)}</span><span class="n">${esc(inf.name)}</span>${edTag(it.ed)}
         <span class="d">${esc(inf.desc)}</span>
-        <button class="btn small" data-buy="${i}" ${it.sold || !afford ? 'disabled' : ''}>${it.sold ? 'Sold' : 'Buy $' + it.price}</button></div>`;
+        <button class="btn small" data-buy="${i}" ${it.sold || !afford ? 'disabled' : ''}>${it.sold ? 'Sold' : it.price === 0 ? 'Take (free)' : 'Buy $' + it.price}</button></div>`;
     };
     const mem = shop.member ? (() => {
       const m = GK.MEMBERSHIPS[shop.member], price = GK.price(run, m.cost);
@@ -394,12 +471,15 @@ var GK = globalThis.GK = globalThis.GK || {};
         <button class="btn small" data-a="member" ${GK.canAfford(run, price) ? '' : 'disabled'}>Buy $${price}</button></div>`;
     })() : '';
     const charms = run.charms.map((c, i) => { const d = GK.CHARMS[c.id]; return `<button class="chip" data-charm="${i}" style="--rc:${GK.RARITY[d.rarity].col}">${esc(d.name)}${c.ed ? ' <small>' + GK.EDITIONS[c.ed].name + '</small>' : ''}</button>`; }).join('') || '<span class="lbl">No charms yet</span>';
-    const balls = run.bag.map((b, i) => `<button class="chip" data-ball="${i}" style="--rc:${GK.BALLS[b.type].col}"><i class="sw" style="background:${GK.BALLS[b.type].col}"></i>${esc(GK.BALLS[b.type].name)}${b.ed ? ' <small>' + GK.EDITIONS[b.ed].name + '</small>' : ''}</button>`).join('');
+    const balls = run.bag.map((b, i) => `<button class="chip" data-ball="${i}" style="--rc:${GK.BALLS[b.type].col}"><i class="sw" style="background:${GK.BALLS[b.type].col}"></i>${esc(GK.BALLS[b.type].name)}${b.ed ? ' <small>' + GK.EDITIONS[b.ed].name + '</small>' : ''}${b.drill && b.drill !== 'stock' ? ' <small>' + esc(GK.DRILLS[b.drill].name.split(' ')[0]) + '</small>' : ''}</button>`).join('');
     const cons = run.cons.map((id, i) => `<button class="chip" data-cons="${i}" style="--rc:${GK.CONS_KIND[GK.CONS[id].kind].col}">${esc(GK.CONS[id].name)}</button>`).join('') || '<span class="lbl">Empty</span>';
     const eq = Object.values(run.equip).filter(id => GK.EQUIP[id]).map(id => GK.EQUIP[id].name).join(', ');
     UI.layer(`<div class="shop">
       <div class="shophead"><div><div class="lbl">Next: ${esc(GK.roundName(run))} · ${esc(GK.alleyDef(run).name)} · target ${fmt(nextTarget)}</div><h2>Pro Shop</h2></div><div class="m">${GK.money(run.money)}</div></div>
+      ${shop.coupon ? '<div class="boss info"><b>Coupon Tag</b><p>Everything here is half price.</p></div>' : ''}
       <div class="grid">${shop.items.map(card).join('')}${mem}</div>
+      <div class="item wide" style="--rc:#3fd0e0"><span class="k">Pro Shop service</span><span class="n">Re-drill a ball</span><span class="d">Change how a ball hooks: Strong, Control or Skid-flare layouts.</span>
+        <button class="btn small alt" data-a="drill" ${GK.canAfford(run, GK.drillCost(run)) ? '' : 'disabled'}>${GK.drillCost(run) ? 'Re-drill $' + GK.drillCost(run) : 'Re-drill (free)'}</button></div>
       <div class="row2"><button class="btn alt small" data-a="reroll" ${GK.canAfford(run, GK.rerollCost(run)) ? '' : 'disabled'}>Reroll $${GK.rerollCost(run)}</button><button class="btn alt small" data-a="info">Run info</button></div>
       <div class="sect">Charms ${run.charms.length}/${run.maxCharms} · tap to sell or reorder</div><div class="owned">${charms}</div>
       <div class="sect">Bag ${run.bag.length}/${run.maxBag}</div><div class="owned">${balls}</div>
@@ -409,6 +489,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     </div>`, r => {
       UI.on(r, '[data-buy]', el => h.buy(+el.dataset.buy));
       UI.on(r, '[data-a=member]', h.member);
+      UI.on(r, '[data-a=drill]', h.drill);
       UI.on(r, '[data-a=reroll]', h.reroll);
       UI.on(r, '[data-a=info]', h.info);
       UI.on(r, '[data-a=next]', h.next);
@@ -426,9 +507,9 @@ var GK = globalThis.GK = globalThis.GK || {};
         <button class="btn alt" data-a="info">Run info</button>
         <button class="btn alt" data-a="how">How to play</button>
         <div class="row2"><button class="btn alt small" data-a="sound">${GK.sfx.muted ? 'Sound off' : 'Sound on'}</button><button class="btn alt small" data-a="speed">${h.fast() ? 'Scoring: fast' : 'Scoring: normal'}</button></div>
-        <button class="btn alt small" data-a="replays">${h.replaysOn() ? 'Replays: on' : 'Replays: off'}</button>
-        <button class="btn alt" data-a="title">Save and quit</button>
-        <button class="btn danger small" data-a="abandon">Abandon run</button>
+        <div class="row2"><button class="btn alt small" data-a="music">${h.musicOn() ? 'Music: on' : 'Music: off'}</button><button class="btn alt small" data-a="replays">${h.replaysOn() ? 'Replays: on' : 'Replays: off'}</button></div>
+        <div class="row2"><button class="btn alt small" data-a="haptics">${h.hapticsOn() ? 'Vibration: on' : 'Vibration: off'}</button><button class="btn alt small" data-a="hints">${h.hintsOn() ? 'Hints: on' : 'Hints: off'}</button></div>
+        ${h.practice() ? '<button class="btn alt" data-a="freshOil">Fresh oil</button><button class="btn alt" data-a="title">End practice</button>' : '<button class="btn alt" data-a="title">Save and quit</button><button class="btn danger small" data-a="abandon">Abandon run</button>'}
       </div>
     </div>`, r => UI.on(r, '[data-a]', el => h[el.dataset.a](el)));
   };

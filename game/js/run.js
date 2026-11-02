@@ -16,23 +16,41 @@ var GK = globalThis.GK = globalThis.GK || {};
       charms: [], maxCharms: 5, cons: [], maxCons: 2,
       rack: GK.padRack(), levels: {}, members: [], equip: {},
       stats: { pins: 0, strikes: 0, spares: 0, splits: 0, gutters: 0, frames: 0, bestFrame: 0, throws: 0, score: 0, perfects: 0, pstreak: 0, bestPStreak: 0 },
-      history: [], best: null,
+      history: [], best: null, bosses: GK.pickBosses(seed), tags: [], practice: false, endless: false,
       nextTargetMul: 1, shopCount: 0, memberOffer: null, memberAlley: -1,
       phase: 'intro', rs: null, shop: null, over: false, won: false
     };
     return run;
   };
 
-  GK.isChamp = run => run.alley >= GK.ALLEY_COUNT;
-  GK.alleyDef = run => GK.isChamp(run) ? GK.CHAMPIONSHIP : GK.ALLEYS[run.alley];
+  // Alleys 0-7, then the Championship (index 8). Endless mode continues past it (9, 10, ...),
+  // cycling the 8 alleys with targets that keep growing.
+  GK.isChamp = run => run.alley === GK.ALLEY_COUNT;
+  GK.isEndless = run => run.alley > GK.ALLEY_COUNT;
+  GK.baseAlley = run => GK.isEndless(run) ? (run.alley - GK.ALLEY_COUNT - 1) % GK.ALLEY_COUNT : run.alley;
+  GK.alleyDef = function (run) {
+    if (GK.isChamp(run)) return GK.CHAMPIONSHIP;
+    const a = GK.ALLEYS[GK.baseAlley(run)];
+    if (!GK.isEndless(run)) return a;
+    return Object.assign({}, a, { name: 'Endless ' + (run.alley - GK.ALLEY_COUNT) + ': ' + a.name });
+  };
   GK.roundName = run => GK.isChamp(run) ? 'Championship' : GK.ROUND_NAMES[run.round];
   GK.isBoss = run => GK.isChamp(run) || run.round === 2;
-  GK.bossId = run => GK.isBoss(run) ? GK.alleyDef(run).boss.id : null;
+  // One boss per alley is picked when the run starts.
+  GK.pickBosses = function (seed) {
+    const rng = GK.stream(seed, 'bosses');
+    return GK.ALLEYS.map(a => a.bosses[rng.int(a.bosses.length)]);
+  };
+  GK.bossFor = run => GK.isChamp(run) ? 'champion' : (run.bosses || GK.pickBosses(run.seed))[GK.baseAlley(run)];
+  GK.bossId = run => GK.isBoss(run) ? GK.bossFor(run) : null;
+  GK.bossDef = run => GK.BOSSES[GK.bossFor(run)];
   GK.roundTarget = function (run) {
     const ru = GK.rules(run);
     if (GK.isChamp(run)) return Math.round(GK.CHAMPIONSHIP.target * run.nextTargetMul * ru.target * ru.bossTarget / 50) * 50;
-    const a = GK.ALLEYS[run.alley];
-    const t = a.base * GK.ROUND_MULT[run.round] * run.nextTargetMul * ru.target * (run.round === 2 ? ru.bossTarget : 1);
+    let t;
+    if (GK.isEndless(run)) t = GK.CHAMPIONSHIP.target * 0.6 * Math.pow(1.7, run.alley - GK.ALLEY_COUNT - 1) * GK.ROUND_MULT[run.round];
+    else t = GK.ALLEYS[run.alley].base * GK.ROUND_MULT[run.round];
+    t *= run.nextTargetMul * ru.target * (run.round === 2 ? ru.bossTarget : 1);
     return Math.round(t / 50) * 50;
   };
 
@@ -98,7 +116,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     run.nextTargetMul = 1;
     if (run.loadedPending) { rs.loadedNext = true; run.loadedPending = false; }
     const rng = GK.stream(run.seed, 'round:' + run.alley + ':' + run.round);
-    if (boss === 'ringmaster') for (let i = 0; i < 12; i++) rs.tilts.push((rng() < 0.5 ? -1 : 1) * (35 + rng() * 45));
+    if (boss === 'ringmaster' || boss === 'strongman') for (let i = 0; i < 12; i++) rs.tilts.push((rng() < 0.5 ? -1 : 1) * (12 + rng() * 12));
     if (boss === 'champion') {
       // The King's frames: pre-rolled so the match is fair and replayable from the seed.
       const w = []; for (let i = 0; i < framesMax; i++) w.push(0.6 + rng() * 0.9);
@@ -133,8 +151,8 @@ var GK = globalThis.GK = globalThis.GK || {};
   // After a won round: move on. Returns 'shop' | 'won'.
   GK.advance = function (run) {
     // round-reset scaling charms
-    run.charms.forEach(c => { if (GK.CHARMS[c.id].roundReset) c.v = 0; });
-    if (GK.isChamp(run)) { run.won = true; run.phase = 'won'; return 'won'; }
+    run.charms.forEach(c => { if (GK.CHARMS[c.id].roundReset) { c.v = 0; if (c.p != null) c.p = 0; } });
+    if (GK.isChamp(run) && !run.endless) { run.won = true; run.phase = 'won'; return 'won'; }
     run.round++;
     if (run.round > 2) { run.round = 0; run.alley++; }
     run.phase = 'shop';
@@ -324,12 +342,124 @@ var GK = globalThis.GK = globalThis.GK || {};
     return { ok: true, msg };
   };
 
+  // ---------- skipping rounds ----------
+  // Skip a Qualifier or Heat: no score, no pay, no shop, but you take the round's reward tag.
+  GK.TAGS = {
+    cash: { name: 'Cash Tag', desc: '+$6 right now.' },
+    coupon: { name: 'Coupon Tag', desc: 'Everything in your next shop is half price.' },
+    charm: { name: 'Charm Tag', desc: 'Your next shop has an extra Uncommon charm, free.' },
+    levels: { name: 'Scorecard Tag', desc: 'Level up two random shots right now.' },
+    trick: { name: 'Trick Tag', desc: 'Get a random Lane Trick right now (needs a free consumable slot).' },
+    drill: { name: 'Drill Tag', desc: 'Your next re-drill at the Pro Shop is free.' }
+  };
+  GK.canSkip = run => !run.practice && !GK.isBoss(run) && !GK.isChamp(run);
+  GK.skipTag = run => GK.stream(run.seed, 'skip:' + run.alley + ':' + run.round).pick(Object.keys(GK.TAGS));
+  GK.skipRound = function (run) {
+    const tag = GK.skipTag(run), rng = GK.stream(run.seed, 'skipfx:' + run.alley + ':' + run.round);
+    let msg = GK.TAGS[tag].name + ': ' + GK.TAGS[tag].desc;
+    if (tag === 'cash') run.money += 6;
+    else if (tag === 'levels') { const a = rng.pick(GK.SHOT_ORDER.slice(0, 5)), b = rng.pick(GK.SHOT_ORDER.slice(0, 5)); [a, b].forEach(k => { run.levels[k] = (run.levels[k] || 0) + 1; }); msg = 'Scorecard Tag: ' + GK.SHOTS[a].name + ' and ' + GK.SHOTS[b].name + ' levelled up.'; }
+    else if (tag === 'trick') {
+      if (run.cons.length < run.maxCons) { const k = rng.pick(GK.CONS_LIST.filter(c => c.kind === 'trick')); run.cons.push(k.id); msg = 'Trick Tag: you got ' + k.name + '.'; }
+      else { run.money += 4; msg = 'Trick Tag: no free slot, so you got $4 instead.'; }
+    } else run.tags.push(tag);
+    if (run.rs) run.history.push({ alley: run.alley, round: run.round, champ: false, target: run.rs.target, total: 0, won: true, skipped: true, frames: 0 });
+    run.round++;
+    if (run.round > 2) { run.round = 0; run.alley++; }
+    run.rs = null; run.phase = 'intro';
+    return { tag, msg };
+  };
+  // Apply pending tags when a shop opens.
+  GK.applyShopTags = function (run) {
+    const shop = run.shop, rng = GK.stream(run.seed, 'tags:' + run.shopCount);
+    run.tags = (run.tags || []).filter(tag => {
+      if (tag === 'coupon') { shop.items.forEach(it => { it.price = Math.max(1, Math.ceil(it.price / 2)); }); shop.coupon = true; return false; }
+      if (tag === 'charm') {
+        const pool = GK.CHARM_LIST.filter(c => c.rarity === 'uncommon' && !run.charms.some(x => x.id === c.id) && GK.isUnlocked('charm', c.id));
+        if (pool.length) shop.items.unshift({ kind: 'charm', id: rng.pick(pool).id, ed: null, price: 0, free: true });
+        return false;
+      }
+      if (tag === 'drill') { shop.freeDrill = true; return false; }
+      return true;
+    });
+  };
+
+  // ---------- ball drilling ----------
+  GK.DRILL_COST = 4;
+  GK.drillCost = run => run.shop && run.shop.freeDrill ? 0 : GK.price(run, GK.DRILL_COST);
+  GK.redrill = function (run, ballIdx, drillId, free) {
+    const b = run.bag[ballIdx];
+    if (!b || !GK.DRILLS[drillId]) return { ok: false, msg: 'Pick a ball and a layout.' };
+    const cost = free ? 0 : GK.drillCost(run);
+    if (!GK.canAfford(run, cost)) return { ok: false, msg: 'Not enough money' };
+    run.money -= cost; b.drill = drillId;
+    if (!free && run.shop) run.shop.freeDrill = false;
+    return { ok: true, msg: GK.BALLS[b.type].full + ' re-drilled: ' + GK.DRILLS[drillId].name };
+  };
+
+  // ---------- events between rounds ----------
+  GK.EVENTS = {
+    lost_found: { name: 'Lost & Found', desc: 'Someone left a ball in the Lost & Found. Nobody is coming back for it.' },
+    vending: { name: 'Vending Machine', desc: 'The old vending machine hums. $3 gets you a mystery item.' },
+    shady: { name: 'A Shady Bowler', desc: '"Psst. Rare charm, no charge. Just don\'t ask where it came from." Your next round\'s target goes up 20%.' },
+    lane_mech: { name: 'The Lane Mechanic', desc: 'The lane mechanic owes you a favour: one free re-drill.' }
+  };
+  GK.EVENT_CHANCE = 0.35;
+  GK.rollEvent = function (run) {
+    if (run.practice) return null;
+    const rng = GK.stream(run.seed, 'event:' + run.shopCount);
+    if (rng() >= GK.EVENT_CHANCE) return null;
+    const id = rng.pick(Object.keys(GK.EVENTS)), ev = { id };
+    if (id === 'lost_found') {
+      const pool = Object.keys(GK.BALLS).filter(k => k !== 'house' && !run.bag.some(b => b.type === k) && GK.isUnlocked('ball', k));
+      if (!pool.length) return null;
+      ev.ball = rng.pick(pool);
+    }
+    if (id === 'shady') {
+      const pool = GK.CHARM_LIST.filter(c => c.rarity === 'rare' && !run.charms.some(x => x.id === c.id) && GK.isUnlocked('charm', c.id));
+      if (!pool.length) return null;
+      ev.charm = rng.pick(pool).id;
+    }
+    if (id === 'vending') ev.item = rng.pick(GK.CONS_LIST).id;
+    return ev;
+  };
+  // Accept an event's offer. arg: bag slot to replace (lost_found) or { ball, drill } (lane_mech).
+  GK.takeEvent = function (run, ev, arg) {
+    if (ev.id === 'lost_found') {
+      if (run.bag.length < run.maxBag) run.bag.push({ type: ev.ball, ed: null });
+      else if (arg != null && run.bag[arg]) run.bag[arg] = { type: ev.ball, ed: null };
+      else return { ok: false, need: 'replace', msg: 'Your bag is full. Pick a ball to leave behind.' };
+      return { ok: true, msg: 'You took the ' + GK.BALLS[ev.ball].full + '.' };
+    }
+    if (ev.id === 'vending') {
+      if (run.cons.length >= run.maxCons) return { ok: false, msg: 'No free consumable slot.' };
+      if (!GK.canAfford(run, 3)) return { ok: false, msg: 'Not enough money.' };
+      run.money -= 3; run.cons.push(ev.item);
+      return { ok: true, msg: 'Clunk! Out drops ' + GK.CONS[ev.item].name + '.' };
+    }
+    if (ev.id === 'shady') {
+      if (run.charms.length >= run.maxCharms) return { ok: false, msg: 'No free charm slot.' };
+      run.charms.push(GK.charmInst(ev.charm)); run.nextTargetMul *= 1.2;
+      return { ok: true, msg: 'You pocket ' + GK.CHARMS[ev.charm].name + '. Next target +20%.' };
+    }
+    if (ev.id === 'lane_mech') return GK.redrill(run, arg.ball, arg.drill, true);
+    return { ok: false };
+  };
+
+  // ---------- endless mode ----------
+  // After beating the Gutter King, keep going: alleys repeat with fast-growing targets.
+  GK.startEndless = function (run) {
+    run.won = false; run.endless = true;
+    run.alley = GK.ALLEY_COUNT + 1; run.round = 0;
+    run.phase = 'shop';
+  };
+
   // ---------- persistence ----------
   GK.save = function (run) {
-    try { if (run && !run.over && !run.won) localStorage.setItem(SAVE_KEY, JSON.stringify(run)); else localStorage.removeItem(SAVE_KEY); } catch (e) {}
+    try { if (run && !run.over && !run.won && !run.practice) localStorage.setItem(SAVE_KEY, JSON.stringify(run, (k, v) => k === 'snap' ? undefined : v)); else if (!run || !run.practice) localStorage.removeItem(SAVE_KEY); } catch (e) {}
   };
   GK.load = function () {
-    try { const s = localStorage.getItem(SAVE_KEY); if (!s) return null; const r = JSON.parse(s); if (!r || r.v !== 1) return null; r.rack = GK.padRack(r.rack); if (r.rs && !r.rs.wear) r.rs.wear = GK.newWear(); r.league = r.league || 'open'; r.asc = r.asc || 0; r.history = r.history || []; r.stats = Object.assign({ perfects: 0, pstreak: 0, bestPStreak: 0 }, r.stats); return r; } catch (e) { return null; }
+    try { const s = localStorage.getItem(SAVE_KEY); if (!s) return null; const r = JSON.parse(s); if (!r || r.v !== 1) return null; r.rack = GK.padRack(r.rack); if (r.rs && !r.rs.wear) r.rs.wear = GK.newWear(); r.league = r.league || 'open'; r.bosses = r.bosses || GK.pickBosses(r.seed); r.tags = r.tags || []; r.asc = r.asc || 0; r.history = r.history || []; r.stats = Object.assign({ perfects: 0, pstreak: 0, bestPStreak: 0 }, r.stats); return r; } catch (e) { return null; }
   };
   GK.clearSave = function () { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} };
   GK.meta = function () {

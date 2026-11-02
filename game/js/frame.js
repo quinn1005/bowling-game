@@ -3,25 +3,62 @@
 'use strict';
 var GK = globalThis.GK = globalThis.GK || {};
 (function () {
-  GK.laneFor = run => Object.assign({}, GK.alleyDef(run).lane || {}, GK.rules(run).dark ? { dark: true } : {});
+  GK.laneFor = function (run) {
+    const L = Object.assign({}, GK.alleyDef(run).lane || {});
+    const rs = run.rs;
+    if (GK.rules(run).dark) L.dark = true;
+    if (rs && rs.boss === 'fog') { L.dark = true; L.fog = true; }
+    if (rs && rs.cur && rs.cur.laneEvent === 'flicker') L.dark = true;
+    return L;
+  };
 
-  GK.beginFrame = function (run) {
+  // Rare lane-condition surprises at the start of a frame (never in Boss Matches).
+  GK.LANE_EVENTS = {
+    flicker: { name: 'Power flicker', desc: 'The lights cut out for this frame. Only a few pins glow.' },
+    sticky: { name: 'Sticky approach', desc: 'Someone spilled soda on the approach. The start slider jitters this frame.' },
+    topup: { name: 'Oil top-up', desc: 'The lane machine ran early: your lane is freshly oiled again.' }
+  };
+  GK.LANE_EVENT_CHANCE = 0.1;
+
+  // Start a frame. With resume=true, rebuild the frame saved mid-way (same rolls, same standing
+  // pins) without re-applying start-of-frame costs, so quitting can't undo a throw.
+  GK.beginFrame = function (run, resume) {
     const rs = run.rs, fl = GK.flags(run, rs.stolen);
     const fi = rs.frameIdx;
     const rng = GK.stream(run.seed, 'phys:' + run.alley + ':' + run.round + ':' + fi);
+    const keep = resume && rs.cur ? rs.cur : null;
+    if (!keep) {
+      rs.cur = { rolls: [], rollIdx: 0, splitLeave: false, leave710: false, retakeUsed: false, call: null, bet: 0, maxRolls: fl.third ? 3 : 2, throwN: 0, laneEvent: null, pinState: null, pending: null };
+      const cur = rs.cur;
+      if (!run.practice && !rs.boss && fi > 0) {
+        const er = GK.stream(run.seed, 'laneev:' + run.alley + ':' + run.round + ':' + fi);
+        if (er() < GK.LANE_EVENT_CHANCE) cur.laneEvent = er.pick(Object.keys(GK.LANE_EVENTS));
+      }
+      if (cur.laneEvent === 'topup') rs.wear = GK.newWear();
+      if (rs.boss === 'janitor' && fi > 0) rs.wear = rs.wear.map(w => w > 0.04 ? -0.2 : w);
+      if (rs.boss === 'bookie') { const bet = Math.floor(Math.max(0, run.money) / 2); cur.bet = bet; run.money -= bet; }
+      if (rs.boss === 'landlord') { if (run.money >= 2) { run.money -= 2; cur.rent = 2; } else cur.rentMiss = true; }
+    }
     const sim = new GK.Sim({
       lane: GK.laneFor(run), rng, rack: run.rack, wear: rs.wear || (rs.wear = GK.newWear()),
       layout: rs.boss === 'astronaut' ? 'random' : 'std',
-      winter: rs.boss === 'winter',
+      winter: rs.boss === 'winter', heavyStd: rs.boss === 'golem',
+      posts3: rs.boss === 'strongman', magnetK: rs.boss === 'rats' ? 2 : 1,
       tilt: rs.boss === 'ringmaster' ? rs.tilts[fi % rs.tilts.length] : 0
     });
     sim.rememberLayout();
-    rs.cur = { rolls: [], rollIdx: 0, splitLeave: false, leave710: false, retakeUsed: false, call: null, bet: 0, maxRolls: fl.third ? 3 : 2, throwN: 0 };
-    if (rs.boss === 'bookie') {
-      const bet = Math.floor(Math.max(0, run.money) / 2);
-      rs.cur.bet = bet; run.money -= bet;
-    }
+    if (keep && keep.pinState) sim.applyPinState(keep.pinState);
     return sim;
+  };
+  // Standing pins after a roll, so a saved frame can be rebuilt exactly.
+  GK.capturePins = sim => sim.pins.filter(p => p.standing && !p.cleared && !p.gone).map(p => ({ n: p.n, x: +p.x.toFixed(2), z: +p.z.toFixed(2) }));
+
+  // Ball drilling (re-drill at the shop or from the lane mechanic event).
+  GK.DRILLS = {
+    stock: { name: 'Stock layout', desc: 'The factory drilling.' },
+    strong: { name: 'Strong layout', desc: 'Hooks 40% harder everywhere.', hook: 1.4 },
+    control: { name: 'Control layout', desc: 'Hooks 40% less. Easier to keep on your line.', hook: 0.6 },
+    flare: { name: 'Skid-flare layout', desc: 'Skids straight through the oil, then snaps hard on the dry boards.', flare: true }
   };
 
   // Chances for the alley's machinery to act up.
@@ -45,8 +82,12 @@ var GK = globalThis.GK = globalThis.GK || {};
     cur.ballIdx = ballIdx;
     cur.ball = { type: ball.type, ed: ball.ed };
     cur.perfect = prm.perfect;
-    const p = Object.assign({}, prm, { speed: GK.clamp(prm.speed * eq.speed, 120, 560) });
-    sim.launch(ball, p, { wide: fl.wide, hook: eq.hook, wild: fl.wild, bumpers: fl.bumpers, rebound: fl.rebound });
+    let speed = GK.clamp(prm.speed * eq.speed, 120, 560);
+    if (rs.boss === 'comet') speed = Math.min(speed, 380 * eq.speed);
+    const p = Object.assign({}, prm, { speed });
+    const dr = GK.DRILLS[ball.drill || 'stock'] || GK.DRILLS.stock;
+    cur.pending = { ballIdx, prm: Object.assign({}, prm, { path: null }) };
+    sim.launch(ball, p, { wide: fl.wide, hook: eq.hook * (dr.hook || 1), flare: !!dr.flare, wild: fl.wild, bumpers: fl.bumpers, rebound: fl.rebound });
     run.stats.throws++;
   };
 
@@ -58,6 +99,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (n) notes.push({ t: 'whisper', text: 'Pin Whisperer tips over pin ' + n, pin: n });
     }
     const rec = sim.summarize();
+    cur.pending = null;
     rec.ball = cur.ball.type; rec.edition = cur.ball.ed; rec.perfect = cur.perfect;
     run.stats.pins += rec.pins;
     // Groove: consecutive PERFECT throws this round.
@@ -72,6 +114,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       cur.retakeUsed = true;
       sim.restore(cur.snap);
       notes.push({ t: 'retake', text: 'Ref looked away. Retake!' });
+      cur.pinState = GK.capturePins(sim);
       return { next: 'aim', notes, rec };
     }
     if (GK.BALLS[cur.ball.type].glass) {
@@ -138,11 +181,13 @@ var GK = globalThis.GK = globalThis.GK || {};
         notes.push({ t: 'mechanic', text: 'The Mechanic resets ' + pick.length + ' pin' + (pick.length > 1 ? 's' : ''), pins: pick });
       }
       cur.rollIdx = 1;
+      cur.pinState = GK.capturePins(sim);
       return { next: 'aim', notes, rec };
     }
     if (cur.rollIdx + 1 < cur.maxRolls) {
       sim.sweep(); cur.rollIdx++;
       notes.push({ t: 'third', text: 'Third Roll!' });
+      cur.pinState = GK.capturePins(sim);
       return { next: 'aim', notes, rec };
     }
     const kind = GK.classify(cur.rolls, false, cur.splitLeave, rs.streak);
@@ -172,6 +217,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   GK.scoreCurrent = function (run, kind) {
     const rs = run.rs, cur = rs.cur;
     const f = {
+      rentMiss: !!cur.rentMiss,
       kind, rolls: cur.rolls, frameIdx: rs.frameIdx, lastFrame: rs.frameIdx === rs.framesMax - 1,
       leftSplit: cur.splitLeave, leave710: cur.leave710, loaded: rs.loadedNext,
       call: rs.boss === 'secretary' ? GK.callResult(cur.call, kind) : null,
@@ -195,6 +241,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (kind === 'gutter') st.gutters++;
     GK.afterFrame(res.ctx, run, rs.stolen);
     res.breaks.forEach(n => { if (run.rack[n - 1] === 'glass') { run.rack[n - 1] = 'std'; notes.push({ t: 'break', text: 'Glass pin ' + n + ' broke' }); } });
+    if (rs.boss === 'enforcer' && (kind === 'open' || kind === 'gutter')) { const take = Math.min(3, Math.max(0, run.money)); run.money -= take; notes.push({ t: 'bet', text: take ? 'The Enforcer collects $' + take + ' for that open frame' : 'The Enforcer finds your pockets empty' }); }
     if (rs.boss === 'bookie' && cur.bet) {
       if (GK.isStrikeKind(kind) || GK.isSpareKind(kind)) { run.money += cur.bet * 2; notes.push({ t: 'bet', text: 'Bookie pays out ' + GK.money(cur.bet * 2) }); }
       else notes.push({ t: 'bet', text: 'Bookie keeps your ' + GK.money(cur.bet) });

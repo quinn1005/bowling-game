@@ -190,56 +190,77 @@ var GK = globalThis.GK = globalThis.GK || {};
     reroll_club: { name: 'Reroll Club', cost: 12, desc: 'Shop rerolls cost $2 less.' }
   };
 
-  // ---------- alleys and bosses ----------
+  // ---------- bosses ----------
+  // Each alley has a pool of bosses; one is picked per run from the seed (see GK.bossFor).
+  GK.BOSSES = {
+    secretary: { name: 'The League Secretary', desc: 'Call your shot before each frame: Strike, Spare or Open. Called right: ×2 Mult. Called wrong: ×0.5 Mult.' },
+    janitor: { name: 'The Janitor', desc: 'Between frames he mops fresh oil over the boards you\'ve dried out, so your line never breaks down.' },
+    mechanic: { name: 'The Mechanic', desc: 'After your first roll, he stands 2 of your knocked pins back up.' },
+    landlord: { name: 'The Landlord', desc: 'Pay $2 rent at the start of every frame. If you can\'t pay, that frame gets -2 Mult.' },
+    strobe: { name: 'DJ Strobe', desc: 'Your ball turns invisible once it passes the arrows, except in strobe flashes.' },
+    fog: { name: 'The Fog Machine', desc: 'Thick fog covers the deck: no pins glow, and your ball only lights up a small patch.' },
+    bookie: { name: 'The Bookie', desc: 'Each frame he takes half your money as a bet. Strike or Spare: you win it back doubled. Anything else: it is gone.' },
+    enforcer: { name: 'The Enforcer', desc: 'Every Open frame or Gutter frame costs you $3.' },
+    winter: { name: 'Old Man Winter', desc: 'Pins are frozen: each one needs two solid hits to fall.' },
+    golem: { name: 'The Snow Golem', desc: 'Every standard pin is packed with ice: heavy as a Lead pin and hard to knock over.' },
+    ringmaster: { name: 'The Ringmaster', desc: 'The whole lane tilts in a new direction every frame.' },
+    strongman: { name: 'The Strongman', desc: 'Three carnival posts slide across the lane, twice as fast.' },
+    astronaut: { name: 'The Astronaut', desc: 'Every frame the rack respawns in random positions on the pin deck.' },
+    comet: { name: 'The Comet', desc: 'Your throws are capped at 70% power. Timing past that does nothing.' },
+    king: { name: 'The Gutter King', desc: 'He steals your most valuable charm for this match.' },
+    rats: { name: 'The Gutter Rats', desc: 'The magnetic gutters pull twice as hard.' },
+    champion: { name: 'The Gutter King', desc: 'Head to head: beat his total over 5 frames. He also steals your most valuable charm.' }
+  };
+  // ---------- alleys ----------
   // lane: physics modifiers. theme: rendering palette.
   GK.ALLEYS = [
     {
       name: 'Lucky Strike Lanes', sub: 'EST. 1974 · LANE 7', base: 500, lane: { oil: 'house' },
       theme: { carpet: '#1c1220', c1: '#2b1a2f', c2: '#4a2a3c', mask: '#231825', sign: '#ffb547', signSh: '#5a2a1a', subc: '#c88f6a', wood: ['#d8a56b', '#d5a268', '#d9a76d', '#d3a066', '#d7a46a'] },
       laneDesc: 'A friendly house lane. Nothing weird. Yet.',
-      boss: { id: 'secretary', name: 'The League Secretary', desc: 'Call your shot before each frame: Strike, Spare or Open. Called right: ×2 Mult. Called wrong: ×0.5 Mult.' }
+      bosses: ['secretary', 'janitor']
     },
     {
       name: 'The Basement', sub: 'WARPED BOARDS · MIND THE DRIP', base: 1300, lane: { warp: 42, oil: 'short' },
       theme: { carpet: '#14161a', c1: '#1f2329', c2: '#2c333b', mask: '#181b20', sign: '#9fd36b', signSh: '#26361a', subc: '#7f8c80', wood: ['#b88e5c', '#a8814f', '#c09563', '#9e7748', '#b38a58'] },
       laneDesc: 'Warped boards push the ball left and right as it rolls.',
-      boss: { id: 'mechanic', name: 'The Mechanic', desc: 'After your first roll, he stands 2 of your knocked pins back up.' }
+      bosses: ['mechanic', 'landlord']
     },
     {
       name: 'Cosmic Bowl', sub: 'BLACKLIGHT NIGHT · 2 FOR 1', base: 4000, lane: { dark: true, oil: 'shark' },
       theme: { carpet: '#0b0618', c1: '#1b0f3a', c2: '#3b1a6b', mask: '#0e0820', sign: '#ff4fd8', signSh: '#2a0a4a', subc: '#5ce1ff', wood: ['#3a2a5c', '#35265a', '#3d2d61', '#322357', '#38295d'] },
       laneDesc: 'Lights out. Only glowing pins and whatever your ball lights up are visible.',
-      boss: { id: 'strobe', name: 'DJ Strobe', desc: 'Your ball turns invisible once it passes the arrows, except in strobe flashes.' }
+      bosses: ['strobe', 'fog']
     },
     {
       name: 'The Back Room', sub: 'MEMBERS ONLY · NO REFUNDS', base: 9500, lane: { lhw: 16, oil: 'sport' },
       theme: { carpet: '#1a0f0c', c1: '#2e1a14', c2: '#4a2a1c', mask: '#20120d', sign: '#e8c27a', signSh: '#3a2410', subc: '#a57a5a', wood: ['#9a6a3e', '#94653a', '#a06f42', '#8f6036', '#996a3d'] },
       laneDesc: 'A narrow private lane. The pins sit closer together.',
-      boss: { id: 'bookie', name: 'The Bookie', desc: 'Each frame he takes half your money as a bet. Strike or Spare: you win it back doubled. Anything else: it is gone.' }
+      bosses: ['bookie', 'enforcer']
     },
     {
       name: 'Frostbite Rink', sub: 'SKATE · BOWL · REGRET', base: 21000, lane: { ice: true, oil: 'ice' },
       theme: { carpet: '#0c1620', c1: '#16283a', c2: '#244058', mask: '#0f1c28', sign: '#bff4ff', signSh: '#1a3a52', subc: '#7fb8d0', wood: ['#cfe9f5', '#c6e3f1', '#d6eef8', '#c0dfee', '#cbe7f3'] },
       laneDesc: 'Frictionless ice. No hook, and fallen pins slide forever.',
-      boss: { id: 'winter', name: 'Old Man Winter', desc: 'Pins are frozen: each one needs two solid hits to fall.' }
+      bosses: ['winter', 'golem']
     },
     {
       name: 'Midway Carnival', sub: 'STEP RIGHT UP · 3 BALLS $1', base: 45000, lane: { posts: true, oil: 'long' },
       theme: { carpet: '#1d0d10', c1: '#3a1418', c2: '#e8c547', mask: '#2a0f14', sign: '#ffdf5c', signSh: '#7a1020', subc: '#ff8a8a', wood: ['#e0a96a', '#dba465', '#e4ae70', '#d69f60', '#dea767'] },
       laneDesc: 'Two carnival posts slide back and forth across the lane.',
-      boss: { id: 'ringmaster', name: 'The Ringmaster', desc: 'The whole lane tilts in a new direction every frame.' }
+      bosses: ['ringmaster', 'strongman']
     },
     {
       name: 'Lunar Lanes', sub: 'ONE SMALL STRIKE FOR MAN', base: 85000, lane: { lowg: true, oil: 'shark' },
       theme: { carpet: '#07070f', c1: '#14142a', c2: '#2a2a4a', mask: '#0b0b18', sign: '#d8d8ff', signSh: '#20204a', subc: '#9a9ac8', wood: ['#9a9aa8', '#9494a2', '#a0a0ae', '#8e8e9c', '#9797a5'] },
       laneDesc: 'Low gravity. Pins topple easily and float a long way.',
-      boss: { id: 'astronaut', name: 'The Astronaut', desc: 'Every frame the rack respawns in random positions on the pin deck.' }
+      bosses: ['astronaut', 'comet']
     },
     {
       name: 'The Gutter', sub: 'WHERE BALLS GO TO DIE', base: 150000, lane: { lhw: 18, magnet: true, oil: 'sport' },
       theme: { carpet: '#0a0a08', c1: '#1a1a12', c2: '#2e2a14', mask: '#10100a', sign: '#c8ff3a', signSh: '#2a3a08', subc: '#8a9a5a', wood: ['#7a6a4a', '#746445', '#806f4e', '#6e5f41', '#776748'] },
       laneDesc: 'A narrow lane with magnetic gutters that tug at your ball near the edges.',
-      boss: { id: 'king', name: 'The Gutter King', desc: 'He steals your most valuable charm for this match.' }
+      bosses: ['king', 'rats']
     }
   ];
   GK.CHAMPIONSHIP = {
@@ -247,7 +268,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     lane: { lhw: 18, magnet: true, oil: 'long' },
     theme: { carpet: '#120a02', c1: '#2a1a06', c2: '#5a3a0a', mask: '#1a1004', sign: '#ffd700', signSh: '#4a2a00', subc: '#ffb547', wood: ['#e0b070', '#dbab6b', '#e4b574', '#d6a666', '#deae6e'] },
     laneDesc: 'Head to head against the Gutter King on his own lane.',
-    boss: { id: 'champion', name: 'The Gutter King', desc: 'Head to head: beat his total over 5 frames. He also steals your most valuable charm.' }
+    bosses: ['champion']
   };
   GK.ROUND_NAMES = ['Qualifier', 'Heat', 'Boss Match'];
   GK.ROUND_MULT = [1, 1.5, 2];

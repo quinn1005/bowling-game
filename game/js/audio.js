@@ -65,6 +65,89 @@ GK.sfx = (() => {
     nope() { tone(160, 0, 0.12, 'square', 0.05); tone(120, 0.1, 0.15, 'square', 0.05); },
     win() { [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(f, i * 0.09, 0.18, 'square', 0.05)); },
     lose() { [392, 349, 311, 262].forEach((f, i) => tone(f, i * 0.18, 0.28, 'triangle', 0.08)); },
-    boss() { [110, 104, 98].forEach((f, i) => tone(f, i * 0.25, 0.4, 'sawtooth', 0.06)); }
+    boss() { [110, 104, 98].forEach((f, i) => tone(f, i * 0.25, 0.4, 'sawtooth', 0.06)); },
+    ctx: () => ac
   };
+})();
+
+// Background music: a small generated chiptune loop per alley (bass, arpeggio, hats). Boss
+// Matches switch to a faster minor loop and play louder. Scheduled ahead with a lookahead timer.
+GK.music = (() => {
+  // [tempo, root midi note, scale steps, chord degrees per bar]
+  const STYLES = [
+    [104, 48, [0, 2, 4, 7, 9], [0, 3, 4, 0]],      // Lucky Strike: sunny major pentatonic
+    [92, 45, [0, 3, 5, 7, 10], [0, 0, 3, 4]],      // Basement: grimy minor
+    [122, 50, [0, 2, 3, 7, 8], [0, 5, 3, 4]],      // Cosmic: disco minor
+    [88, 43, [0, 3, 5, 6, 7, 10], [0, 3, 0, 4]],   // Back Room: smoky blues
+    [100, 52, [0, 2, 4, 7, 11], [0, 4, 5, 3]],     // Frostbite: icy major 7
+    [132, 48, [0, 2, 4, 5, 7, 9], [0, 4, 5, 4]],   // Carnival: oom-pah
+    [84, 46, [0, 2, 7, 9], [0, 2, 3, 2]],          // Lunar: floaty
+    [96, 41, [0, 1, 5, 7, 8], [0, 1, 0, 4]]        // The Gutter: sinister
+  ];
+  let timer = null, next = 0, beat = 0, cfg = null, on = true, vol = 0.5, gain = null;
+  const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+  function note(ac, f, t, dur, type, v) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t);
+    g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(v, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g).connect(gain); o.start(t); o.stop(t + dur + 0.02);
+  }
+  function hat(ac, t, v) {
+    const len = 0.04, buf = ac.createBuffer(1, Math.floor(ac.sampleRate * len), ac.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    src.buffer = buf; f.type = 'highpass'; f.frequency.value = 6000; g.gain.value = v;
+    src.connect(f).connect(g).connect(gain); src.start(t);
+  }
+  function tick() {
+    const ac = GK.sfx.ctx(); if (!ac || !cfg) return;
+    const [tempo, root, scale, chords] = cfg.style, spb = 60 / (tempo * (cfg.boss ? 1.15 : 1)) / 2;
+    while (next < ac.currentTime + 0.25) {
+      const bar = Math.floor(beat / 8) % chords.length, step = beat % 8, deg = chords[bar];
+      const base = root + scale[deg % scale.length];
+      if (step % 4 === 0) note(ac, hz(base - 12), next, spb * 3.5, 'triangle', 0.16);
+      if (step % 4 === 2) note(ac, hz(base - 5), next, spb * 1.5, 'triangle', 0.09);
+      const arp = [0, 2, 4, 2, 1, 3, 4, 3][step], m = root + 12 + scale[(deg + arp) % scale.length] + 12 * Math.floor((deg + arp) / scale.length);
+      if (cfg.boss || step % 2 === 0) note(ac, hz(m), next, spb * 0.9, 'square', 0.035);
+      if (step % 2 === 1 || cfg.boss) hat(ac, next, cfg.boss ? 0.05 : 0.03);
+      next += spb; beat++;
+    }
+  }
+  return {
+    get on() { return on; },
+    setOn(v) { on = v; if (!v) this.stop(); },
+    play(alleyIdx, boss) {
+      const ac = GK.sfx.ctx(); if (!ac || !on || GK.sfx.muted) { this.stop(); return; }
+      const key = alleyIdx + ':' + !!boss;
+      if (cfg && cfg.key === key && timer) return;
+      this.stop();
+      if (!gain) { gain = ac.createGain(); gain.connect(ac.destination); }
+      gain.gain.setValueAtTime(boss ? vol * 1.5 : vol, ac.currentTime);
+      cfg = { key, style: STYLES[((alleyIdx % 8) + 8) % 8], boss: !!boss };
+      next = ac.currentTime + 0.1; beat = 0;
+      timer = setInterval(tick, 60); tick();
+    },
+    stop() {
+      if (timer) clearInterval(timer); timer = null;
+      if (gain) { try { const ac = GK.sfx.ctx(); gain.gain.setTargetAtTime(0, ac.currentTime, 0.1); gain.disconnect(); } catch (e) {} gain = null; }
+      cfg = null;
+    }
+  };
+})();
+
+// Vibration: Capacitor's Haptics plugin inside the Android app, the Vibration API in browsers.
+GK.haptic = (() => {
+  let on = true;
+  const ms = { light: 12, medium: 28, heavy: 60, success: [30, 40, 60] };
+  const fn = kind => {
+    if (!on) return;
+    try {
+      const H = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics;
+      if (H) { if (kind === 'success') H.notification({ type: 'SUCCESS' }); else H.impact({ style: kind.toUpperCase() }); return; }
+      if (navigator.vibrate) navigator.vibrate(ms[kind] || 20);
+    } catch (e) {}
+  };
+  fn.setOn = v => { on = v; };
+  Object.defineProperty(fn, 'on', { get: () => on });
+  return fn;
 })();

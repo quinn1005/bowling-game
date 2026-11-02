@@ -324,3 +324,87 @@ test('pinsetter fumble that drops the last standing pin is a free spare, not a s
     assert.ok(res.score > 0);
   } finally { GK.MISHAPS.respot = prev; }
 });
+
+test('boss pools: each alley picks one boss per run, fixed by the seed', () => {
+  const a = GK.newRun({ seed: 77 }), b = GK.newRun({ seed: 77 });
+  assert.deepStrictEqual(a.bosses, b.bosses);
+  a.bosses.forEach((id, i) => assert.ok(GK.ALLEYS[i].bosses.includes(id)));
+  const seen = new Set(); for (let s = 0; s < 40; s++) seen.add(GK.newRun({ seed: s }).bosses[0]);
+  assert.strictEqual(seen.size, 2, 'both Alley 1 bosses show up across seeds');
+  a.round = 2; assert.strictEqual(GK.bossId(a), a.bosses[0]);
+});
+
+test('skipping a round: tag applied, no pay, straight to the next round', () => {
+  const run = GK.newRun({ seed: 3 });
+  GK.startRound(run);
+  const money = run.money, r = GK.skipRound(run);
+  assert.ok(GK.TAGS[r.tag]);
+  assert.strictEqual(run.round, 1);
+  assert.ok(run.history[0].skipped);
+  if (r.tag === 'cash') assert.strictEqual(run.money, money + 6);
+  run.round = 2; assert.strictEqual(GK.canSkip(run), false, 'boss rounds cannot be skipped');
+});
+
+test('shop tags: coupon halves prices and the charm tag adds a free charm', () => {
+  const run = GK.newRun({ seed: 3 });
+  run.tags = ['coupon', 'charm'];
+  GK.openShop(run);
+  const before = run.shop.items.map(i => i.price);
+  GK.applyShopTags(run);
+  assert.strictEqual(run.shop.items[0].price, 0);
+  assert.ok(run.shop.items.slice(1).every((it, i) => it.price === Math.max(1, Math.ceil(before[i] / 2))));
+  assert.deepStrictEqual(run.tags, []);
+});
+
+test('events: each offer can be taken', () => {
+  const run = GK.newRun({ seed: 5 }); run.money = 20;
+  assert.ok(GK.takeEvent(run, { id: 'vending', item: 'card_spare' }).ok);
+  assert.strictEqual(run.money, 17);
+  assert.ok(GK.takeEvent(run, { id: 'shady', charm: 'sniper' }).ok);
+  assert.ok(run.nextTargetMul > 1.19);
+  const lf = GK.takeEvent(run, { id: 'lost_found', ball: 'ghost' });
+  assert.strictEqual(lf.need, 'replace');
+  assert.ok(GK.takeEvent(run, { id: 'lost_found', ball: 'ghost' }, 2).ok);
+  assert.strictEqual(run.bag[2].type, 'ghost');
+  assert.ok(GK.takeEvent(run, { id: 'lane_mech' }, { ball: 0, drill: 'strong' }).ok);
+  assert.strictEqual(run.bag[0].drill, 'strong');
+});
+
+test('drilling changes how a ball hooks', () => {
+  const finalX = (drill) => {
+    const run = GK.newRun({ seed: 9 }); GK.startRound(run);
+    run.bag[0].drill = drill; run.rack = GK.padRack(new Array(10).fill('none'));
+    const sim = GK.beginFrame(run);
+    GK.launch(run, sim, 0, { aimX: 6, aim: 0, spin: -0.4, speed: 330 });
+    for (let i = 0; i < 240 * 1.3; i++) sim.step();
+    return sim.balls[0].x;
+  };
+  const stock = finalX('stock'), strong = finalX('strong'), control = finalX('control');
+  assert.ok(strong < stock - 1 && control > stock + 1, [stock, strong, control].join(' '));
+});
+
+test('endless mode continues past the Championship with growing targets', () => {
+  const run = GK.newRun({ seed: 1 });
+  run.alley = GK.ALLEY_COUNT; GK.startRound(run); GK.advance(run);
+  assert.ok(run.won);
+  GK.startEndless(run);
+  assert.ok(GK.isEndless(run) && !run.won);
+  const t1 = GK.roundTarget(run); run.alley++; const t2 = GK.roundTarget(run);
+  assert.ok(t2 > t1 * 1.5);
+  assert.ok(/Endless 2/.test(GK.alleyDef(run).name));
+});
+
+test('resuming a saved frame keeps its rolls and standing pins', () => {
+  const run = GK.newRun({ seed: 12 }); GK.startRound(run);
+  let sim = GK.beginFrame(run);
+  GK.launch(run, sim, 0, { aimX: 10, aim: 0, spin: 0, speed: 300 });
+  sim.simulate();
+  const out = GK.afterRoll(run, sim);
+  if (out.next !== 'aim') return; // strike: nothing to resume
+  const saved = JSON.parse(JSON.stringify(run));
+  const sim2 = GK.beginFrame(saved, true);
+  const standing = sim2.standing().map(p => p.n).sort((a, b) => a - b);
+  assert.deepStrictEqual(standing, sim.standing().map(p => p.n).sort((a, b) => a - b));
+  assert.strictEqual(saved.rs.cur.rollIdx, 1);
+  assert.strictEqual(saved.rs.cur.rolls.length, 1);
+});

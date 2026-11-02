@@ -21,6 +21,9 @@ What the game has:
 - Reactive oil: `rs.wear` (`GK.newWear`, `GK.oilEff` in `core.js`) is a boards × 6in grid kept per round; `Sim.wearLine` strips oil under the ball and adds carrydown past the pattern. The renderer redraws its oil layer after each roll (`setWear`).
 - Mishaps (`GK.MISHAPS` in `frame.js`): 5% pinsetter fumble after roll 1 (drops 1-2 standing pins, counted as down; if that clears the rack it's a free Spare scored as a second 'pinsetter' roll, never a Strike), 6% ball jams in the return (`rs.stuck`) until a different ball is thrown.
 - Ball return (right of the approach) replaces the bag buttons: tap a ball to select it (`Renderer.drawReturn` / `returnHit`). Lane TV with pixel cartoons for strikes, doubles, turkeys, spares, splits and the 7-10 (`TV_SCENES` in `render.js`).
+- v0.6: boss pools per alley (`GK.BOSSES`, `alley.bosses`, picked per run in `run.bosses`), skip tags (`GK.TAGS`, `GK.skipRound`, `GK.applyShopTags`), between-round events (`GK.EVENTS`, `GK.rollEvent`, `GK.takeEvent`), ball drilling (`GK.DRILLS`, `GK.redrill`), lane events (`GK.LANE_EVENTS`), endless mode (`GK.startEndless`, alley index > 8), practice runs (`run.practice`, never saved), tutorial hints (`HINTS` in `main.js`, remembered in `meta.hints`), music (`GK.music`) and vibration (`GK.haptic`, Capacitor Haptics plugin in the app).
+- Saving: the run saves after `beginFrame`, at every launch (`rs.cur.pending`) and after every roll (`rs.cur.pinState`); `GK.beginFrame(run, true)` rebuilds a mid-frame state and a pending throw is replayed.
+- Rendering: the lane is laid out in 200×356 lane pixels but drawn at `RS` = 3× resolution (`render.js`), so the canvas scales smoothly to fill its space. Fonts: Bungee (display) and Rubik (UI and canvas text).
 - Slow-motion replays of strikes and 7-10 conversions, end-of-run story with best-frame replay, crowd reactions, daily result sharing.
 - Points × Mult scoring (the design doc's "Chips" are called Points in game) animated step by step; charms fire left to right.
 - Seeded runs (seed code on the end screen), daily run, run save/continue, meta stats, procedural WebAudio.
@@ -50,7 +53,7 @@ The logic modules (core, data, physics, scoring, run, frame) load in Node, so wh
 
 - `npm test` unit tests for scoring, rules, physics determinism, shop and consumables.
 - `npm run bot` headless bot plays 30 runs with human-like timing error and prints where they ended (balance check). `node tests/bot.js 60 great` uses a sharper player. After the v0.4.0 rebalance a good player clears about 5 rounds on average and a great one about 7; wins are rare.
-- `npm run e2e` Playwright play-tests in Chromium: a normal run with the shop, then every alley's boss with every ball type. Needs `playwright` resolvable (e.g. `NODE_PATH=$(npm root -g)`).
+- `npm run e2e` Playwright play-tests in Chromium: the throw sliders, a normal run with the shop, every alley's boss with every ball type, and the v0.6 features (skip, events, drilling, endless, TV, resume mid-throw, practice). Needs `playwright` resolvable (e.g. `NODE_PATH=$(npm root -g)`).
 
 ## Physics tuning constants (`game/js/core.js`, `physics.js`; same values as the prototype)
 

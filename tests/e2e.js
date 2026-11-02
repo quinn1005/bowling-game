@@ -26,6 +26,7 @@ const shots = process.argv[2];
     if (st.phase === 'aim') {
       frames++;
       if (frames === 2) await snap('04-aim');
+      await page.evaluate(() => { const r = GK.debug.run; if (r.rs && r.alley < 1) r.rs.target = Math.min(r.rs.target, 250); if (r.alley >= 1 && r.rs) r.rs.target = 1e9; });
       await page.evaluate(() => GK.debug.throw({ aimX: (Math.random() - 0.5) * 6, speed: 320 + Math.random() * 100, spin: (Math.random() - 0.5) * 0.4 }));
       await page.waitForTimeout(600);
       if (frames === 2) await snap('05-rolling');
@@ -35,6 +36,7 @@ const shots = process.argv[2];
       const what = await page.evaluate(() => {
         const L = document.getElementById('layerInner');
         if (L.querySelector('.shop')) return 'shop';
+        if (L.querySelector('[data-a=leave]')) return 'event';
         if (L.querySelector('[data-a=go]')) return 'go';
         if (L.querySelector('[data-a=again]')) return 'end';
         return 'other';
@@ -43,11 +45,18 @@ const shots = process.argv[2];
         shopVisits++;
         if (shopVisits === 1) await snap('06-shop');
         // buy whatever is affordable, use scorecards, then continue
-        const n = await page.$$eval('#layerInner [data-buy]:not([disabled])', els => els.length);
-        if (n) { await page.click('#layerInner [data-buy]:not([disabled])'); await page.waitForTimeout(100); if (!(await page.$('#modal[hidden]'))) await page.click('#modal [data-a=no], #modal .btn.alt').catch(() => {}); continue; }
+        // buy affordable non-ball items (a ball with a full bag would ask for a swap)
+        const idx = await page.$$eval('#layerInner .item', els => els.findIndex(el => { const b = el.querySelector('[data-buy]:not([disabled])'); return b && el.querySelector('.k').textContent.trim() !== 'Ball'; }));
+        if (idx >= 0 && shopVisits < 40) {
+          await page.evaluate(i => document.querySelectorAll('#layerInner .item')[i].querySelector('[data-buy]').click(), idx);
+          await page.waitForTimeout(150);
+          if (!(await page.$('#modal[hidden]'))) await page.evaluate(() => { const b = document.querySelector('#modal [data-a=no]') || document.querySelector('#modal .btn.alt'); if (b) b.click(); });
+          continue;
+        }
         await page.click('#layerInner [data-a=next]');
         continue;
       }
+      if (what === 'event') { await snap('08-event'); await page.click('#layerInner [data-a=leave]'); continue; }
       if (what === 'go') { await page.click('#layerInner [data-a=go]'); continue; }
       if (what === 'end') { await snap('09-end'); break; }
     }

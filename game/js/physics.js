@@ -48,9 +48,15 @@ var GK = globalThis.GK = globalThis.GK || {};
       this.winter = !!o.winter;
       this.bumpers = false;
       this.posts = L.posts ? [
-        { x: 0, z: 150, r: 3.2, amp: 13, w: 1.3, ph: this.rng() * 6.28 },
-        { x: 0, z: 235, r: 3.2, amp: 15, w: 0.9, ph: this.rng() * 6.28 }
+        { x: 0, z: 150, r: 2.6, amp: 13, w: 1.3, ph: this.rng() * 6.28 },
+        { x: 0, z: 235, r: 2.6, amp: 15, w: 0.9, ph: this.rng() * 6.28 }
       ] : [];
+      if (L.posts && o.posts3) {
+        this.posts.push({ x: 0, z: 190, r: 2.6, amp: 14, w: 1.1, ph: this.rng() * 6.28 });
+        this.posts.forEach(q => { q.w *= 2; });
+      }
+      this.magnetK = o.magnetK || 1;
+      this.heavyStd = !!o.heavyStd;
       this.time = 0; this.throwT = 0; this.settleT = 0;
       this.balls = []; this.blasts = []; this.fx = [];
       this.rolling = false;
@@ -70,8 +76,8 @@ var GK = globalThis.GK = globalThis.GK || {};
         const def = GK.PINS[type] || GK.PINS.std;
         const [x, z] = spots[i];
         this.pins.push({
-          n: i + 1, type, sx: x, sz: z, x, z, vx: 0, vz: 0, m: def.m || C.PIN_M, r: C.PIN_R * (def.r || 1), wobbled: false,
-          toppleV: this.toppleV * (def.topple || 1), e: def.e || 0,
+          n: i + 1, type, sx: x, sz: z, x, z, vx: 0, vz: 0, m: (this.heavyStd && type === 'std') ? 4 : (def.m || C.PIN_M), r: C.PIN_R * (def.r || 1), wobbled: false,
+          toppleV: this.toppleV * ((this.heavyStd && type === 'std') ? 1.8 : (def.topple || 1)), e: def.e || 0,
           standing: true, fallen: false, fallT: 0, fd: { x: 0, z: 1 }, wob: 0, wobDir: { x: 0, z: 1 }, fallAt: 0, byPin: false,
           gone: false, cleared: false, clearT: 0, counted: false, drop: 0, hp: this.winter ? 2 : 1,
           swallowed: false, downBy: null, downT: 0, blasted: false, rubberHits: 0
@@ -103,7 +109,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (mods.wild) spin = GK.clamp(spin + (this.rng() * 2 - 1) * 0.9, -1.2, 1.2);
       if (t === 'ice') spin = 0;
       this.rebound = !!mods.rebound;
-      const base = { z: C.BALL_Z0, spin, r: C.BALL_R * wide * (def.rs || 1), m: def.m, type: t, rot: 0, gutter: false, gone: false, contacts: 0, delay: 0, kind: 'main', touched: false, exploded: false };
+      const base = { flare: !!mods.flare, z: C.BALL_Z0, spin, r: C.BALL_R * wide * (def.rs || 1), m: def.m, type: t, rot: 0, gutter: false, gone: false, contacts: 0, delay: 0, kind: 'main', touched: false, exploded: false };
       const mk = (x, aim, extra) => Object.assign({}, base, { x, vx: Math.sin(aim) * prm.speed, vz: Math.cos(aim) * prm.speed }, extra || {});
       this.balls = [];
       if (t === 'cluster') {
@@ -126,6 +132,16 @@ var GK = globalThis.GK = globalThis.GK || {};
       };
       for (const p of this.pins) { p.ballHit = false; p.wobbled = false; }
       this.rolling = true; this.throwT = 0; this.settleT = 0;
+    }
+
+    // Rebuild a saved mid-frame rack: listed pins stand where they were; the rest are swept.
+    applyPinState(state) {
+      const m = new Map(state.map(q => [q.n, q]));
+      for (const p of this.pins) {
+        const q = m.get(p.n);
+        if (q) { p.x = p.sx = q.x; p.z = p.sz = q.z; p.drop = 1; }
+        else Object.assign(p, { standing: false, fallen: true, cleared: true, clearT: 1, counted: true, gone: true });
+      }
     }
 
     // Pin Whisperer: the first pin that wobbled this roll but stayed standing falls over.
@@ -228,10 +244,11 @@ var GK = globalThis.GK = globalThis.GK || {};
           b.x += (gx - b.x) * Math.min(1, dt * 12); b.vx = 0; b.z += b.vz * dt;
         } else {
           const oil = GK.oilEff(this.oil, this.wear, b.x, b.z, lhw);
-          let ax = b.spin * (this.hookOil + (this.hookDry - this.hookOil) * (1 - oil));
+          const hO = b.flare ? this.hookOil * 0.35 : this.hookOil, hD = b.flare ? this.hookDry * 1.45 : this.hookDry;
+          let ax = b.spin * (hO + (hD - hO) * (1 - oil));
           if (this.warp) ax += this.warp * Math.sin(b.z / 38 + this.warpPh);
           ax += this.tilt;
-          if (this.magnet && Math.abs(b.x) > lhw - 7) ax += Math.sign(b.x) * 90;
+          if (this.magnet && Math.abs(b.x) > lhw - 7) ax += Math.sign(b.x) * 90 * this.magnetK;
           if (b.path && !b.touched) {
             const tx = pathX(b.path, b.z + 24);
             if (tx != null) { b.vx = GK.clamp((tx - b.x) * b.vz / 24, -b.vz * 0.6, b.vz * 0.6); ax = 0; }
@@ -256,13 +273,17 @@ var GK = globalThis.GK = globalThis.GK || {};
             if (R && b.kind === 'main' && !R.contact) R.gutterBall = true;
             this.emit({ t: 'gutter', x: b.x, z: b.z, main: b.kind === 'main', early: R ? !R.contact : true });
           }
-          for (const q of this.posts) {
+          for (let qi = 0; qi < this.posts.length; qi++) {
+            const q = this.posts[qi];
+            // One knock per post per pass: a moving post must not hit the same ball every step.
+            if (b.postCool && b.postCool[qi] > this.time) continue;
             const dx = b.x - q.x, dz = b.z - q.z, d = Math.hypot(dx, dz);
             if (d < b.r + q.r && d > 0) {
               const nx = dx / d, nz = dz / d, ov = b.r + q.r - d;
               b.x += nx * ov; b.z += nz * ov;
               const rel = b.vx * nx + b.vz * nz;
-              if (rel < 0) { b.vx -= 1.8 * rel * nx; b.vz -= 1.8 * rel * nz; if (R) R.ballBounces++; this.emit({ t: 'ballBounce', x: b.x, z: b.z, post: true }); }
+              // A glancing knock, not a pinball flipper: the ball keeps most of its line.
+              if (rel < 0) { b.vx += GK.clamp(-1.25 * rel * nx, -45, 45); b.vz *= 0.9; (b.postCool || (b.postCool = {}))[qi] = this.time + 0.3; if (R) R.ballBounces++; this.emit({ t: 'ballBounce', x: b.x, z: b.z, post: true }); }
             }
           }
         }
