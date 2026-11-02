@@ -103,7 +103,8 @@ button:focus-visible { outline: 2px solid var(--marquee); outline-offset: 2px; }
 @keyframes rise { 0% { opacity: 0; transform: translate(-50%, 4px); } 15% { opacity: 1; } 75% { opacity: 1; } 100% { transform: translate(-50%, -22px); opacity: 0; } }
 
 /* ---------- lane ---------- */
-.stage { min-height: 0; display: grid; place-items: center; }
+.stage { min-height: 0; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.mini { flex: none; width: 34px; border-radius: 6px; background: #140e16; box-shadow: 0 0 0 1px var(--line), 0 6px 16px rgba(0, 0, 0, 0.45); }
 .lanebox { position: relative; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--line); }
 canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: pointer; image-rendering: crisp-edges; image-rendering: pixelated; }
 .banner {
@@ -311,7 +312,7 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
 .famerow.one { grid-template-columns: minmax(0, 1fr); justify-items: center; }
 .famerow.one .fame { width: calc((100% - 20px) / 3); }
 .fame { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.fame canvas { width: 100%; aspect-ratio: 32 / 40; image-rendering: pixelated; border-radius: 3px; border: 4px solid #c8932a; box-shadow: inset 0 0 0 2px #7a5418, 0 0 0 2px #3a2410, 0 6px 14px rgba(0, 0, 0, 0.5); background: #1a1420; }
+.fame canvas { width: 100%; aspect-ratio: 64 / 80; image-rendering: pixelated; border-radius: 3px; border: 4px solid #c8932a; box-shadow: inset 0 0 0 2px #7a5418, 0 0 0 2px #3a2410, 0 6px 14px rgba(0, 0, 0, 0.5); background: #1a1420; }
 .fame.you canvas { border-color: #6a5a78; border-style: dashed; box-shadow: 0 0 0 2px #2a2034; }
 .fame figcaption { display: flex; flex-direction: column; align-items: center; padding: 2px 8px 3px; border-radius: 4px; background: linear-gradient(180deg, #f2c94c, #c8932a); color: #2a1a10; box-shadow: 0 0 0 1px #5a3a10; }
 .fame figcaption b { font-family: var(--display); font-size: 13px; letter-spacing: 0.04em; line-height: 1.2; }

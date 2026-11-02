@@ -84,6 +84,9 @@ const must = (c, m) => { if (!c) throw new Error(m); };
   const sizes = new Set();
   for (const i of [0, 1, 2, 0, 2, 1]) { await page.evaluate(i => GK.debug.pickBall(i), i); await page.waitForTimeout(120); sizes.add(await page.$eval('#lanebox', e => Math.round(e.getBoundingClientRect().height))); }
   must(sizes.size === 1, 'lane changed size when picking balls: ' + [...sizes]);
+  // the lane map sits beside the lane at the same height and draws the oil and the last shot
+  const mini = await page.evaluate(() => { const m = document.getElementById('mini'), l = document.getElementById('lanebox'); const g = m.getContext('2d').getImageData(Math.floor(m.width / 2), Math.floor(m.height * 0.7), 1, 1).data; return { h: Math.round(m.getBoundingClientRect().height), lane: Math.round(l.getBoundingClientRect().height), painted: g[3] > 0 }; });
+  must(mini.h === mini.lane && mini.painted, 'lane map missing: ' + JSON.stringify(mini));
 
   // the Wall of Fame after beating the Gutter King
   await page.evaluate(() => GK.debug.wall());

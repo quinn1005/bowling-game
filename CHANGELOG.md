@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.9.1
+
+### New
+- **Lane map.** A small top-down view of your lane sits beside it and updates live. The oil shows in blue and fades to bare wood where your ball has dried the line out. It also shows the arrows, the pins, the ball as it rolls, and the line of your last shot in orange. It fills the spare space beside the lane, so the lane stays the same size.
+
+### Changed
+- **Higher-quality Wall of Fame portraits.** Kaleb, Quinn and Levi are redrawn at twice the resolution with proper lighting and shading. Changes: egg-shaped faces, Quinn's centre-parted long hair, Kaleb's loose curls, and Levi's slicked-back hair, top bun and stubble.
+- **Quinn's goatee** is now one connected shape: the moustache runs down both corners of the mouth into the chin beard.
+- **Kaleb's bag strap** is gone from the portrait.
+
 ## v0.9.0
 
 ### The Regulars

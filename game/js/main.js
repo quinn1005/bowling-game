@@ -12,6 +12,7 @@
   GK.music.setOn(meta.music !== false);
   GK.haptic.setOn(meta.haptics !== false);
   // Replays: frames recorded while a roll plays, so strikes and the best frame can be shown again.
+  let curPath = [], lastPath = null, themedRs = null; // the lane map's live ball trail and your last shot's line
   let recFrames = [], lastRec = null, bestReplay = null, replay = null, crowd = { mood: 'idle', t: 0 }, tv = null;
   try { fast = localStorage.getItem('gk-fast') === '1'; } catch (e) {}
 
@@ -20,12 +21,16 @@
   GK.debug = { get run() { return run; }, get sim() { return sim; }, get phase() { return phase; }, get aimX() { return aimX; } };
 
   // ---------- sizing ----------
+  const MINI_W = 34, MINI_GAP = 6;
   function fit() {
     const r = $('stage').getBoundingClientRect();
     // The lane renders at high resolution, so it can scale to fill the space exactly.
-    const s = Math.min(r.width / C.W, r.height / C.H);
+    // The lane map sits beside it in the spare width.
+    const s = Math.min((r.width - MINI_W - MINI_GAP) / C.W, r.height / C.H);
+    const h = Math.floor(C.H * s), dpr = Math.min(3, window.devicePixelRatio || 1);
     $('lanebox').style.width = Math.floor(C.W * s) + 'px';
-    $('lanebox').style.height = Math.floor(C.H * s) + 'px';
+    $('lanebox').style.height = h + 'px';
+    const m = $('mini'); m.style.height = h + 'px'; m.width = MINI_W * dpr; m.height = h * dpr;
   }
   new ResizeObserver(fit).observe($('stage'));
   window.addEventListener('resize', fit);
@@ -34,6 +39,7 @@
   const laneOf = () => GK.laneFor(run);
   function themeRound() {
     const def = GK.alleyDef(run), L = laneOf();
+    if (!run.rs || run.rs !== themedRs) { lastPath = null; curPath = []; themedRs = run.rs; }
     R.setTheme(def, L.lhw || C.LHW, L.magnet ? 12 : C.GUT, L.oil);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (run) R.buildStatic(); });
   }
@@ -174,6 +180,7 @@
     const b = run.bag[sel];
     if (b.type === 'snake' && !prm.path) prm.path = GK.snakePath(prm.aimX, prm.aim, laneOf().lhw || C.LHW);
     GK.launch(run, sim, sel, prm);
+    curPath = [];
     GK.save(run);
     hitStop = 0; step = 'pos'; posT0 = performance.now(); recFrames = [];
     UI.shot(GK.BALLS[b.type].full + ' away');
@@ -782,7 +789,9 @@
         const lc = GK.liveChips(run.rs.cur.rolls, sim), el = $('chips');
         if (el.textContent !== fmt(lc)) { el.textContent = fmt(lc); UI.bump($('chipsBox')); }
         if (recFrames.length < 900) recFrames.push(snapSim(sim));
-        if (!sim.rolling) { acc = 0; onRollEnd(); }
+        const mb = sim.balls.find(b => b.kind === 'main' && !b.gone && !(b.delay > 0));
+        if (mb && (!curPath.length || Math.abs(mb.z - curPath[curPath.length - 1].z) > 3)) curPath.push({ x: mb.x, z: mb.z });
+        if (!sim.rolling) { acc = 0; if (curPath.length > 2) lastPath = curPath; curPath = []; onRollEnd(); }
       } else sim.time += realDt;
       for (const p of sim.pins) {
         if (p.drop < 1) p.drop = Math.min(1, p.drop + realDt * 3.5);
@@ -804,6 +813,7 @@
       else tvBig = null;
     }
     R.tick(realDt);
+    R.drawMini($('mini'), { sim: replay ? null : sim, live: phase === 'rolling' ? curPath : null, last: lastPath });
     const rs = run && run.rs;
     const thrown = rs && rs.cur && rs.cur.ball && phase !== 'aim' ? rs.cur.ball : null;
     const b = run && run.bag[sel];

@@ -435,7 +435,70 @@ var GK = globalThis.GK = globalThis.GK || {};
       g.restore();
     }
     setWear(wear) { this.wear = wear || null; this.rebuildOil(); }
+    // Lane map: a top-down strip beside the lane with the live oil (blue = oil, wood = dry, darker
+    // wood = boards your ball has dried out), the arrows, the pins, the ball as it rolls and the
+    // line of your last shot.
+    drawMini(cv, st) {
+      if (!cv || !cv.width) return;
+      const g = cv.getContext('2d'), w = cv.width, h = cv.height, d = w / 34;
+      const lhw = this.lhw || C.LHW, gut = 3 * d, lw = w - 2 * gut;
+      const zMin = -8, zMax = C.ZH + 42, top = 6 * d, bot = 6 * d;
+      const X = x => gut + (x + lhw) / (2 * lhw) * lw, Y = z => h - bot - (z - zMin) / (zMax - zMin) * (h - top - bot);
+      const key = this.oilVer + ':' + w + 'x' + h;
+      if (this.miniKey !== key) {
+        this.miniKey = key;
+        const c = this.miniCv || (this.miniCv = document.createElement('canvas'));
+        c.width = w; c.height = h;
+        const q = c.getContext('2d');
+        q.fillStyle = '#140e16'; q.fillRect(0, 0, w, h);
+        q.fillStyle = '#231a26'; q.fillRect(0, 0, gut, h); q.fillRect(w - gut, 0, gut, h);
+        const W = GK.WEAR, NB = W.NB, wood = [200, 146, 90], worn = [150, 96, 52], oilC = [58, 128, 220];
+        for (let zi = 0; zi * W.DZ < zMax; zi++) {
+          const z0 = zi * W.DZ, z1 = Math.min(zMax, z0 + W.DZ), y0 = Math.round(Y(z1)), y1 = Math.round(Y(Math.max(zMin, z0 === 0 ? zMin : z0)));
+          for (let b = 0; b < NB; b++) {
+            const xc = -lhw + (b + 0.5) / NB * 2 * lhw, zc = z0 + W.DZ / 2;
+            const o = zc > C.ZH - 10 ? 0 : GK.oilEff(this.oil, this.wear, xc, zc, lhw);
+            const wi = this.wear ? GK.wearIdx(xc, zc, lhw) : -1, wv = wi >= 0 ? Math.max(0, this.wear[wi]) : 0;
+            const base = wood.map((v, k) => v + (worn[k] - v) * Math.min(1, wv * 3));
+            const col = base.map((v, k) => Math.round(v + (oilC[k] - v) * Math.min(1, o * 1.1)));
+            const deck = zc > C.ZH - 10;
+            q.fillStyle = deck ? '#d8b07a' : 'rgb(' + col.join(',') + ')';
+            const x0 = Math.round(X(-lhw + b / NB * 2 * lhw)), x1 = Math.round(X(-lhw + (b + 1) / NB * 2 * lhw));
+            q.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
+          }
+        }
+        // foul line and the targeting arrows
+        q.fillStyle = '#ff5a6e'; q.fillRect(gut, Math.round(Y(0)), lw, Math.max(1, Math.round(d)));
+        q.fillStyle = 'rgba(30,16,12,0.85)';
+        for (let i = 1; i <= 7; i++) { const x = X(-lhw + i * 5 / 40 * 2 * lhw), y = Y(60 + Math.abs(4 - i) * 6); q.beginPath(); q.moveTo(x, y - 3 * d); q.lineTo(x - 1.4 * d, y + 1.5 * d); q.lineTo(x + 1.4 * d, y + 1.5 * d); q.fill(); }
+        q.fillStyle = 'rgba(255,255,255,0.75)'; q.font = '700 ' + Math.round(7 * d) + 'px Rubik, system-ui, sans-serif'; q.textAlign = 'center';
+        q.fillText('LANE', w / 2, h - 0.5 * d);
+      }
+      g.drawImage(this.miniCv, 0, 0);
+      const line = (pts, col, lwid) => {
+        if (!pts || pts.length < 2) return;
+        g.strokeStyle = col; g.lineWidth = lwid; g.lineJoin = 'round'; g.lineCap = 'round';
+        g.beginPath(); pts.forEach((p, i) => { const x = X(GK.clamp(p.x, -lhw - 3, lhw + 3)), y = Y(Math.min(p.z, zMax)); if (i) g.lineTo(x, y); else g.moveTo(x, y); }); g.stroke();
+      };
+      line(st.last, 'rgba(20,10,16,0.6)', 3 * d); line(st.last, '#ffb547', 1.6 * d);
+      line(st.live, '#ffffff', 1.6 * d);
+      const sim = st.sim;
+      if (sim) {
+        for (const p of sim.pins) {
+          if (p.gone || p.cleared) continue;
+          g.fillStyle = p.standing ? '#ffffff' : 'rgba(255,255,255,0.35)';
+          g.beginPath(); g.arc(X(p.x), Y(p.z), 1.3 * d, 0, Math.PI * 2); g.fill();
+        }
+        if (st.live) for (const b of sim.balls) {
+          if (b.gone || b.delay > 0 || b.kind === 'shard') continue;
+          g.fillStyle = b.kind === 'main' ? '#ffd447' : 'rgba(255,212,71,0.6)';
+          g.beginPath(); g.arc(X(b.x), Y(Math.min(b.z, zMax)), 2 * d, 0, Math.PI * 2); g.fill();
+        }
+      }
+    }
+
     rebuildOil() {
+      this.oilVer = (this.oilVer || 0) + 1;
       const g = this.oilCv.getContext('2d'); g.setTransform(RS, 0, 0, RS, 0, 0); g.clearRect(0, 0, W, H);
       this.drawOil(g, this.lhw || C.LHW, Math.round((this.lhw || C.LHW) * 2 / 1.064));
       pixelize(this.oilCv, 16, 28);
