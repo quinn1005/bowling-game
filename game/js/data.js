@@ -23,7 +23,7 @@ var GK = globalThis.GK = globalThis.GK || {};
 
   // ---------- editions (balls and charms) ----------
   GK.EDITIONS = {
-    foil: { name: 'Foil', desc: '+50 Chips', col: '#9fe8ff' },
+    foil: { name: 'Foil', desc: '+50 Points', col: '#9fe8ff' },
     holo: { name: 'Holo', desc: '+10 Mult', col: '#ff9ef0' },
     neon: { name: 'Neon', desc: '×1.5 Mult', col: '#b6ff5c' }
   };
@@ -35,17 +35,17 @@ var GK = globalThis.GK = globalThis.GK || {};
     split: { name: 'Split', full: 'Split Ball', cost: 5, m: 6, col: '#d98a22', hi: '#ffd590', desc: 'Splits into two half-size balls on first contact.' },
     ghost: { name: 'Ghost', full: 'Ghost Ball', cost: 6, m: 6, col: '#b9c7d6', hi: '#ffffff', desc: 'Passes straight through the first 3 pins it touches.' },
     feather: { name: 'Feather', full: 'Featherweight', cost: 5, m: 2.4, col: '#d9609a', hi: '#ffc2dd', desc: 'Very light. +2 Mult every time a pin knocks over another pin.' },
-    lead: { name: 'Lead', full: 'Lead Ball', cost: 5, m: 11, col: '#59626d', hi: '#c9d2dc', desc: 'Flattens every pin it touches. Chips from its roll ×0.5.' },
-    bouncer: { name: 'Bouncer', full: 'Bouncer', cost: 6, m: 5, col: '#2fb36a', hi: '#a6ffcb', desc: 'Bounces off the gutter edges instead of falling in. +10 Chips per wall bounce.' },
+    lead: { name: 'Lead', full: 'Lead Ball', cost: 5, m: 11, col: '#59626d', hi: '#c9d2dc', desc: 'Flattens every pin it touches. Points from its roll ×0.5.' },
+    bouncer: { name: 'Bouncer', full: 'Bouncer', cost: 6, m: 5, col: '#2fb36a', hi: '#a6ffcb', desc: 'Bounces off the gutter edges instead of falling in. +10 Points per wall bounce.' },
     bomb: { name: 'Bomb', full: 'Bomb Ball', cost: 7, m: 6, col: '#2a2228', hi: '#ff6a3d', desc: 'Explodes on its 3rd pin contact, blasting everything nearby.' },
     ice: { name: 'Ice', full: 'Ice Ball', cost: 6, m: 6, col: '#7fd6ff', hi: '#e8fbff', desc: 'Never hooks. Bursts into 3 ice shards on first contact.' },
     mirror: { name: 'Mirror', full: 'Mirror Ball', cost: 8, m: 5, col: '#c0c6d0', hi: '#ffffff', desc: 'Rolls with a mirrored twin on the other side of the lane.' },
     echo: { name: 'Echo', full: 'Echo Ball', cost: 7, m: 6, col: '#7b5cff', hi: '#cbbdff', desc: 'A half-weight echo replays your exact throw a moment later.' },
     glass: { name: 'Glass', full: 'Glass Ball', cost: 6, m: 5, col: '#9be3e0', hi: '#ffffff', desc: '×3 Mult for its roll. 1 in 4 chance to shatter after the roll.', glass: true },
-    golden: { name: 'Golden', full: 'Golden Ball', cost: 7, m: 7, col: '#e0b028', hi: '#fff1a8', desc: 'Earns $1 per pin knocked down. Its roll scores no pin Chips.' },
+    golden: { name: 'Golden', full: 'Golden Ball', cost: 7, m: 7, col: '#e0b028', hi: '#fff1a8', desc: 'Earns $1 per pin knocked down. Its roll scores no pin Points.' },
     cluster: { name: 'Cluster', full: 'Cluster', cost: 8, m: 6, col: '#e2584a', hi: '#ffc1a8', desc: 'Throws 5 marbles in a spread instead of one ball.' },
-    blackhole: { name: 'Black Hole', full: 'Black Hole', cost: 9, m: 8, col: '#120a1c', hi: '#b06bff', desc: 'Swallows pins it touches and pulls nearby pins in. Swallowed pins give ×2 Chips.' },
-    snake: { name: 'Snake', full: 'Snake Ball', cost: 7, m: 6, col: '#3d9b3a', hi: '#c8ff8a', desc: 'Draw its path: the ball follows the shape of your swipe until it hits a pin.' },
+    blackhole: { name: 'Black Hole', full: 'Black Hole', cost: 9, m: 8, col: '#120a1c', hi: '#b06bff', desc: 'Swallows pins it touches and pulls nearby pins in. Swallowed pins give ×2 Points.' },
+    snake: { name: 'Snake', full: 'Snake Ball', cost: 7, m: 6, col: '#3d9b3a', hi: '#c8ff8a', desc: 'Slithers in an S-curve along your aim line, sweeping across extra boards until it hits a pin.' },
     lucky7: { name: 'Lucky 7', full: 'Lucky Seven', cost: 7, m: 6, col: '#1e8a4f', hi: '#ffe066', desc: 'If its roll knocks down exactly 7 pins, every charm triggers twice this frame.' }
   };
 
@@ -58,12 +58,12 @@ var GK = globalThis.GK = globalThis.GK || {};
 
   // ---------- pin types ----------
   GK.PINS = {
-    std: { name: 'Standard', desc: '5 Chips when knocked down.', chips: 5, body: '#f2ebe0', shade: '#d9cfc2', band: '#c4243a' },
-    gold: { name: 'Gold Pin', desc: '5 Chips and $1 when knocked down.', chips: 5, body: '#f2c94c', shade: '#c8932a', band: '#fff3b0' },
+    std: { name: 'Standard', desc: '5 Points when knocked down.', chips: 5, body: '#f2ebe0', shade: '#d9cfc2', band: '#c4243a' },
+    gold: { name: 'Gold Pin', desc: '5 Points and $1 when knocked down.', chips: 5, body: '#f2c94c', shade: '#c8932a', band: '#fff3b0' },
     glass: { name: 'Glass Pin', desc: '×1.5 Mult when knocked down. 1 in 4 breaks for good.', chips: 5, body: '#bfeff3', shade: '#7fc8d0', band: '#e8ffff', alpha: 0.78 },
-    lead: { name: 'Lead Pin', desc: 'Heavy and hard to topple. 20 Chips when knocked down.', chips: 20, body: '#8a929c', shade: '#5f666e', band: '#3a3f45', m: 4, topple: 1.8 },
-    rubber: { name: 'Rubber Pin', desc: 'Super bouncy. +5 Chips for each pin it bounces off.', chips: 5, body: '#ff7a59', shade: '#c9502f', band: '#2a1d22', e: 1.0 },
-    explosive: { name: 'Explosive Pin', desc: 'Explodes when it falls, blasting nearby pins. +15 Chips.', chips: 20, body: '#ff4d4d', shade: '#b52a2a', band: '#ffd447' },
+    lead: { name: 'Lead Pin', desc: 'Heavy and hard to topple. 20 Points when knocked down.', chips: 20, body: '#8a929c', shade: '#5f666e', band: '#3a3f45', m: 4, topple: 1.8 },
+    rubber: { name: 'Rubber Pin', desc: 'Super bouncy. +5 Points for each pin it bounces off.', chips: 5, body: '#ff7a59', shade: '#c9502f', band: '#2a1d22', e: 1.0 },
+    explosive: { name: 'Explosive Pin', desc: 'Explodes when it falls, blasting nearby pins. +15 Points.', chips: 20, body: '#ff4d4d', shade: '#b52a2a', band: '#ffd447' },
     lucky: { name: 'Lucky Pin', desc: 'When knocked down: 1 in 3 for +8 Mult, 1 in 6 for $4.', chips: 5, body: '#7be38a', shade: '#3fa85a', band: '#ffffff' },
     phantom: { name: 'Phantom Pin', desc: 'Pins pass through it, only balls can hit it. +4 Mult when knocked down.', chips: 5, body: '#b58cff', shade: '#7c55c9', band: '#efe3ff', alpha: 0.65 },
     none: { name: 'Empty Spot', desc: 'This spot has no pin.', chips: 0 }
@@ -76,21 +76,21 @@ var GK = globalThis.GK = globalThis.GK || {};
   // flags: passive rule changes read by the game (frames, reracks, bumpers, wide, wild, retake, third, debt).
   const C = [];
   const add = (id, name, rarity, cost, tag, desc, o) => C.push(Object.assign({ id, name, rarity, cost, tag, desc }, o || {}));
-  // +Chips
-  add('lucky_shoes', 'Lucky Shoes', 'common', 4, 'chips', '+30 Chips every frame.', { score: (c, s) => s.chips(30) });
-  add('chalk_bag', 'Chalk Bag', 'common', 4, 'chips', '+4 Chips for every pin knocked down this frame.', { score: (c, s) => c.pins && s.chips(4 * c.pins) });
-  add('corner_office', 'Corner Office', 'common', 5, 'chips', '+50 Chips for each corner pin (7 or 10) knocked down.', { score: (c, s) => { const n = (c.down.has(7) ? 1 : 0) + (c.down.has(10) ? 1 : 0); if (n) s.chips(50 * n); } });
-  add('headpin_hunter', 'Headpin Hunter', 'common', 5, 'chips', '+60 Chips if the first pin your ball touches is the headpin.', { score: (c, s) => c.firstPin === 1 && s.chips(60) });
-  add('domino', 'Domino Theory', 'common', 5, 'chips', '+8 Chips for every pin that knocks over another pin.', { score: (c, s) => c.carry && s.chips(8 * c.carry) });
-  add('bumper_kid', 'Bumper Kid', 'uncommon', 6, 'rule', 'Bumpers up: balls bounce off the gutters. +10 Chips per ball bounce.', { flags: { bumpers: true }, score: (c, s) => c.ballBounces && s.chips(10 * c.ballBounces) });
-  add('rail_rider', 'Rail Rider', 'uncommon', 6, 'chips', '+15 Chips each time a pin bangs off a kickback wall.', { score: (c, s) => c.walls && s.chips(15 * c.walls) });
-  add('pin_collector', 'Pin Collector', 'uncommon', 6, 'scaling', 'Gains +1 Chip for every pin you knock down. (Currently +{v} Chips)', { init: { v: 0 }, score: (c, s, me) => me.v && s.chips(me.v), after: (c, me) => { me.v += c.pins; } });
+  // +Points
+  add('lucky_shoes', 'Lucky Shoes', 'common', 4, 'chips', '+30 Points every frame.', { score: (c, s) => s.chips(30) });
+  add('chalk_bag', 'Chalk Bag', 'common', 4, 'chips', '+4 Points for every pin knocked down this frame.', { score: (c, s) => c.pins && s.chips(4 * c.pins) });
+  add('corner_office', 'Corner Office', 'common', 5, 'chips', '+50 Points for each corner pin (7 or 10) knocked down.', { score: (c, s) => { const n = (c.down.has(7) ? 1 : 0) + (c.down.has(10) ? 1 : 0); if (n) s.chips(50 * n); } });
+  add('headpin_hunter', 'Headpin Hunter', 'common', 5, 'chips', '+60 Points if the first pin your ball touches is the headpin.', { score: (c, s) => c.firstPin === 1 && s.chips(60) });
+  add('domino', 'Domino Theory', 'common', 5, 'chips', '+8 Points for every pin that knocks over another pin.', { score: (c, s) => c.carry && s.chips(8 * c.carry) });
+  add('bumper_kid', 'Bumper Kid', 'uncommon', 6, 'rule', 'Bumpers up: balls bounce off the gutters. +10 Points per ball bounce.', { flags: { bumpers: true }, score: (c, s) => c.ballBounces && s.chips(10 * c.ballBounces) });
+  add('rail_rider', 'Rail Rider', 'uncommon', 6, 'chips', '+15 Points each time a pin bangs off a kickback wall.', { score: (c, s) => c.walls && s.chips(15 * c.walls) });
+  add('pin_collector', 'Pin Collector', 'uncommon', 6, 'scaling', 'Gains +1 Point for every pin you knock down. (Currently +{v} Points)', { init: { v: 0 }, score: (c, s, me) => me.v && s.chips(me.v), after: (c, me) => { me.v += c.pins; } });
   // +Mult
   add('league_jacket', 'League Jacket', 'common', 4, 'mult', '+4 Mult every frame.', { score: (c, s) => s.mult(4) });
   add('spare_parts', 'Spare Parts', 'common', 5, 'mult', '+8 Mult on a Spare or Split conversion.', { score: (c, s) => GK.isSpareKind(c.kind) && s.mult(8) });
   add('strike_out', 'Strike Out', 'common', 5, 'mult', '+6 Mult on any Strike, Double or Turkey.', { score: (c, s) => GK.isStrikeKind(c.kind) && s.mult(6) });
   add('open_mic', 'Open Mic', 'common', 4, 'mult', '+12 Mult on an Open frame.', { score: (c, s) => c.kind === 'open' && s.mult(12) });
-  add('gutter_punk', 'Gutter Punk', 'common', 4, 'mult', 'Gutter frames get +40 Chips and +5 Mult.', { score: (c, s) => { if (c.kind === 'gutter') { s.chips(40); s.mult(5); } } });
+  add('gutter_punk', 'Gutter Punk', 'common', 4, 'mult', 'Gutter frames get +40 Points and +5 Mult.', { score: (c, s) => { if (c.kind === 'gutter') { s.chips(40); s.mult(5); } } });
   add('split_personality', 'Split Personality', 'uncommon', 6, 'mult', '+12 Mult on a Split conversion. +4 Mult whenever you leave a split.', { score: (c, s) => { if (c.kind === 'split') s.mult(12); else if (c.leftSplit) s.mult(4); } });
   add('thunderclap', 'Thunderclap', 'uncommon', 6, 'mult', '+2 Mult for each pin that falls within half a second of first contact.', { score: (c, s) => c.fast && s.mult(2 * c.fast) });
   add('moon_shot', 'Moon Shot', 'uncommon', 6, 'mult', '+3 Mult for every pin that flies into the pit.', { score: (c, s) => c.pit && s.mult(3 * c.pit) });
@@ -101,7 +101,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   // ×Mult
   add('tenth_frame', 'Tenth Frame', 'rare', 8, 'xmult', '×3 Mult on the last frame of each round.', { score: (c, s) => c.lastFrame && s.xmult(3) });
   add('hot_streak', 'Hot Streak', 'rare', 8, 'scaling', 'Gains ×0.5 Mult for each strike in a row; resets on anything else. (Currently ×{x})', { init: { v: 0 }, score: (c, s, me) => { const x = 1 + 0.5 * (me.v + (GK.isStrikeKind(c.kind) ? 1 : 0)); if (x > 1) s.xmult(x); }, after: (c, me) => { me.v = GK.isStrikeKind(c.kind) ? me.v + 1 : 0; }, show: me => (1 + 0.5 * me.v).toFixed(1) });
-  add('pyromaniac', 'Pyromaniac', 'rare', 8, 'xmult', '×2 Mult if anything exploded this frame. +10 Chips per pin blasted.', { score: (c, s) => { if (c.blasted) s.chips(10 * c.blasted); if (c.explosions) s.xmult(2); } });
+  add('pyromaniac', 'Pyromaniac', 'rare', 8, 'xmult', '×2 Mult if anything exploded this frame. +10 Points per pin blasted.', { score: (c, s) => { if (c.blasted) s.chips(10 * c.blasted); if (c.explosions) s.xmult(2); } });
   add('sniper', 'Sniper', 'rare', 7, 'xmult', '×3 Mult when you convert a spare by knocking down exactly one pin.', { score: (c, s) => GK.isSpareKind(c.kind) && c.lastRollPins === 1 && s.xmult(3) });
   add('seven_ten', '7-10 Club', 'rare', 8, 'xmult', '×2 Mult on Split conversions. Converting the 7-10 is ×5 and pays $10.', { score: (c, s) => { if (c.kind !== 'split') return; if (c.leave710) { s.xmult(5); s.money(10); } else s.xmult(2); } });
   add('butterfingers', 'Butterfingers', 'rare', 7, 'rule', 'Every throw gets a random wild hook. ×2 Mult.', { flags: { wild: true }, score: (c, s) => s.xmult(2) });
@@ -120,7 +120,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   GK.CHARMS = {}; C.forEach(c => { GK.CHARMS[c.id] = c; });
   GK.CHARM_LIST = C;
   GK.RARITY = { common: { w: 60, col: '#8fb3d9', name: 'Common' }, uncommon: { w: 30, col: '#7be38a', name: 'Uncommon' }, rare: { w: 10, col: '#ff5a6e', name: 'Rare' } };
-  GK.TAG_GLYPH = { chips: '+C', mult: '+M', xmult: '×M', scaling: '↑', economy: '$', rule: '!' };
+  GK.TAG_GLYPH = { chips: '+P', mult: '+M', xmult: '×M', scaling: '↑', economy: '$', rule: '!' };
 
   // ---------- consumables ----------
   // kind: card (levels a shot), trick (targets pins/balls or the round), market (black market).
@@ -129,7 +129,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   const kadd = (id, name, kind, cost, desc, o) => K.push(Object.assign({ id, name, kind, cost, desc }, o || {}));
   GK.SHOT_ORDER.forEach(k => {
     const s = GK.SHOTS[k];
-    kadd('card_' + k, s.name + ' Card', 'card', 3, 'Level up ' + s.name + ': +' + s.lv[0] + ' Chips and +' + s.lv[1] + ' Mult.', { shot: k });
+    kadd('card_' + k, s.name + ' Card', 'card', 3, 'Level up ' + s.name + ': +' + s.lv[0] + ' Points and +' + s.lv[1] + ' Mult.', { shot: k });
   });
   const pinTrick = (id, name, type) => kadd(id, name, 'trick', 4, 'Turn up to 2 pins in your rack into ' + GK.PINS[type].name + 's. ' + GK.PINS[type].desc, { target: 'pin', pinType: type, picks: 2 });
   pinTrick('t_gild', 'Gilder', 'gold');
@@ -139,12 +139,12 @@ var GK = globalThis.GK = globalThis.GK || {};
   pinTrick('t_keg', 'Powder Keg', 'explosive');
   pinTrick('t_clover', 'Four-Leaf', 'lucky');
   pinTrick('t_seance', 'Séance', 'phantom');
-  kadd('t_foil', 'Foil Wrap', 'trick', 5, 'Give a ball the Foil edition: +50 Chips on its rolls.', { target: 'ball', edition: 'foil' });
+  kadd('t_foil', 'Foil Wrap', 'trick', 5, 'Give a ball the Foil edition: +50 Points on its rolls.', { target: 'ball', edition: 'foil' });
   kadd('t_holo', 'Holo Wrap', 'trick', 5, 'Give a ball the Holo edition: +10 Mult on its rolls.', { target: 'ball', edition: 'holo' });
   kadd('t_neon', 'Neon Paint', 'trick', 6, 'Give a ball the Neon edition: ×1.5 Mult on its rolls.', { target: 'ball', edition: 'neon' });
   kadd('t_frame', 'Extra Frame', 'trick', 4, '+1 Frame this round. Use during a round.', { target: 'round', inRound: true });
   kadd('t_rerack', 'Re-rack Token', 'trick', 3, '+1 Re-rack this round. Use during a round.', { target: 'round', inRound: true });
-  kadd('m_eraser', 'Pin Eraser', 'market', 6, 'Black market. Remove a pin from your rack for good. Strikes get easier, frames earn fewer Chips.', { target: 'pin', picks: 1, pinType: 'none' });
+  kadd('m_eraser', 'Pin Eraser', 'market', 6, 'Black market. Remove a pin from your rack for good. Strikes get easier, frames earn fewer Points.', { target: 'pin', picks: 1, pinType: 'none' });
   kadd('m_loaded', 'Loaded Ball', 'market', 5, 'Black market. Your next frame gets ×3 Mult. Destroys a random charm.', { target: null });
   kadd('m_counterfeit', 'Counterfeit Bills', 'market', 4, 'Black market. Gain $15. The next round\'s target is 25% higher.', { target: null });
   kadd('m_bribe', 'Bribe the Ref', 'market', 6, 'Black market. This round\'s target drops 30%, but you lose a frame. Use during a round.', { target: 'round', inRound: true });
@@ -155,12 +155,12 @@ var GK = globalThis.GK = globalThis.GK || {};
 
   // ---------- equipment (feel, not rules) ----------
   GK.EQUIP = {
-    hook_glove: { slot: 'gloves', name: 'Hook Glove', cost: 5, desc: 'Your hook bites 35% harder.', hook: 1.35 },
+    steady_glove: { slot: 'gloves', name: 'Steady Glove', cost: 5, desc: 'The power bar moves 35% slower.', bar: 1.35 },
     power_glove: { slot: 'gloves', name: 'Power Glove', cost: 5, desc: 'Throws are 12% faster.', speed: 1.12 },
-    anchor_shoes: { slot: 'shoes', name: 'Anchor Shoes', cost: 5, desc: 'Steadier aim: your flick angle is 40% less sensitive.', aim: 0.6 },
-    slide_shoes: { slot: 'shoes', name: 'Slide Shoes', cost: 5, desc: 'A longer slide: your aim reaches 40% wider angles.', aim: 1.4 },
-    wrist_brace: { slot: 'wrist', name: 'Wrist Brace', cost: 5, desc: 'Gentler hooks: curve sensitivity ×0.6.', spin: 0.6 },
-    snap_wrist: { slot: 'wrist', name: 'Snap Wrist', cost: 5, desc: 'Sharper hooks: curve sensitivity ×1.5.', spin: 1.5 }
+    anchor_shoes: { slot: 'shoes', name: 'Anchor Shoes', cost: 5, desc: 'Finer aim: dragging changes the angle 40% less.', aim: 0.6 },
+    slide_shoes: { slot: 'shoes', name: 'Slide Shoes', cost: 5, desc: 'A longer slide: your angle reaches 40% wider.', aim: 1.4 },
+    wrist_brace: { slot: 'wrist', name: 'Wrist Brace', cost: 5, desc: 'The PERFECT zone on the power bar is 60% wider.', zone: 1.6 },
+    snap_wrist: { slot: 'wrist', name: 'Snap Wrist', cost: 5, desc: 'Throws past the PERFECT zone stay on line instead of wobbling.', noWobble: true }
   };
 
   // ---------- alley memberships (permanent run upgrades) ----------

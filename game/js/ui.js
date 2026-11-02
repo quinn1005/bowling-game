@@ -195,8 +195,8 @@ var GK = globalThis.GK = globalThis.GK || {};
   UI.how = function (onBack) {
     UI.modal(`<div class="panel" style="text-align:left">
       <h2>How to play</h2>
-      <p><b>Throw:</b> drag sideways to line up, then flick up. The faster the flick, the faster the ball. Curve the end of your flick to hook. Keyboard: ←/→ and Space (Shift+Space hooks).</p>
-      <p><b>Score:</b> every frame scores <span style="color:var(--chips)">Chips</span> × <span style="color:var(--mult)">Mult</span>. The shot sets the base (Strike 40×4, Spare 20×3, Split conversion 50×5, Double, Turkey…). Each pin adds 5 Chips. Pins knocking over pins, late wobblers and kickback bangs add bonus Chips.</p>
+      <p><b>Throw in 3 steps:</b> 1) drag on the lane to slide your starting spot, then tap (or press Set). 2) Drag to swing the aim arrow, then tap. 3) The power bar sweeps back and forth: tap to stop it. Land in the green PERFECT zone for a hard, true throw. Push past it and the ball wobbles off line. Keyboard: ←/→ adjust, Space sets, Esc goes back.</p>
+      <p><b>Score:</b> every frame scores <span style="color:var(--chips)">Points</span> × <span style="color:var(--mult)">Mult</span>. The shot sets the base (Strike 40×4, Spare 20×3, Split conversion 50×5, Double, Turkey…). Each pin adds 5 Points. Pins knocking over pins, late wobblers and kickback bangs add bonus Points.</p>
       <p><b>Rounds:</b> reach the target within your frames. Each alley has a Qualifier, a Heat and a Boss Match. Miss a target and the run ends.</p>
       <p><b>Re-racks:</b> after a bad first roll, spend a re-rack to reset all pins and take roll one again.</p>
       <p><b>Shop:</b> charms trigger left to right after every frame, so order matters. Balls change the physics. Scorecards level up shots, Lane Tricks change your pins and balls, and the Black Market is powerful but costs you.</p>
@@ -258,7 +258,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   };
 
   UI.runInfo = function (run, onClose) {
-    const eq = Object.values(run.equip).map(id => GK.EQUIP[id].name).join(', ') || 'None';
+    const eq = Object.values(run.equip).filter(id => GK.EQUIP[id]).map(id => GK.EQUIP[id].name).join(', ') || 'None';
     const mem = run.members.map(id => GK.MEMBERSHIPS[id].name).join(', ') || 'None';
     const kinds = [...new Set(run.rack)].filter(t => t !== 'std');
     UI.modal(`<div class="panel" style="text-align:left">
@@ -330,7 +330,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     const charms = run.charms.map((c, i) => { const d = GK.CHARMS[c.id]; return `<button class="chip" data-charm="${i}" style="--rc:${GK.RARITY[d.rarity].col}">${esc(d.name)}${c.ed ? ' <small>' + GK.EDITIONS[c.ed].name + '</small>' : ''}</button>`; }).join('') || '<span class="lbl">No charms yet</span>';
     const balls = run.bag.map((b, i) => `<button class="chip" data-ball="${i}" style="--rc:${GK.BALLS[b.type].col}"><i class="sw" style="background:${GK.BALLS[b.type].col}"></i>${esc(GK.BALLS[b.type].name)}${b.ed ? ' <small>' + GK.EDITIONS[b.ed].name + '</small>' : ''}</button>`).join('');
     const cons = run.cons.map((id, i) => `<button class="chip" data-cons="${i}" style="--rc:${GK.CONS_KIND[GK.CONS[id].kind].col}">${esc(GK.CONS[id].name)}</button>`).join('') || '<span class="lbl">Empty</span>';
-    const eq = Object.values(run.equip).map(id => GK.EQUIP[id].name).join(', ');
+    const eq = Object.values(run.equip).filter(id => GK.EQUIP[id]).map(id => GK.EQUIP[id].name).join(', ');
     UI.layer(`<div class="shop">
       <div class="shophead"><div><div class="lbl">Next: ${esc(GK.roundName(run))} · ${esc(GK.alleyDef(run).name)} · target ${fmt(nextTarget)}</div><h2>Pro Shop</h2></div><div class="m">${GK.money(run.money)}</div></div>
       <div class="grid">${shop.items.map(card).join('')}${mem}</div>

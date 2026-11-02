@@ -15,7 +15,8 @@ What the game has:
 - Every alley has its lane gimmick and boss from the design doc (Secretary call-your-shot, Mechanic, Cosmic darkness + DJ Strobe, narrow lane + Bookie, ice + Old Man Winter, moving posts + Ringmaster tilt, low gravity + Astronaut scramble, magnetic gutters + Gutter King charm theft, Championship head-to-head).
 - All 16 balls from the design doc, ball/charm editions (Foil, Holo, Neon), 36 charms, 8 pin types, 7 Scorecards, 12 Lane Tricks, 5 Black Market items, 6 equipment pieces, 8 Alley Memberships.
 - Pro Shop between rounds: 2 charms, 1 ball, 2 goods, a per-alley membership, rerolls, selling, charm reordering.
-- Chips × Mult scoring animated step by step; charms fire left to right.
+- Controls: drag to set the start spot, drag to set the angle, then time a sweeping power bar (green PERFECT zone; overpowered throws wobble). No flick or player-controlled hook.
+- Points × Mult scoring (the design doc's "Chips" are called Points in game) animated step by step; charms fire left to right.
 - Seeded runs (seed code on the end screen), daily run, run save/continue, meta stats, procedural WebAudio.
 
 ## Code layout (`game/js`, all attach to the global `GK`)

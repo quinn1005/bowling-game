@@ -160,19 +160,40 @@ var GK = globalThis.GK = globalThis.GK || {};
     }
 
     drawGuide(st) {
-      const cx = this.cx, aim = st.guide ? st.guide.aim : 0;
-      if (st.snakePath && st.snakePath.length > 1) {
-        cx.fillStyle = 'rgba(200,255,138,0.9)';
-        for (let z = 6; z < 290; z += 7) { const x = GK.pathX(st.snakePath, z); if (x == null) continue; const q = P(x, z); cx.fillRect(Math.round(q.x), Math.round(q.y), 1, 1); }
+      const cx = this.cx, t = st.time, ang = st.aimAng || 0;
+      if (st.step === 'pos') {
+        // Start marker: arrows either side of the ball and a short straight line ahead.
+        const q = P(st.aimX, C.BALL_Z0, 4), bob = Math.round(Math.sin(t * 6) * 1.5);
+        cx.fillStyle = '#ffb547';
+        for (const d of [-1, 1]) {
+          const x0 = Math.round(q.x + d * (19 + bob)), y0 = Math.round(q.y);
+          for (let i = 0; i < 4; i++) cx.fillRect(x0 + d * i, y0 - 3 + i, 1, 7 - i * 2);
+        }
+        for (let z = 14; z < 70; z += 9) { const p = P(st.aimX, z); cx.fillStyle = '#2a1416'; cx.fillRect(Math.round(p.x), Math.round(p.y) + 1, 2, 1); cx.fillStyle = 'rgba(255,210,122,0.8)'; cx.fillRect(Math.round(p.x) - 1, Math.round(p.y), 2, 1); }
         return;
       }
-      cx.fillStyle = 'rgba(255,181,71,0.85)';
-      for (let z = 14; z < 120; z += 9) { const x = st.aimX + Math.tan(aim) * (z - C.BALL_Z0); const q = P(x, z); cx.fillRect(Math.round(q.x), Math.round(q.y), 1, 1); }
-      if (st.guide) {
-        const q = P(st.aimX + Math.tan(aim) * 128, 120), sp = (st.guide.speed - 170) / 300;
+      const lineX = z => st.aimX + Math.tan(ang) * (z - C.BALL_Z0);
+      if (st.preview && st.preview.type === 'snake') {
+        const path = GK.snakePath(st.aimX, ang, this.lhw);
+        for (let z = 6; z < 220; z += 6) { const p = P(GK.pathX(path, z), z), x = Math.round(p.x), y = Math.round(p.y); cx.fillStyle = '#1a2a10'; cx.fillRect(x + 1, y + 1, 2, 2); cx.fillStyle = '#c8ff8a'; cx.fillRect(x, y, 2, 2); }
+      } else {
+        // Marching dots along the aim line out past the arrows.
+        const off = (t * 30) % 9;
+        for (let z = 10 + off; z < 210; z += 9) {
+          const p = P(lineX(z), z), w = z < 140 ? 2 : 1, x = Math.round(p.x - w / 2), y = Math.round(p.y);
+          cx.fillStyle = '#2a1416'; cx.fillRect(x + 1, y + 1, w, w);
+          cx.fillStyle = '#ffd27a'; cx.fillRect(x, y, w, w);
+        }
+      }
+      // arrowhead at the end of the line
+      const e1 = P(lineX(214), 214), e0 = P(lineX(200), 200);
+      const dx = e1.x - e0.x, dy = e1.y - e0.y, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l;
+      cx.strokeStyle = '#ffd27a'; cx.lineWidth = 1.5; cx.beginPath();
+      cx.moveTo(e1.x - ux * 5 - uy * 3, e1.y - uy * 5 + ux * 3); cx.lineTo(e1.x, e1.y); cx.lineTo(e1.x - ux * 5 + uy * 3, e1.y - uy * 5 - ux * 3); cx.stroke();
+      if (st.step === 'angle') {
         cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'center'; cx.fillStyle = '#ffb547';
-        const hook = st.guide.spin > 0.15 ? ' HOOK →' : st.guide.spin < -0.15 ? ' ← HOOK' : '';
-        cx.fillText('PWR ' + Math.round(40 + sp * 60) + hook, q.x, q.y - 4);
+        const deg = ang * 180 / Math.PI;
+        cx.fillText((deg >= 0 ? '+' : '') + deg.toFixed(1) + '°', e1.x, e1.y - 6);
       }
     }
 

@@ -12,7 +12,7 @@ npm run serve   # http://localhost:8080
 
 On Android Chrome, use "Add to Home screen" to install it as a full-screen app that also works offline.
 
-**Controls:** drag sideways to line up, flick up to throw, curve the end of the flick to hook. On a keyboard: ←/→ to aim, Space to throw (Shift+Space hooks), 1–3 to pick a ball, R to re-rack.
+**Controls:** three steps per throw. Drag to set your starting spot and tap to lock it, drag to set the angle and tap to lock it, then tap to stop the moving power bar (the green zone is a PERFECT throw; past it the ball wobbles). On a keyboard: ←/→ adjust, Space/Enter sets, Esc goes back, 1–3 picks a ball, R re-racks.
 
 ## Develop
 

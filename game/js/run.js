@@ -60,8 +60,8 @@ var GK = globalThis.GK = globalThis.GK || {};
     return f;
   };
   GK.equipMods = function (run) {
-    const m = { hook: 1, speed: 1, aim: 1, spin: 1 };
-    Object.values(run.equip || {}).forEach(id => { const e = GK.EQUIP[id]; if (!e) return; ['hook', 'speed', 'aim', 'spin'].forEach(k => { if (e[k]) m[k] *= e[k]; }); });
+    const m = { hook: 1, speed: 1, aim: 1, bar: 1, zone: 1, noWobble: false };
+    Object.values(run.equip || {}).forEach(id => { const e = GK.EQUIP[id]; if (!e) return; ['speed', 'aim', 'bar', 'zone'].forEach(k => { if (e[k]) m[k] *= e[k]; }); if (e.noWobble) m.noWobble = true; });
     return m;
   };
   GK.canAfford = (run, price) => run.money - price >= -GK.flags(run).debt;

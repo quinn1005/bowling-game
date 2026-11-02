@@ -39,7 +39,7 @@
 
   <div class="tally" aria-live="polite">
     <div class="shot" id="shot">Line up your shot</div>
-    <div class="box chips" id="chipsBox"><small>Chips</small><b id="chips">0</b></div>
+    <div class="box chips" id="chipsBox"><small>Points</small><b id="chips">0</b></div>
     <span class="x">×</span>
     <div class="box mult" id="multBox"><small>Mult</small><b id="mult">–</b></div>
     <span class="x">=</span>
@@ -50,8 +50,7 @@
 
   <div class="stage" id="stage">
     <div class="lanebox" id="lanebox">
-      <canvas id="lane" aria-label="Bowling lane. Drag sideways to line up, flick upward to throw, curve the flick to hook."></canvas>
-      <div class="hint" id="hint" hidden><b>Drag sideways</b> to line up<br><b>Flick up</b> to throw · <b>curve it</b> to hook</div>
+      <canvas id="lane" aria-label="Bowling lane. Drag to set the start point, tap to lock it. Drag to set the angle, tap to lock it. Tap to stop the moving power bar and throw."></canvas>
       <div class="banner" id="banner" hidden></div>
       <div class="toast" id="toast" hidden></div>
       <div class="callbar" id="callbar" hidden>
@@ -63,6 +62,15 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <div class="ctrl" id="ctrl">
+    <button class="cbtn alt" id="backBtn" type="button">Back</button>
+    <div class="cmid">
+      <span class="stepLbl" id="stepLbl">1 · Drag to set your start</span>
+      <div class="pbar" id="pbar" hidden aria-hidden="true"><i id="pzone"></i><b id="pneedle"></b></div>
+    </div>
+    <button class="cbtn" id="setBtn" type="button">Set start</button>
   </div>
 
   <div class="dock">

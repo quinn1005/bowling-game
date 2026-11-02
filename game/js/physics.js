@@ -423,6 +423,17 @@ var GK = globalThis.GK = globalThis.GK || {};
     return path[path.length - 1].x;
   }
 
+  // Snake Ball: an S-curve that weaves around the aim line.
+  function snakePath(aimX, aim, lhw) {
+    const out = [], lim = (lhw || C.LHW) - 2;
+    for (let z = 0; z <= 300; z += 10) {
+      const amp = 9 * Math.min(1, z / 60);
+      out.push({ z, x: GK.clamp(aimX + Math.tan(aim) * (z - C.BALL_Z0) + amp * Math.sin(z / 300 * Math.PI * 3), -lim, lim) });
+    }
+    return out;
+  }
+
   GK.Sim = Sim;
   GK.pathX = pathX;
+  GK.snakePath = snakePath;
 })();

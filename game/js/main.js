@@ -4,8 +4,8 @@
   const GK = window.GK, UI = GK.UI, $ = UI.$, C = GK.C, fmt = GK.fmt, sfx = GK.sfx;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-  let run = null, sim = null, phase = 'menu', sel = 0, aimX = 0, guide = null, gesture = null, snakePath = null;
-  let glow = null, fast = false, hintShown = false, hitStop = 0, busyToken = 0;
+  let run = null, sim = null, phase = 'menu', sel = 0, aimX = 0, gesture = null;
+  let glow = null, fast = false, hitStop = 0, busyToken = 0;
   let meta = GK.meta();
   sfx.setMuted(!!meta.muted);
   try { fast = localStorage.getItem('gk-fast') === '1'; } catch (e) {}
@@ -45,6 +45,7 @@
     UI.rule(run, sel);
     $('rerackBtn').disabled = !(canAct && GK.canRerack(run));
     $('callbar').hidden = phase !== 'call';
+    syncCtrl();
   }
   function setPhase(p) { phase = p; refresh(); }
   function resetTally() { UI.tally(null, null, null); }
@@ -70,7 +71,7 @@
     sfx.init();
     run = GK.newRun(o);
     meta.runs++; GK.saveMeta(meta);
-    sel = 0; hintShown = true;
+    sel = 0;
     toIntro();
   }
   function resume(s) {
@@ -99,9 +100,8 @@
     sim = GK.beginFrame(run);
     sim.onEvent = onSimEvent;
     pickGlow();
-    aimX = 0; guide = null; snakePath = null;
+    step = 'pos';
     resetTally();
-    $('hint').hidden = !hintShown;
     const rs = run.rs;
     UI.shot('Frame ' + (rs.frameIdx + 1) + ' · line up your shot');
     if (rs.loadedNext) UI.toast('Loaded Ball: this frame gets ×3 Mult');
@@ -136,10 +136,9 @@
     if (phase !== 'aim') return;
     sfx.init();
     const b = run.bag[sel];
-    if (b.type === 'snake' && !prm.path) prm.path = [{ z: 0, x: prm.aimX }, { z: 300, x: prm.aimX + Math.tan(prm.aim) * 300 }];
+    if (b.type === 'snake' && !prm.path) prm.path = GK.snakePath(prm.aimX, prm.aim, laneOf().lhw || C.LHW);
     GK.launch(run, sim, sel, prm);
-    if (hintShown) { hintShown = false; $('hint').hidden = true; }
-    guide = null; snakePath = null; hitStop = 0;
+    hitStop = 0; step = 'pos';
     UI.shot(GK.BALLS[b.type].full + ' away');
     setPhase('rolling');
   }
@@ -191,7 +190,7 @@
     await scoreFrame(out.kind, token);
   }
 
-  const stepText = st => st.op === 'chips' ? '+' + fmt(st.v) + ' Chips' : st.op === 'mult' ? '+' + (Math.round(st.v * 10) / 10) + ' Mult' : st.op === 'xmult' ? '×' + (Math.round(st.v * 100) / 100) + ' Mult' : st.op === 'money' ? '+$' + st.v : '';
+  const stepText = st => st.op === 'chips' ? '+' + fmt(st.v) + ' Points' : st.op === 'mult' ? '+' + (Math.round(st.v * 10) / 10) + ' Mult' : st.op === 'xmult' ? '×' + (Math.round(st.v * 100) / 100) + ' Mult' : st.op === 'money' ? '+$' + st.v : '';
   const stepCol = st => st.op === 'chips' ? '#39c6d6' : st.op === 'money' ? '#f2c94c' : '#ff5a6e';
 
   // token: if the player quits (or a debug jump happens) mid-animation, stop touching the run.
@@ -373,85 +372,112 @@
     });
   });
 
-  // ---------- input ----------
+  // ---------- input: 1) slide to set the start, 2) set the angle, 3) time the power bar ----------
+  // Drag on the lane adjusts the current step; a tap (or the Set button / Space) locks it in.
+  // On the power step the bar sweeps up and down and the tap that stops it throws the ball.
+  let step = 'pos', aimAng = 0, powerT0 = 0;
+  const PZONE = [0.8, 0.92];
   function rectInfo() { const r = cv.getBoundingClientRect(); return { r, k: r.width / C.W }; }
   function pt(e) { const { r } = rectInfo(); return { x: e.clientX - r.left, y: e.clientY - r.top, t: performance.now() }; }
   const aimLim = () => C.LHW - C.BALL_R - 0.5 - (C.LHW - (laneOf().lhw || C.LHW));
-
-  function gestureParams(pts, final) {
-    const p0 = pts[0], pN = pts[pts.length - 1], dyTot = p0.y - pN.y, { r } = rectInfo();
-    if (dyTot < (final ? r.height * 0.06 : 4)) return null;
-    const eq = GK.equipMods(run);
-    let pm = pN;
-    for (const q of pts) { if (p0.y - q.y >= dyTot * 0.55) { pm = q; break; } }
-    const angEarly = Math.atan2(pm.x - p0.x, Math.max(1, p0.y - pm.y));
-    const angLate = pm === pN ? angEarly : Math.atan2(pN.x - pm.x, Math.max(1, pm.y - pN.y));
-    const lim = 0.085 * Math.max(1, eq.aim);
-    const aim = GK.clamp(angEarly * 0.16 * eq.aim, -lim, lim);
-    const spin = GK.clamp((angLate - angEarly) * 1.6 * eq.spin, -1, 1);
-    let pa = p0;
-    for (let i = pts.length - 1; i >= 0; i--) { if (pN.t - pts[i].t > 90) { pa = pts[i]; break; } }
-    const dt = Math.max(16, pN.t - pa.t);
-    const hps = (pa.y - pN.y) / dt * 1000 / r.height;
-    const speed = GK.clamp(170 + (hps - 0.8) * 75, 170, 470);
-    return { aimX, aim, spin, speed };
+  const angLim = () => 0.085 * Math.max(1, GK.equipMods(run).aim);
+  function zone() {
+    const eq = GK.equipMods(run), mid = (PZONE[0] + PZONE[1]) / 2, half = (PZONE[1] - PZONE[0]) / 2 * eq.zone;
+    return [mid - half, Math.min(0.99, mid + half)];
   }
-  function buildSnake(pts) {
-    const p0 = pts[0], pN = pts[pts.length - 1], dy = p0.y - pN.y; if (dy < 8) return null;
-    const { k } = rectInfo(), L = aimLim();
-    const out = []; let lastZ = -1;
-    for (const q of pts) {
-      const z = (p0.y - q.y) / dy * 300; if (z <= lastZ) continue; lastZ = z;
-      out.push({ z, x: GK.clamp(aimX + (q.x - p0.x) / (k * C.S0) * 1.4, -L - 3, L + 3) });
-    }
-    return out.length > 1 ? out : null;
+  function powerNow() {
+    const P = 1.15 * GK.equipMods(run).bar, u = ((performance.now() - powerT0) / 1000 / P) % 2;
+    return u < 1 ? u : 2 - u;
+  }
+  const STEP_TEXT = {
+    pos: ['1 · Drag to set your start', 'Set start'],
+    angle: ['2 · Drag to set the angle', 'Set angle'],
+    power: ['3 · Tap to stop the power bar', 'Throw!']
+  };
+  function setStep(s) {
+    step = s;
+    if (s === 'power') powerT0 = performance.now();
+    syncCtrl();
+  }
+  function syncCtrl() {
+    const on = phase === 'aim';
+    $('ctrl').classList.toggle('off', !on);
+    $('stepLbl').textContent = on ? STEP_TEXT[step][0] : phase === 'call' ? 'Call your shot first' : phase === 'rolling' ? 'Rolling…' : '';
+    $('setBtn').textContent = STEP_TEXT[step][1];
+    $('setBtn').disabled = !on; $('backBtn').disabled = !on || step === 'pos';
+    $('pbar').hidden = !(on && step === 'power');
+    $('stepLbl').hidden = on && step === 'power';
+    const z = zone();
+    $('pzone').style.left = z[0] * 100 + '%'; $('pzone').style.width = (z[1] - z[0]) * 100 + '%';
+  }
+  function confirmStep() {
+    if (phase !== 'aim') return;
+    sfx.init();
+    if (step === 'pos') { setStep('angle'); sfx.tick(520); }
+    else if (step === 'angle') { setStep('power'); sfx.tick(660); }
+    else releasePower();
+  }
+  function backStep() {
+    if (phase !== 'aim') return;
+    if (step === 'power') setStep('angle'); else if (step === 'angle') setStep('pos');
+  }
+  function releasePower() {
+    const p = powerNow(), z = zone(), eq = GK.equipMods(run);
+    let aim = aimAng, spin = 0, label;
+    if (p >= z[0] && p <= z[1]) { label = 'PERFECT!'; sfx.coin(); }
+    else if (p > z[1]) {
+      label = 'TOO HARD';
+      if (!eq.noWobble) { const k = (p - z[1]) / (1 - z[1] + 0.001); aim += (Math.random() - 0.5) * 0.05 * (0.4 + k); spin = (Math.random() - 0.5) * 0.6 * (0.4 + k); }
+    } else label = p < 0.45 ? 'SOFT' : 'GOOD';
+    const speed = 170 + GK.clamp(p, 0, 1) * 300;
+    R.pop(aimX, 10, 14, label + ' ' + Math.round(p * 100) + '%', label === 'PERFECT!' ? '#7be38a' : label === 'TOO HARD' ? '#ff5a6e' : '#ffb547');
+    throwBall({ aimX, aim, spin, speed, power: p });
   }
 
   cv.addEventListener('pointerdown', e => {
     sfx.init();
     if (phase !== 'aim') return;
+    if (step === 'power') { e.preventDefault(); releasePower(); return; }
     cv.setPointerCapture(e.pointerId);
     const p = pt(e);
-    gesture = { mode: null, pts: [p], x0: p.x, y0: p.y, aim0: aimX };
+    gesture = { moved: false, x0: p.x, y0: p.y, aim0: aimX, ang0: aimAng };
   });
   cv.addEventListener('pointermove', e => {
     if (!gesture || phase !== 'aim') return;
-    const p = pt(e); gesture.pts.push(p);
-    const dx = p.x - gesture.x0, dy = p.y - gesture.y0;
-    if (!gesture.mode) {
-      if (dy < -10 && Math.abs(dy) > Math.abs(dx) * 0.8) gesture.mode = 'throw';
-      else if (Math.abs(dx) > 8) gesture.mode = 'move';
-    }
-    if (gesture.mode === 'move') {
-      const { k } = rectInfo(), L = aimLim();
+    const p = pt(e), dx = p.x - gesture.x0;
+    if (!gesture.moved && Math.abs(dx) < 4) return;
+    gesture.moved = true;
+    const { k, r } = rectInfo();
+    if (step === 'pos') {
+      const L = aimLim();
       aimX = GK.clamp(gesture.aim0 + dx / (k * C.S0 * GK.sc(C.BALL_Z0)), -L, L);
-    } else if (gesture.mode === 'throw') {
-      guide = gestureParams(gesture.pts, false);
-      if (run.bag[sel].type === 'snake') snakePath = buildSnake(gesture.pts);
+    } else if (step === 'angle') {
+      const lim = angLim();
+      aimAng = GK.clamp(gesture.ang0 + dx / r.width * 0.25 * GK.equipMods(run).aim, -lim, lim);
     }
   });
-  function endGesture() {
-    if (!gesture) return;
-    if (gesture.mode === 'throw' && phase === 'aim') {
-      const pr = gestureParams(gesture.pts, true);
-      if (pr) { if (run.bag[sel].type === 'snake') pr.path = buildSnake(gesture.pts); throwBall(pr); }
-    }
-    gesture = null; guide = null; if (phase === 'aim') snakePath = null;
-  }
-  cv.addEventListener('pointerup', endGesture);
-  cv.addEventListener('pointercancel', () => { gesture = null; guide = null; snakePath = null; });
+  cv.addEventListener('pointerup', () => { if (gesture && !gesture.moved) confirmStep(); gesture = null; });
+  cv.addEventListener('pointercancel', () => { gesture = null; });
+  $('setBtn').addEventListener('pointerdown', e => { e.preventDefault(); confirmStep(); });
+  $('backBtn').addEventListener('click', backStep);
   window.addEventListener('keydown', e => {
     if (!$('modal').hidden || !$('layer').hidden || !run) return;
     if (phase === 'call' && ['1', '2', '3'].includes(e.key)) { document.querySelectorAll('#callbar [data-call]')[+e.key - 1].click(); return; }
     if (phase !== 'aim') return;
-    const L = aimLim();
-    if (e.key === 'ArrowLeft') { aimX = GK.clamp(aimX - 0.6, -L, L); e.preventDefault(); }
-    else if (e.key === 'ArrowRight') { aimX = GK.clamp(aimX + 0.6, -L, L); e.preventDefault(); }
+    const L = aimLim(), lim = angLim();
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      const d = e.key === 'ArrowLeft' ? -1 : 1;
+      if (step === 'pos') aimX = GK.clamp(aimX + d * 0.6, -L, L);
+      else if (step === 'angle') aimAng = GK.clamp(aimAng + d * 0.004, -lim, lim);
+      e.preventDefault();
+    }
     else if (/^[1-9]$/.test(e.key) && +e.key <= run.bag.length) { sel = +e.key - 1; refresh(); }
     else if (e.key === 'r' || e.key === 'R') $('rerackBtn').click();
+    else if (e.key === 'Escape' || e.key === 'Backspace') backStep();
     else if (e.key === ' ' || e.key === 'Enter') {
-      if (document.activeElement && document.activeElement.tagName === 'BUTTON') return;
-      e.preventDefault(); throwBall({ aimX, aim: 0, spin: e.shiftKey ? 0.5 : 0, speed: 340 });
+      // Space/Enter always means "set" during aiming, even if a dock button still has focus.
+      if (document.activeElement && document.activeElement.tagName === 'BUTTON') document.activeElement.blur();
+      e.preventDefault(); confirmStep();
     }
   });
   // Exposed for automated play-tests.
@@ -481,13 +507,14 @@
       }
       if (phase !== 'rolling') { sim.updatePosts(); for (const f of sim.fx) f.t += realDt; sim.fx = sim.fx.filter(f => f.t < 0.6); }
     }
+    if (phase === 'aim' && step === 'power') $('pneedle').style.left = (powerNow() * 100) + '%';
     R.tick(realDt);
     const rs = run && run.rs;
     const thrown = rs && rs.cur && rs.cur.ball && phase !== 'aim' ? rs.cur.ball : null;
     const b = run && run.bag[sel];
     const wide = run ? GK.flags(run, rs ? rs.stolen : -1).wide : 1;
     R.draw({
-      sim, phase, aimX, guide, snakePath, time: now / 1000,
+      sim, phase, aimX, aimAng, step, time: now / 1000,
       preview: thrown ? { type: thrown.type, ed: thrown.ed, r: C.BALL_R * wide } : b ? { type: b.type, ed: b.ed, r: (b.type === 'cluster' ? 2.3 : C.BALL_R) * wide } : null,
       dark: run && laneOf().dark, strobe: rs && rs.boss === 'strobe', glow,
       tilt: rs && rs.boss === 'ringmaster' ? rs.tilts[rs.frameIdx % rs.tilts.length] : 0
