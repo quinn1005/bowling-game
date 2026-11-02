@@ -1,5 +1,14 @@
 # Changelog
 
+## v0.8.0
+
+### Unlocks
+- **Most content now has to be unlocked.** A new run starts with a small starter set: 8 balls, 22 charms, 4 pieces of equipment, 6 Lane Tricks, 3 Black Market items, and the Scorecards and memberships. The other 137 items (28 balls, 68 charms, 13 equipment, 11 Lane Tricks, the Full Rack Card and 16 Black Market items) are locked behind 56 themed feats.
+- **Feats match what they unlock.** A few examples: a strike with a big hook unlocks Hook Artist, Snap Wrist and Lucky Wristband. Knocking down 3 Lead pins in one frame unlocks Scrap Metal and the Spiked and Wrecking balls. Seeing the pinsetter fumble unlocks Pinsetter's Cut, Butterfingers and Pin Thief. Rerolling one shop 3 times unlocks Coupon Book, Arcade Tokens and Pro Shop Pass. Using 3 Black Market items in a run opens up more of the Black Market.
+- **Feats screen** shows how many items you've unlocked and lists what each feat unlocks, labelled as ball, charm, gear or item.
+- Locked items never show up in the shop, the vending machine, events or reward tags. If you have no Rare charms unlocked yet, the Shady Bowler offers an Uncommon one instead.
+- Feats you already completed in earlier versions stay completed and keep their (now larger) unlocks.
+
 ## v0.7.0
 
 ### Bigger rack

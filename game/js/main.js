@@ -100,7 +100,7 @@
     UI.shot(GK.roundName(run) + ' · target ' + fmt(run.rs.target));
     if (GK.isBoss(run)) sfx.boss();
     UI.intro(run, () => { UI.hideLayer(); beginFrame(); UI.banner(GK.roundName(run).toUpperCase(), 'Target ' + fmt(run.rs.target), 1800); },
-      GK.canSkip(run) ? () => { const r = GK.skipRound(run); sfx.coin(); UI.toast(r.msg, 3200); GK.save(run); toIntro(); } : null);
+      GK.canSkip(run) ? () => { const r = GK.skipRound(run); sfx.coin(); UI.toast(r.msg, 3200); GK.save(run); feats({ t: 'shop', run }); toIntro(); } : null);
   }
 
   // ---------- frames ----------
@@ -229,6 +229,7 @@
       if (n.t === 'respot') { sfx.crack(); hint('respot'); R.pop(0, C.ZH + 10, 34, 'PINSETTER FUMBLE!', '#ffd447'); R.shake = 3; }
     }
     if (out.rec.gutterBall) cheer('groan');
+    feats({ t: 'roll', notes: out.notes, rec: out.rec, run });
     if (out.next === 'aim') {
       await sleep(650);
       if (token !== busyToken || !run) return;
@@ -371,7 +372,7 @@
     const start = rs.total;
     const out = GK.commitFrame(run, kind, res);
     if (run.best && run.best.score === res.score && run.best.frame === rs.frameIdx - 1) bestReplay = lastRec;
-    feats({ t: 'frame', kind, score: res.score, ctx: res.ctx, leave710: res.ctx.leave710, run });
+    feats({ t: 'frame', kind, score: res.score, ctx: res.ctx, leave710: res.ctx.leave710, breaks: res.breaks, run });
     if (kind === 'turkey' || kind === 'double') cheer('cheer'); else if (GK.isSpareKind(kind)) cheer('clap'); else if (kind === 'gutter') cheer('groan');
     for (let i = 1; i <= 8; i++) { $('score').firstChild.textContent = fmt(start + res.score * i / 8); await sleep(30); if (!live()) return; }
     if (res.score > meta.bestFrame) { meta.bestFrame = res.score; GK.saveMeta(meta); }
@@ -457,6 +458,7 @@
     const done = r => {
       if (r && r.ok === false) { sfx.nope(); UI.toast(r.msg || 'Can\'t do that'); return; }
       if (r && r.msg) { sfx.buy(); UI.toast(r.msg, 2600); }
+      feats({ t: 'shop', run });
       run.event = null; GK.save(run); UI.hideModal(); showShop();
     };
     UI.eventScreen(run, ev, {
@@ -532,6 +534,7 @@
       if (r && r.ok === false) { sfx.nope(); UI.toast(r.msg || 'Can\'t do that'); }
       else sfx.buy();
       GK.save(run); showShop();
+      feats({ t: 'shop', run });
     }
   }
 
@@ -543,6 +546,7 @@
       UI.hideModal();
       if (!r.ok) { sfx.nope(); if (r.msg) UI.toast(r.msg); return; }
       sfx.buy(); UI.toast(r.msg || 'Used', 2000);
+      feats({ t: inRound ? 'use' : 'shop', run });
       if (k.target === 'pin' && inRound) UI.toast(r.msg + ' (from next frame)', 2200);
       GK.save(run);
       if (inRound) refresh(); else showShop();

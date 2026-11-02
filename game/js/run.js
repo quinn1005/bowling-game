@@ -233,11 +233,11 @@ var GK = globalThis.GK = globalThis.GK || {};
   function pickGood(run, rng, exclude) {
     const r = rng();
     if (r < 0.1) {
-      const pool = Object.keys(GK.EQUIP).filter(k => !Object.values(run.equip).includes(k) && !exclude.includes(k));
+      const pool = Object.keys(GK.EQUIP).filter(k => !Object.values(run.equip).includes(k) && !exclude.includes(k) && GK.isUnlocked('equip', k));
       if (pool.length) { const id = rng.pick(pool); return { kind: 'equip', id, price: GK.price(run, GK.EQUIP[id].cost) }; }
     }
     let kind = r < 0.5 ? 'card' : r < 0.88 ? 'trick' : 'market';
-    const pool = GK.CONS_LIST.filter(k => k.kind === kind && !exclude.includes(k.id));
+    const pool = GK.CONS_LIST.filter(k => k.kind === kind && !exclude.includes(k.id) && GK.isUnlocked('cons', k.id));
     const k = rng.pick(pool);
     return { kind: 'cons', id: k.id, price: GK.price(run, k.cost) };
   }
@@ -396,6 +396,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     } else if (id === 'm_hot_charm') {
       if (run.charms.length >= run.maxCharms) return { ok: false, msg: 'No free charm slot.' };
       const pool = GK.CHARM_LIST.filter(c => c.rarity === 'rare' && !run.charms.some(x => x.id === c.id) && GK.isUnlocked('charm', c.id));
+      if (!pool.length) return { ok: false, msg: 'No Rare charms unlocked yet.' };
       const c = GK.charmInst(rng.pick(pool).id, 'neon'); c.expires = 2; run.charms.push(c);
       msg = 'Hot ' + GK.CHARMS[c.id].name + ' (Neon). Burns out in 2 rounds';
     } else if (id === 'm_insurance') {
@@ -423,6 +424,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       msg = 'Smuggled in a ' + GK.BALLS[nb].full + '. Every first roll this round uses it';
     }
     run.charms.forEach(c => { if (c.id === 'ironman') c.v = 0; });
+    if (run.rs && run.phase !== 'shop') run.rs.usedCons = true;
+    if (k.kind === 'market') run.stats.market = (run.stats.market || 0) + 1;
     run.cons.splice(i, 1);
     return { ok: true, msg };
   };
@@ -445,7 +448,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (tag === 'cash') run.money += 6;
     else if (tag === 'levels') { const a = rng.pick(GK.SHOT_ORDER.slice(0, 5)), b = rng.pick(GK.SHOT_ORDER.slice(0, 5)); [a, b].forEach(k => { run.levels[k] = (run.levels[k] || 0) + 1; }); msg = 'Scorecard Tag: ' + GK.SHOTS[a].name + ' and ' + GK.SHOTS[b].name + ' levelled up.'; }
     else if (tag === 'trick') {
-      if (run.cons.length < run.maxCons) { const k = rng.pick(GK.CONS_LIST.filter(c => c.kind === 'trick')); run.cons.push(k.id); msg = 'Trick Tag: you got ' + k.name + '.'; }
+      if (run.cons.length < run.maxCons) { const k = rng.pick(GK.CONS_LIST.filter(c => c.kind === 'trick' && GK.isUnlocked('cons', c.id))); run.cons.push(k.id); msg = 'Trick Tag: you got ' + k.name + '.'; }
       else { run.money += 4; msg = 'Trick Tag: no free slot, so you got $4 instead.'; }
     } else run.tags.push(tag);
     if (run.rs) run.history.push({ alley: run.alley, round: run.round, champ: false, target: run.rs.target, total: 0, won: true, skipped: true, frames: 0 });
@@ -501,11 +504,13 @@ var GK = globalThis.GK = globalThis.GK || {};
       ev.ball = rng.pick(pool);
     }
     if (id === 'shady') {
-      const pool = GK.CHARM_LIST.filter(c => c.rarity === 'rare' && !run.charms.some(x => x.id === c.id) && GK.isUnlocked('charm', c.id));
+      // a Rare charm if you've unlocked any, otherwise an Uncommon one
+      const open = r => GK.CHARM_LIST.filter(c => c.rarity === r && !run.charms.some(x => x.id === c.id) && GK.isUnlocked('charm', c.id));
+      const pool = open('rare').length ? open('rare') : open('uncommon');
       if (!pool.length) return null;
       ev.charm = rng.pick(pool).id;
     }
-    if (id === 'vending') ev.item = rng.pick(GK.CONS_LIST).id;
+    if (id === 'vending') ev.item = rng.pick(GK.CONS_LIST.filter(c => GK.isUnlocked('cons', c.id))).id;
     return ev;
   };
   // Accept an event's offer. arg: bag slot to replace (lost_found) or { ball, drill } (lane_mech).

@@ -244,6 +244,8 @@ test('feats unlock items; locked items never appear in the shop', () => {
       for (const it of run.shop.items) {
         if (it.kind === 'charm') assert.ok(GK.isUnlocked('charm', it.id), it.id + ' is locked');
         if (it.kind === 'ball') assert.ok(GK.isUnlocked('ball', it.id), it.id + ' is locked');
+        if (it.kind === 'equip') assert.ok(GK.isUnlocked('equip', it.id), it.id + ' is locked');
+        if (it.kind === 'cons') assert.ok(GK.isUnlocked('cons', it.id), it.id + ' is locked');
       }
     }
     const got = GK.checkFeats(GK._meta, { t: 'frame', kind: 'turkey', score: 10, ctx: { carry: 0, late: 0, blasted: 0 }, run });
@@ -532,4 +534,31 @@ test('Fourth Frame Ball: a strike in the last frame earns a bonus ball at a fres
     assert.strictEqual(out2.next, 'score'); assert.strictEqual(out2.kind, run.rs.cur.bonusKind);
     assert.strictEqual(run.rs.cur.rolls.length, 2);
   } finally { [GK.MISHAPS.respot, GK.MISHAPS.stuck] = prev; }
+});
+
+test('unlocks: most content starts locked, every locked item has a feat, themed feats fire', () => {
+  const all = [...Object.keys(GK.BALLS).filter(k => k !== 'house').map(k => 'ball:' + k), ...GK.CHARM_LIST.map(c => 'charm:' + c.id),
+    ...Object.keys(GK.EQUIP).map(k => 'equip:' + k), ...GK.CONS_LIST.map(c => 'cons:' + c.id)];
+  const locked = all.filter(k => GK.LOCKED.has(k));
+  assert.ok(locked.length > all.length * 0.6, 'most items are locked: ' + locked.length + '/' + all.length);
+  for (const k of GK.LOCKED) assert.ok(k.startsWith('league:') || all.includes(k), 'unknown unlock ' + k);
+  const seen = new Set(); GK.FEATS.forEach(f => f.unlocks.forEach(u => { assert.ok(!seen.has(u), 'unlocked twice: ' + u); seen.add(u); }));
+  // the starter set still fills every shop slot type
+  GK._meta = { feats: {} };
+  try {
+    for (const kind of ['card', 'trick', 'market']) assert.ok(GK.CONS_LIST.some(c => c.kind === kind && GK.isUnlocked('cons', c.id)), kind);
+    assert.ok(Object.keys(GK.EQUIP).some(k => GK.isUnlocked('equip', k)));
+    assert.ok(GK.CHARM_LIST.filter(c => GK.isUnlocked('charm', c.id)).length >= 15);
+    const run = GK.newRun({ seed: 5 });
+    const meta = GK._meta;
+    const did = ev => GK.checkFeats(meta, Object.assign({ run }, ev)).map(f => f.id);
+    assert.ok(did({ t: 'roll', notes: [{ t: 'stuck' }] }).includes('jammed'));
+    assert.ok(GK.isUnlocked('charm', 'second_return') && GK.isUnlocked('cons', 'm_ball_swap'));
+    const ctx = { rolls: [{ pins: 9, down: [] }, { pins: 1, down: [] }], pocket: false, maxHook: 0, throws: 2, leftOne: true, walls: 0, wobbles: 1, pins: 10, carry: 0, late: 0 };
+    assert.ok(did({ t: 'frame', kind: 'spare', score: 100, ctx }).includes('sharpshooter'));
+    run.bag = [{ type: 'house', ed: null, drill: 'strong' }];
+    assert.ok(did({ t: 'shop' }).includes('custom'));
+    assert.ok(GK.isUnlocked('cons', 'm_illegal_drill'));
+    assert.strictEqual(GK.unlockProgress(meta).have, GK.FEATS.filter(f => meta.feats[f.id]).reduce((a, f) => a + f.unlocks.filter(u => !u.startsWith('league:')).length, 0));
+  } finally { GK._meta = undefined; }
 });

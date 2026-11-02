@@ -239,11 +239,16 @@ var GK = globalThis.GK = globalThis.GK || {};
 
   UI.collection = function (meta) {
     const done = meta.feats || {};
+    const prog = GK.unlockProgress(meta), pct = Math.round(prog.have / Math.max(1, prog.total) * 100);
+    const nDone = GK.FEATS.filter(f => done[f.id]).length;
+    const KIND = { ball: 'ball', charm: 'charm', equip: 'gear', cons: 'item', league: 'league' };
     const log = meta.dailyLog || [];
     UI.modal(`<div class="panel" style="text-align:left">
       <h2>Feats &amp; unlocks</h2>
-      <p class="dim">Feats unlock new balls, charms and leagues for future runs.</p>
-      <div>${GK.FEATS.map(f => `<div class="feat"><b class="${done[f.id] ? 'ok' : 'no'}">${done[f.id] ? 'DONE' : 'LOCKED'}</b><b>${esc(f.name)}</b><span>${esc(f.desc)} Unlocks ${esc(f.unlocks.map(GK.unlockName).join(', '))}.</span></div>`).join('')}</div>
+      <p class="dim">Most balls, charms, equipment, Lane Tricks and Black Market items start locked. Each feat unlocks the items that match its theme for future runs.</p>
+      <div class="bar unlockbar"><i style="width:${pct}%"></i></div>
+      <p class="dim">${prog.have} of ${prog.total} items unlocked · ${nDone} of ${GK.FEATS.length} feats</p>
+      <div>${GK.FEATS.map(f => `<div class="feat"><b class="${done[f.id] ? 'ok' : 'no'}">${done[f.id] ? 'DONE' : 'LOCKED'}</b><b>${esc(f.name)}</b><span>${esc(f.desc)} Unlocks ${esc(f.unlocks.map(k => GK.unlockName(k) + ' (' + KIND[k.split(':')[0]] + ')').join(', '))}.</span></div>`).join('')}</div>
       <h3>Ascension</h3><p class="dim">${meta.maxAsc ? 'Unlocked up to level ' + meta.maxAsc + ' of ' + GK.MAX_ASC + '.' : 'Beat the Gutter King to unlock.'}</p>
       <h3>Your daily runs</h3>
       ${log.length ? '<div class="story">' + log.map(x => `<div><span>${esc(x.date)}</span><b>${esc(x.label)} · best frame ${fmt(x.best || 0)}</b></div>`).join('') + '</div>' : '<p class="dim">No daily runs yet.</p>'}
