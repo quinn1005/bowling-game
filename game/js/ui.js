@@ -138,7 +138,8 @@ var GK = globalThis.GK = globalThis.GK || {};
     const b = run.bag[sel]; if (!b) { $('rule').textContent = ''; return; }
     const d = GK.BALLS[b.type];
     const st = run.rs && run.rs.stuck && run.bag.length > 1 && run.bag[run.rs.stuck.idx] ? ' <span style="color:var(--mult)">' + esc(GK.BALLS[run.bag[run.rs.stuck.idx].type].name) + ' is stuck in the return.</span>' : '';
-    $('rule').innerHTML = '<b>' + esc(d.full) + (b.ed ? ' (' + GK.EDITIONS[b.ed].name + ')' : '') + '.</b> ' + esc(d.desc) + ' <span class="lbl">Tap a ball on the return to switch.</span>' + st;
+    const dr = b.drill && b.drill !== 'stock' ? ' <span class="tag">' + esc(GK.DRILLS[b.drill].name) + '</span>' : '';
+    $('rule').innerHTML = '<i class="sw" style="background:' + d.col + '"></i><span><b>' + esc(d.full) + (b.ed ? ' (' + GK.EDITIONS[b.ed].name + ')' : '') + '</b>' + dr + ' ' + esc(d.desc) + st + '</span>';
   };
 
   function mark(f, live) {

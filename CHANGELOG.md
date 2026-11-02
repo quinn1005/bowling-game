@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.6.2
+
+### Changed
+- **Ball info no longer pops up.** Picking a ball from the ball return used to show a pop-up that lingered and stacked. The selected ball's name, edition, drilling and description now sit in a fixed line under the controls and change instantly when you pick another ball.
+
 ## v0.6.1
 
 ### Changed

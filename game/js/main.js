@@ -607,8 +607,6 @@
     if (!run || !run.bag[i]) return;
     if (GK.isStuck(run, i)) { sfx.nope(); UI.toast(GK.BALLS[run.bag[i].type].full + ' is stuck in the ball return. Throw another ball first.'); return; }
     sel = i; sfx.tick(760); refresh();
-    const b = run.bag[i], d = GK.BALLS[b.type];
-    UI.toast(d.full + (b.ed ? ' (' + GK.EDITIONS[b.ed].name + ')' : '') + ': ' + d.desc);
   }
   const aimLim = () => C.LHW - C.BALL_R - 0.5 - (C.LHW - (laneOf().lhw || C.LHW));
   const angLim = () => 0.085 * Math.max(1, GK.equipMods(run).aim);
