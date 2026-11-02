@@ -4,25 +4,125 @@
 var GK = globalThis.GK = globalThis.GK || {};
 (function () {
   const C = GK.C, W = C.W, H = C.H, P = GK.P, S0 = C.S0;
-  // The lane is drawn in 200×356 "lane pixels" but rendered at RS× resolution: pixel-art layout,
-  // crisp edges, smooth curves and readable text on phones.
-  const RS = 3;
+  // Pixel art on a 400×712 grid: the lane is laid out in 200×356 "lane units" and drawn at RS = 2
+  // art pixels per unit. Every shape is snapped to whole art pixels (no anti-aliasing) and the
+  // canvas is scaled up with nearest-neighbour, so pixels stay hard-edged squares.
+  const RS = 2;
+  let SNAP = RS; // art pixels per lane unit for the pixel primitives (the big TV uses 1)
+  const sp = v => Math.round(v * SNAP) / SNAP;
+  // Filled pixel disc, row by row.
+  function pdisc(g, x, y, r, fill) {
+    g.fillStyle = fill;
+    if (r * SNAP < 0.75) { g.fillRect(Math.floor(x * SNAP) / SNAP, Math.floor(y * SNAP) / SNAP, 1 / SNAP, 1 / SNAP); return; }
+    const y0 = Math.round((y - r) * SNAP), y1 = Math.round((y + r) * SNAP);
+    for (let yi = y0; yi < y1; yi++) {
+      const dy = (yi + 0.5) / SNAP - y; if (Math.abs(dy) > r) continue;
+      const hw = Math.sqrt(r * r - dy * dy);
+      let x0 = Math.round((x - hw) * SNAP), x1 = Math.round((x + hw) * SNAP); if (x1 <= x0) x1 = x0 + 1;
+      g.fillRect(x0 / SNAP, yi / SNAP, (x1 - x0) / SNAP, 1 / SNAP);
+    }
+  }
+  // Filled pixel ellipse (top half only with half = 'top').
+  function pell(g, x, y, rx, ry, fill, half) {
+    g.fillStyle = fill;
+    const y0 = Math.round((y - ry) * SNAP), y1 = half === 'top' ? Math.round(y * SNAP) : Math.round((y + ry) * SNAP);
+    for (let yi = y0; yi < y1; yi++) {
+      const dy = ((yi + 0.5) / SNAP - y) / ry; if (Math.abs(dy) > 1) continue;
+      const hw = rx * Math.sqrt(1 - dy * dy);
+      let x0 = Math.round((x - hw) * SNAP), x1 = Math.round((x + hw) * SNAP); if (x1 <= x0) x1 = x0 + 1;
+      g.fillRect(x0 / SNAP, yi / SNAP, (x1 - x0) / SNAP, 1 / SNAP);
+    }
+  }
+  // Pixel line (stepped), w art pixels thick.
+  function pline(g, x0, y0, x1, y1, fill, w = 1) {
+    g.fillStyle = fill;
+    const n = Math.max(1, Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) * SNAP));
+    for (let i = 0; i <= n; i++) { const t = i / n; g.fillRect(Math.round((x0 + (x1 - x0) * t) * SNAP) / SNAP, Math.round((y0 + (y1 - y0) * t) * SNAP) / SNAP, w / SNAP, w / SNAP); }
+  }
+  // Crisp text: rendered once, alpha thresholded to hard pixels, with an optional 1-pixel outline.
+  const textCache = new Map();
+  function ptext(g, text, x, y, font, col, align, outline) {
+    text = String(text);
+    const key = SNAP + '|' + font + '|' + col + '|' + (outline || '') + '|' + text;
+    let c = textCache.get(key);
+    if (!c) {
+      const size = parseFloat((/([\d.]+)px/.exec(font) || [0, 7])[1]);
+      const m = document.createElement('canvas').getContext('2d'); m.font = font;
+      const w = Math.ceil((m.measureText(text).width + 4) * SNAP), h = Math.ceil((size * 1.5 + 4) * SNAP);
+      c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = Math.max(1, h);
+      const t = c.getContext('2d'); t.setTransform(SNAP, 0, 0, SNAP, 0, 0); t.font = font; t.fillStyle = col; t.textBaseline = 'alphabetic';
+      t.fillText(text, 2, size + 2);
+      const id = t.getImageData(0, 0, c.width, c.height), d = id.data, W2 = c.width, H2 = c.height;
+      const solid = new Uint8Array(W2 * H2);
+      for (let i = 0; i < W2 * H2; i++) solid[i] = d[i * 4 + 3] >= 110 ? 1 : 0;
+      const n = parseInt(col.slice(1), 16), r = n >> 16, gg = (n >> 8) & 255, b = n & 255;
+      const on = outline ? parseInt(outline.slice(1), 16) : 0;
+      for (let i = 0; i < W2 * H2; i++) {
+        const o = i * 4;
+        if (solid[i]) { d[o] = r; d[o + 1] = gg; d[o + 2] = b; d[o + 3] = 255; continue; }
+        d[o + 3] = 0;
+        if (outline) {
+          const xx = i % W2, yy = (i / W2) | 0;
+          for (let k = 0; k < 8; k++) { const dx = [1, -1, 0, 0, 1, 1, -1, -1][k], dy = [0, 0, 1, -1, 1, -1, 1, -1][k]; const nx = xx + dx, ny = yy + dy; if (nx >= 0 && ny >= 0 && nx < W2 && ny < H2 && solid[ny * W2 + nx]) { d[o] = on >> 16; d[o + 1] = (on >> 8) & 255; d[o + 2] = on & 255; d[o + 3] = 255; break; } }
+        }
+      }
+      t.putImageData(id, 0, 0);
+      c.size = size;
+      if (textCache.size > 400) textCache.clear();
+      textCache.set(key, c);
+    }
+    const w = c.width / SNAP, h = c.height / SNAP;
+    const ox = align === 'center' ? w / 2 : align === 'right' ? w - 2 : 2;
+    g.drawImage(c, sp(x - ox), sp(y - c.size - 2), w, h);
+  }
+  // Dither pass for static layers: posterizes colour (and alpha) with a 4×4 Bayer matrix, so soft
+  // gradients become stepped, dithered pixel shading.
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  function pixelize(canvas, step, astep) {
+    const g = canvas.getContext('2d');
+    g.save(); g.setTransform(1, 0, 0, 1, 0, 0);
+    const id = g.getImageData(0, 0, canvas.width, canvas.height), d = id.data, w = canvas.width;
+    for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+      const t = (BAYER[((p / w | 0) & 3) * 4 + ((p % w) & 3)] + 0.5) / 16 - 0.5;
+      for (let k = 0; k < 3; k++) d[i + k] = Math.max(0, Math.min(255, Math.round((d[i + k] + t * step) / step) * step));
+      if (astep) { const a = d[i + 3]; if (a > 0 && a < 255) d[i + 3] = Math.max(0, Math.min(255, Math.round((a + t * astep) / astep) * astep)); }
+    }
+    g.putImageData(id, 0, 0); g.restore();
+  }
   const FONT_S = '700 7px Rubik, system-ui, sans-serif';
   const PROF = [[0, 0.3], [0.3, 0.5], [0.62, 0.2], [0.82, 0.28], [0.97, 0.14], [1, 0.05]];
   function prof(t) {
     for (let i = 1; i < PROF.length; i++) if (t <= PROF[i][0]) { const [t0, r0] = PROF[i - 1], [t1, r1] = PROF[i]; return r0 + (r1 - r0) * (t - t0) / (t1 - t0); }
     return 0.05;
   }
-  function quad(g, a, b, c, d, fill) { g.fillStyle = fill; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(c.x, c.y); g.lineTo(d.x, d.y); g.closePath(); g.fill(); }
+  // Convex polygon filled scanline by scanline on the art-pixel grid (no anti-aliased edges).
+  function quad(g, a, b, c, d, fill) { ppoly(g, [a, b, c, d], fill); }
+  function ppoly(g, pts, fill) {
+    g.fillStyle = fill;
+    let minY = Infinity, maxY = -Infinity;
+    for (const p of pts) { minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
+    const y0 = Math.round(minY * SNAP), y1 = Math.round(maxY * SNAP);
+    for (let yi = y0; yi < y1; yi++) {
+      const yc = (yi + 0.5) / SNAP; let xl = Infinity, xr = -Infinity;
+      for (let i = 0; i < pts.length; i++) {
+        const p = pts[i], q = pts[(i + 1) % pts.length];
+        if ((yc < p.y) === (yc < q.y)) continue;
+        const x = p.x + (q.x - p.x) * (yc - p.y) / (q.y - p.y);
+        xl = Math.min(xl, x); xr = Math.max(xr, x);
+      }
+      if (xl > xr) continue;
+      const a0 = Math.round(xl * SNAP), a1 = Math.max(a0 + 1, Math.round(xr * SNAP));
+      g.fillRect(a0 / SNAP, yi / SNAP, (a1 - a0) / SNAP, 1 / SNAP);
+    }
+  }
 
   // ---------- TV cartoons (screen is ~38×26 px) ----------
   // Each scene draws frame t (seconds) of a short loop. v picks a variant.
   const px = (cx, x, y, w, h, c) => { cx.fillStyle = c; cx.fillRect(Math.round(x), Math.round(y), w, h); };
   function caption(cx, sx, sy, sw, sh, txt, col, t) {
     if (t < 0.25) return;
-    cx.font = FONT_S; cx.textAlign = 'center';
     const y = sy + sh - 2, x = sx + sw / 2 + (t < 0.4 ? (0.4 - t) * 60 : 0);
-    cx.fillStyle = '#000'; cx.fillText(txt, x + 1, y + 1); cx.fillStyle = col; cx.fillText(txt, x, y);
+    ptext(cx, txt, x, y, FONT_S, col, 'center', '#000000');
   }
   // A tiny pin: 3×8 with a red band. lean in radians.
   function tinyPin(cx, x, y, lean, face) {
@@ -46,7 +146,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         // ball smashes three pins that fly off spinning
         px(cx, sx, sy + 17, sw, 2, '#d8a56b');
         const bx = sx - 6 + Math.min(t, 0.7) / 0.7 * 26;
-        cx.fillStyle = '#2b4fb8'; cx.beginPath(); cx.arc(bx, sy + 14, 3, 0, 7); cx.fill();
+        pdisc(cx, bx, sy + 14, 3, '#2b4fb8');
         [[24, -1], [28, 0.4], [32, 1]].forEach(([x, d], i) => {
           if (t < 0.65) tinyPin(cx, sx + x, sy + 17, 0, true);
           else { const k = t - 0.65; tinyPin(cx, sx + x + d * 18 * k, sy + 17 - 40 * k + 35 * k * k, k * 9 * (d || 1), true); }
@@ -65,8 +165,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       px(cx, sx, sy, sw, sh, '#1d3a2a');
       // two balls roll in and bump: high five!
       const k = Math.min(1, t / 0.8), off = (1 - k) * 16;
-      cx.fillStyle = '#2b4fb8'; cx.beginPath(); cx.arc(sx + sw / 2 - 5 - off, sy + 12, 4, 0, 7); cx.fill();
-      cx.fillStyle = '#d9609a'; cx.beginPath(); cx.arc(sx + sw / 2 + 5 + off, sy + 12, 4, 0, 7); cx.fill();
+      pdisc(cx, sx + sw / 2 - 5 - off, sy + 12, 4, '#2b4fb8');
+      pdisc(cx, sx + sw / 2 + 5 + off, sy + 12, 4, '#d9609a');
       if (t > 0.8) { px(cx, sx + sw / 2 - 1, sy + 4 - (t - 0.8) * 4, 2, 2, '#fff'); px(cx, sx + sw / 2 - 4, sy + 6, 1, 1, '#ffd447'); px(cx, sx + sw / 2 + 3, sy + 6, 1, 1, '#ffd447'); }
       caption(cx, sx, sy, sw, sh, 'DOUBLE!', '#7be38a', t);
     },
@@ -78,7 +178,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       px(cx, x - 4, sy + 9, 8, 6, '#8a5a2a'); px(cx, x + 3, sy + 6 - bob, 3, 4, '#8a5a2a');
       px(cx, x + 5, sy + 7 - bob, 2, 1, '#ffb547'); px(cx, x + 5, sy + 8 - bob, 1, 2, '#c4243a');
       px(cx, x - 2, sy + 15, 1, 3, '#ffb547'); px(cx, x + 1, sy + 15, 1, 3, '#ffb547');
-      if (Math.floor(t * 3) % 2) { cx.font = FONT_S; cx.textAlign = 'left'; cx.fillStyle = '#fff'; cx.fillText('GOBBLE', sx + 1, sy + 7); }
+      if (Math.floor(t * 3) % 2) ptext(cx, 'GOBBLE', sx + 1, sy + 7, FONT_S, '#ffffff', 'left');
       caption(cx, sx, sy, sw, sh, 'TURKEY!', '#ffb547', t);
     },
     spare(cx, sx, sy, sw, sh, t, v) {
@@ -89,7 +189,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         const faint = t > 1.6 ? Math.min(1.5, (t - 1.6) * 3) : 0;
         tinyPin(cx, sx + sw / 2, sy + 18, faint, true);
         if (!faint) { const wv = Math.sin(t * 10) * 2; px(cx, sx + sw / 2 + 3, sy + 4, 1, 10, '#a8949f'); px(cx, sx + sw / 2 + 4, sy + 4 + wv * 0.3, 6, 4, '#fff'); }
-        else { cx.font = FONT_S; cx.textAlign = 'center'; cx.fillStyle = '#fff'; cx.fillText('x_x', sx + sw / 2 + 8, sy + 9); }
+        else ptext(cx, 'x_x', sx + sw / 2 + 8, sy + 9, FONT_S, '#ffffff', 'center');
       } else {
         // the bowler fist-pumps
         const pose = Math.floor(t * 5) % 2 ? 1 : 2;
@@ -105,7 +205,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       px(cx, x - 1, y - 9, 3, 3, '#f2ebe0'); px(cx, x - 1, y - 6, 3, 1, '#c4243a'); px(cx, x - 2, y - 5, 5, 4, '#f2ebe0');
       px(cx, x - 2 - k * 7, y - 1, 3 + k * 7, 2, '#f2ebe0'); px(cx, x + 1, y - 1, 3 + k * 7, 2, '#f2ebe0');
       px(cx, x - 1, y - 8, 1, 1, '#000'); px(cx, x + 1, y - 8, 1, 1, '#000');
-      if (t > 0.8) { px(cx, x - 1, y - 5 + 1, 3, 1, '#000'); cx.font = FONT_S; cx.textAlign = 'center'; cx.fillStyle = '#ffd447'; if (Math.floor(t * 4) % 2) cx.fillText('OUCH', x, sy + 6); }
+      if (t > 0.8) { px(cx, x - 1, y - 5 + 1, 3, 1, '#000'); if (Math.floor(t * 4) % 2) ptext(cx, 'OUCH', x, sy + 6, FONT_S, '#ffd447', 'center'); }
       caption(cx, sx, sy, sw, sh, 'SPLIT!', '#ff9ef0', t);
     },
     seven10(cx, sx, sy, sw, sh, t) {
@@ -124,20 +224,22 @@ var GK = globalThis.GK = globalThis.GK || {};
   class Renderer {
     constructor(canvas) {
       this.cv = canvas; canvas.width = W * RS; canvas.height = H * RS;
-      this.cx = canvas.getContext('2d');
+      this.cx = canvas.getContext('2d'); this.cx.imageSmoothingEnabled = false;
       const mk = () => { const c = document.createElement('canvas'); c.width = W * RS; c.height = H * RS; return c; };
       this.bg = mk(); this.dark = mk(); this.oilCv = mk(); this.vig = mk();
       this.buildVignette();
       this.pops = []; this.shake = 0; this.flash = 0; this.parts = [];
       this.theme = null;
     }
+    // Vignette baked as dithered steps so it stays pixel art.
     buildVignette() {
       const g = this.vig.getContext('2d'); g.setTransform(RS, 0, 0, RS, 0, 0);
-      const gr = g.createRadialGradient(W / 2, H * 0.55, H * 0.25, W / 2, H * 0.55, H * 0.75);
-      gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,0.42)');
+      const gr = g.createRadialGradient(W / 2, H * 0.55, H * 0.28, W / 2, H * 0.55, H * 0.78);
+      gr.addColorStop(0, 'rgba(0,0,0,0)'); gr.addColorStop(1, 'rgba(0,0,0,0.4)');
       g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      pixelize(this.vig, 255, 34);
     }
-    circle(x, y, r, fill) { const cx = this.cx; cx.fillStyle = fill; cx.beginPath(); cx.arc(x, y, Math.max(0.3, r), 0, Math.PI * 2); cx.fill(); }
+    circle(x, y, r, fill) { pdisc(this.cx, x, y, Math.max(0.3, r), fill); }
     pop(x, z, h, text, col) { this.pops.push({ x, z, h, text, col, t: 0 }); if (this.pops.length > 40) this.pops.shift(); }
     burst(x, z, col, n = 8, sp = 40) {
       for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = sp * (0.4 + Math.random()); this.parts.push({ x, z, h: 6, vx: Math.cos(a) * v, vz: Math.sin(a) * v, vh: 30 + Math.random() * 40, col, t: 0, life: 0.5 + Math.random() * 0.4 }); }
@@ -156,7 +258,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       g.fillStyle = T.carpet; g.fillRect(0, 0, W, H);
       for (let y = 0; y < H; y += 12) for (let x = (y / 12) % 2 ? 6 : 0; x < W; x += 12) {
         g.fillStyle = T.c1; g.beginPath(); g.moveTo(x + 6, y); g.lineTo(x + 11, y + 6); g.lineTo(x + 6, y + 12); g.lineTo(x + 1, y + 6); g.closePath(); g.fill();
-        g.fillStyle = T.c2; g.beginPath(); g.arc(x + 6, y + 6, 1.4, 0, Math.PI * 2); g.fill();
+        pdisc(g, x + 6, y + 6, 1.4, T.c2);
       }
       const E = LHW + GUT;
       quad(g, P(-E, -60), P(E, -60), P(E, 0), P(-E, 0), shade(T.wood[0], -0.12));
@@ -178,7 +280,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       }
       // grain flecks
       const rng = GK.makeRng(GK.hash(this.signText));
-      for (let i = 0; i < 260; i++) { const x = (rng() * 2 - 1) * LHW, z = rng() * C.ZBACK, q = P(x, z); g.fillStyle = 'rgba(80,40,10,0.18)'; g.fillRect(Math.round(q.x), Math.round(q.y), 1, 1); }
+      // wood grain: short dark streaks along the boards
+      for (let i = 0; i < 420; i++) { const x = (rng() * 2 - 1) * LHW, z = rng() * C.ZBACK, q = P(x, z), q2 = P(x, z + 3 + rng() * 6); pline(g, q.x, q.y, q2.x, q2.y, rng() < 0.5 ? 'rgba(80,40,10,0.22)' : 'rgba(255,235,200,0.12)'); }
       quad(g, P(-LHW, C.ZH - 12), P(LHW, C.ZH - 12), P(LHW, C.ZBACK), P(-LHW, C.ZBACK), 'rgba(255,236,200,0.18)');
       // lane lighting: a soft gloss down the middle and a warm pool of light on the pin deck
       g.save(); g.beginPath(); const l0 = P(-LHW, 0), l1 = P(LHW, 0), l2 = P(LHW, C.ZBACK), l3 = P(-LHW, C.ZBACK);
@@ -199,14 +302,14 @@ var GK = globalThis.GK = globalThis.GK || {};
       [5, 10, 15, 20, 25, 30, 35].forEach((bd, i) => {
         const x = LHW - (bd - 0.5) * 1.064 * LHW / C.LHW, zb = 64 + (3 - Math.abs(i - 3)) * 5;
         const p1 = P(x - 0.8, zb), p2 = P(x + 0.8, zb), p3 = P(x, zb + 6);
-        g.fillStyle = '#4a2c18'; g.beginPath(); g.moveTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.lineTo(p3.x, p3.y); g.closePath(); g.fill();
+        ppoly(g, [p1, p2, p3], '#4a2c18');
       });
       GK.spots(LHW).forEach(([x, z], i) => { const q = P(x, z); g.fillStyle = i < 10 ? 'rgba(90,50,25,0.55)' : 'rgba(90,50,25,0.25)'; g.fillRect(Math.round(q.x - 1), Math.round(q.y), 2, 1); });
       quad(g, P(-E, -0.6), P(E, -0.6), P(E, 0.6), P(-E, 0.6), '#2a1416');
       for (const s of [-1, 1]) {
         quad(g, P(s * E, C.ZH - 16), P(s * E, C.ZBACK + 18), P(s * E, C.ZBACK + 18, 24), P(s * E, C.ZH - 16, 24), '#3d2a2c');
         const t1 = P(s * E, C.ZH - 16, 24), t2 = P(s * E, C.ZBACK + 18, 24);
-        g.strokeStyle = '#7a5444'; g.lineWidth = 1; g.beginPath(); g.moveTo(t1.x, t1.y); g.lineTo(t2.x, t2.y); g.stroke();
+        pline(g, t1.x, t1.y, t2.x, t2.y, '#7a5444');
       }
       // masking unit + marquee
       const mb = Math.round(P(0, C.ZBACK + 18, 34).y);
@@ -216,15 +319,19 @@ var GK = globalThis.GK = globalThis.GK || {};
       this.drawMaskArt(g, mb);
       g.fillStyle = shade(T.mask, 0.18); g.fillRect(0, mb - 2, W, 2);
       g.fillStyle = '#0a060c'; g.fillRect(0, mb, W, 1);
-      g.textAlign = 'center';
-      g.shadowColor = T.sign; g.shadowBlur = 8;
       let fs = 15; g.font = fs + 'px Bungee, Rubik, sans-serif';
       while (g.measureText(this.signText).width > W - 56 && fs > 8) { fs -= 0.5; g.font = fs + 'px Bungee, Rubik, sans-serif'; }
-      g.fillStyle = T.signSh; g.fillText(this.signText, W / 2 + 1, 28);
-      g.fillStyle = T.sign; g.fillText(this.signText, W / 2, 27);
-      g.shadowBlur = 0;
-      g.font = '600 6.5px Rubik, system-ui, sans-serif';
-      g.fillStyle = T.subc; g.fillText(this.subText, W / 2, 37);
+      const sf = fs + 'px Bungee, Rubik, sans-serif';
+      this.pixelBg = true;
+      this.signDraw = () => {
+        // neon tube: dark drop shadow, a glow halo (outline), then the bright tube
+        ptext(g, this.signText, W / 2 + 1, 28.5, sf, T.signSh, 'center');
+        ptext(g, this.signText, W / 2, 27, sf, T.sign, 'center', shade(T.sign, -0.45));
+        ptext(g, this.subText, W / 2, 37, '600 6.5px Rubik, system-ui, sans-serif', T.subc, 'center');
+      };
+      // Turn the soft lighting into stepped, dithered pixel shading, then draw the sign on top.
+      pixelize(this.bg, 14);
+      this.signDraw();
     }
 
     // Visible oil, redrawn after every roll from the round's wear grid: a blue sheen board by
@@ -233,19 +340,20 @@ var GK = globalThis.GK = globalThis.GK || {};
     drawMaskArt(g, mb) {
       const T = this.theme, name = this.signText || '', rng = GK.makeRng(GK.hash(name + 'mask'));
       g.save(); g.beginPath(); g.rect(0, 0, W, mb); g.clip();
-      const dots = (n, col, r) => { for (let i = 0; i < n; i++) { g.fillStyle = col; g.beginPath(); g.arc(rng() * W, rng() * mb, r * (0.5 + rng()), 0, 7); g.fill(); } };
-      if (/COSMIC|LUNAR/.test(name)) { dots(40, 'rgba(255,255,255,0.7)', 0.45); g.fillStyle = 'rgba(255,79,216,0.35)'; g.beginPath(); g.arc(22, 14, 8, 0, 7); g.fill(); g.fillStyle = 'rgba(92,225,255,0.35)'; g.beginPath(); g.arc(178, 22, 5, 0, 7); g.fill(); }
-      if (/FROSTBITE/.test(name)) { for (let x = 0; x < W; x += 7) { g.fillStyle = 'rgba(220,245,255,0.55)'; g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 4, 0); g.lineTo(x + 2, 5 + rng() * 6); g.closePath(); g.fill(); } dots(18, 'rgba(255,255,255,0.6)', 0.5); }
-      if (/CARNIVAL/.test(name)) { for (let x = 0; x < W; x += 12) { g.fillStyle = (x / 12) % 2 ? 'rgba(255,74,90,0.35)' : 'rgba(255,243,224,0.18)'; g.beginPath(); g.moveTo(x, 0); g.lineTo(x + 12, 0); g.lineTo(x + 6, 10); g.closePath(); g.fill(); } }
+      const dots = (n, col, r) => { for (let i = 0; i < n; i++) pdisc(g, rng() * W, rng() * mb, r * (0.5 + rng()), col); };
+      if (/COSMIC|LUNAR/.test(name)) { dots(40, 'rgba(255,255,255,0.7)', 0.45); pdisc(g, 22, 14, 8, 'rgba(255,79,216,0.35)'); pdisc(g, 19, 11, 3, 'rgba(255,200,240,0.3)'); pdisc(g, 178, 22, 5, 'rgba(92,225,255,0.35)'); }
+      if (/FROSTBITE/.test(name)) { for (let x = 0; x < W; x += 7) ppoly(g, [{ x, y: 0 }, { x: x + 4, y: 0 }, { x: x + 2, y: 5 + rng() * 6 }], 'rgba(220,245,255,0.55)'); dots(18, 'rgba(255,255,255,0.6)', 0.5); }
+      if (/CARNIVAL/.test(name)) { for (let x = 0; x < W; x += 12) ppoly(g, [{ x, y: 0 }, { x: x + 12, y: 0 }, { x: x + 6, y: 10 }], (x / 12) % 2 ? 'rgba(255,74,90,0.35)' : 'rgba(255,243,224,0.18)'); }
       if (/BASEMENT|GUTTER/.test(name)) { g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(0, 6, W, 3); g.fillRect(0, mb - 9, W, 2); for (let x = 14; x < W; x += 46) { g.fillStyle = 'rgba(150,170,120,0.25)'; g.fillRect(x, 4, 3, mb - 8); } }
       if (/BACK ROOM/.test(name)) { for (let x = 0; x < W; x += 6) { g.fillStyle = x % 12 ? 'rgba(120,20,30,0.25)' : 'rgba(60,8,16,0.3)'; g.fillRect(x, 0, 6, mb); } }
-      if (/LUCKY|CHAMPIONSHIP/.test(name)) { for (let x = 6; x < W; x += 16) { g.fillStyle = 'rgba(255,210,122,0.18)'; g.beginPath(); for (let k = 0; k < 5; k++) { const a = k * 2 * Math.PI * 2 / 5 - Math.PI / 2; g.lineTo(x + Math.cos(a) * 3, mb - 7 + Math.sin(a) * 3); } g.closePath(); g.fill(); } }
+      if (/LUCKY|CHAMPIONSHIP/.test(name)) { for (let x = 6; x < W; x += 16) { pdisc(g, x, mb - 7, 1.6, 'rgba(255,210,122,0.25)'); g.fillStyle = 'rgba(255,210,122,0.25)'; g.fillRect(x - 3, mb - 7.5, 6, 1); g.fillRect(x - 0.5, mb - 10, 1, 6); } }
       g.restore();
     }
     setWear(wear) { this.wear = wear || null; this.rebuildOil(); }
     rebuildOil() {
       const g = this.oilCv.getContext('2d'); g.setTransform(RS, 0, 0, RS, 0, 0); g.clearRect(0, 0, W, H);
       this.drawOil(g, this.lhw || C.LHW, Math.round((this.lhw || C.LHW) * 2 / 1.064));
+      pixelize(this.oilCv, 16, 28);
     }
     drawOil(g, LHW, nb) {
       const pat = this.oil, wear = this.wear;
@@ -291,7 +399,6 @@ var GK = globalThis.GK = globalThis.GK || {};
       cx.fillStyle = '#5a2a3a'; cx.fillRect(hx, hy, 32, 14);
       cx.fillStyle = '#8a3a4e'; cx.fillRect(hx, hy, 32, 3);
       cx.fillStyle = '#0a060c'; cx.fillRect(hx + 6, hy + 6, 20, 8);
-      cx.font = FONT_S; cx.textAlign = 'center'; cx.fillStyle = '#ffd27a';
       let slot = 0;
       for (let i = 0; i < n; i++) {
         const b = ret.balls[i], def = GK.BALLS[b.type] || GK.BALLS.house;
@@ -307,8 +414,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         this.circle(x - r * 0.35, y - r * 0.35, r * 0.3, def.hi);
         if (!stuck) this.retPos.push({ i, x, y, r: r + 3 });
         else {
-          cx.fillStyle = (Math.floor(time * 4) % 2) ? '#ff5a6e' : '#ffd27a';
-          cx.fillText('STUCK', hx + 16, hy - 3);
+          ptext(cx, 'STUCK', hx + 16, hy - 3, FONT_S, (Math.floor(time * 4) % 2) ? '#ff5a6e' : '#ffd27a', 'center', '#140e16');
         }
       }
     }
@@ -332,8 +438,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (!kind) {
         cx.fillStyle = '#1a2a3a'; cx.fillRect(sx, sy, sw, sh);
         cx.fillStyle = this.theme ? this.theme.sign : '#ffb547';
-        cx.font = FONT_S; cx.textAlign = 'center';
-        cx.fillText('LANE', sx + sw / 2, sy + 11); cx.fillText('TV', sx + sw / 2, sy + 20);
+        const tc = this.theme ? this.theme.sign : '#ffb547';
+        ptext(cx, 'LANE', sx + sw / 2, sy + 11, FONT_S, tc, 'center'); ptext(cx, 'TV', sx + sw / 2, sy + 20, FONT_S, tc, 'center');
         if (Math.floor(time * 1.3) % 6 === 0) for (let k = 0; k < 60; k++) { cx.fillStyle = Math.random() < 0.5 ? '#fff' : '#555'; cx.fillRect(sx + Math.floor(Math.random() * sw), sy + Math.floor(Math.random() * sh), 1, 1); }
       } else {
         TV_SCENES[kind](cx, sx, sy, sw, sh, t, tv.v || 0, this);
@@ -356,20 +462,21 @@ var GK = globalThis.GK = globalThis.GK || {};
         else if (mood === 'groan') { dy = 1.5; slump = true; }
         const by = H - 8 + dy, sh = slump ? GK.shade(shirt, -0.45) : shirt;
         // shoulders and body
-        cx.fillStyle = '#0c0810'; cx.beginPath(); cx.ellipse(x, by + 6, 7.2, 7.5, 0, Math.PI, 0); cx.fill();
-        const gb = cx.createLinearGradient(x - 6, 0, x + 6, 0); gb.addColorStop(0, GK.shade(sh, 0.15)); gb.addColorStop(1, GK.shade(sh, -0.3));
-        cx.fillStyle = gb; cx.beginPath(); cx.ellipse(x, by + 6, 6.2, 6.6, 0, Math.PI, 0); cx.fill(); cx.fillRect(x - 6.2, by + 6, 12.4, 4);
-        if (arms === 2) { cx.strokeStyle = skin; cx.lineWidth = 1.8; cx.lineCap = 'round'; cx.beginPath(); cx.moveTo(x - 5, by + 2); cx.lineTo(x - 8, by - 6); cx.moveTo(x + 5, by + 2); cx.lineTo(x + 8, by - 6); cx.stroke(); }
+        pell(cx, x, by + 6, 7.2, 7.5, '#0c0810', 'top');
+        pell(cx, x, by + 6, 6.2, 6.6, sh, 'top'); cx.fillRect(sp(x - 6.5), sp(by + 6), 13, 4);
+        pell(cx, x + 2, by + 6, 3.4, 5.2, GK.shade(sh, -0.28), 'top');
+        pell(cx, x - 2.6, by + 4, 1.6, 2.6, GK.shade(sh, 0.2), 'top');
+        if (arms === 2) { pline(cx, x - 5, by + 2, x - 8, by - 6, skin, 3); pline(cx, x + 5, by + 2, x + 8, by - 6, skin, 3); }
         if (arms === 1) { const k = Math.floor(t * 8 + i) % 2 ? 1.5 : 3.5; cx.fillStyle = skin; this.circle(x - k, by + 1, 1.3, skin); this.circle(x + k, by + 1, 1.3, skin); }
         // head
         const hy = by - 4 + (slump ? 2 : 0);
         this.circle(x, hy, 3.6, '#0c0810');
         this.circle(x, hy, 3.1, skin);
-        cx.fillStyle = hair; cx.beginPath(); cx.arc(x, hy - 0.6, 3.2, Math.PI * 1.05, Math.PI * 1.95); cx.fill();
+        pell(cx, x, hy - 0.6, 3.3, 2.4, hair, 'top');
+        cx.fillStyle = GK.shade(skin, -0.25); cx.fillRect(sp(x + 1.5), sp(hy - 0.5), 1, 2);
       });
-      cx.font = '800 7px Rubik, system-ui, sans-serif'; cx.textAlign = 'center';
-      if (mood === 'cheer' && t < 1.8) { cx.globalAlpha = Math.min(1, (1.8 - t) * 2); cx.fillStyle = '#ffd27a'; cx.fillText('YEAH!', 24, H - 26 - t * 6); cx.globalAlpha = 1; }
-      if (mood === 'groan' && t < 1.8) { cx.globalAlpha = Math.min(1, (1.8 - t) * 2); cx.fillStyle = '#c9b7d3'; cx.fillText('ohh…', 24, H - 24); cx.globalAlpha = 1; }
+      if (mood === 'cheer' && t < 1.8) ptext(cx, 'YEAH!', 24, H - 26 - Math.round(t * 6), '800 7px Rubik, system-ui, sans-serif', '#ffd27a', 'center', '#140e16');
+      if (mood === 'groan' && t < 1.8) ptext(cx, 'ohh…', 24, H - 24, '800 7px Rubik, system-ui, sans-serif', '#c9b7d3', 'center', '#140e16');
     }
 
     drawPin(p, sim, time, glowOnly) {
@@ -386,11 +493,10 @@ var GK = globalThis.GK = globalThis.GK || {};
       cx.globalAlpha = alpha;
       const sh = P(p.x, p.z);
       if (!glowOnly) {
-        const rr = PW * S0 * sh.s * 0.75, gsh = cx.createRadialGradient(sh.x, sh.y, 0, sh.x, sh.y, rr);
-        gsh.addColorStop(0, 'rgba(20,10,8,0.38)'); gsh.addColorStop(1, 'rgba(20,10,8,0)');
-        cx.fillStyle = gsh; cx.beginPath(); cx.ellipse(sh.x, sh.y, rr, rr * 0.4, 0, 0, Math.PI * 2); cx.fill();
+        const rr = PW * S0 * sh.s * 0.75;
+        pell(cx, sh.x, sh.y, rr, rr * 0.4, 'rgba(20,10,8,0.2)'); pell(cx, sh.x, sh.y, rr * 0.6, rr * 0.25, 'rgba(20,10,8,0.25)');
       }
-      const pts = [], N = 22;
+      const pts = [], N = 16;
       for (let k = 0; k <= N; k++) { const t = k / N; const q = P(p.x + dir.x * L * sn * t, p.z + dir.z * L * sn * t, h0 + L * cs * t); pts.push([q.x, q.y, prof(t) * PW * S0 * q.s, t]); }
       const frozen = p.hp > 1 && p.standing;
       const outline = glowOnly ? '#ff4fd8' : '#2b1f24';
@@ -400,7 +506,15 @@ var GK = globalThis.GK = globalThis.GK || {};
       for (const [x, y, r, t] of pts) if (t > 0.05 && t < 0.95) this.circle(x + r * 0.42, y, r * 0.5, 'rgba(0,0,0,0.07)');
       for (const [x, y, r, t] of pts) if (t > 0.12 && t < 0.42) this.circle(x - r * 0.42, y, r * 0.24, 'rgba(255,255,255,0.9)');
       for (const [x, y, r, t] of pts) if (t > 0.78 && t < 0.92) this.circle(x - r * 0.35, y, r * 0.22, 'rgba(255,255,255,0.75)');
-      for (const tt of [0.58, 0.67]) { const q = P(p.x + dir.x * L * sn * tt, p.z + dir.z * L * sn * tt, h0 + L * cs * tt); this.circle(q.x, q.y, prof(tt) * PW * S0 * q.s * 0.95, def.band); }
+      // Two thin red stripes around the neck with white between them, drawn across the pin's
+      // axis so they stay horizontal when it stands and turn with it when it falls.
+      const at = tt => P(p.x + dir.x * L * sn * tt, p.z + dir.z * L * sn * tt, h0 + L * cs * tt);
+      for (const tt of [0.56, 0.68]) {
+        const q = at(tt), q2 = at(tt + 0.04);
+        let ax = q2.x - q.x, ay = q2.y - q.y; const al = Math.hypot(ax, ay) || 1; ax /= al; ay /= al;
+        const r = prof(tt) * PW * S0 * q.s, w = q.s > 0.62 ? 2 : 1;
+        pline(cx, q.x - ay * r, q.y + ax * r, q.x + ay * r, q.y - ax * r, def.band, w);
+      }
       if (p.type === 'explosive' && p.standing) { const q = P(p.x, p.z, h0 + L + 1.5); cx.fillStyle = (Math.floor(time * 8) % 2) ? '#ffd447' : '#ff6a3d'; cx.fillRect(Math.round(q.x), Math.round(q.y - 1), 1, 2); }
       if (p.type === 'gold' && p.standing && Math.floor(time * 2 + p.n) % 5 === 0) { const q = P(p.x, p.z, h0 + 9); cx.fillStyle = '#fff'; cx.fillRect(Math.round(q.x - 1), Math.round(q.y), 1, 1); }
       if (frozen) { const q = P(p.x, p.z, h0 + 4); cx.fillStyle = '#ffffff'; cx.fillRect(Math.round(q.x + 1), Math.round(q.y), 1, 1); }
@@ -411,14 +525,17 @@ var GK = globalThis.GK = globalThis.GK || {};
       const t = GK.BALLS[type] || GK.BALLS.house, cx = this.cx;
       const c = P(x, z, r), R = r * S0 * c.s, s2 = P(x, z);
       cx.globalAlpha = alpha;
-      cx.fillStyle = 'rgba(15,8,10,0.35)'; cx.beginPath(); cx.ellipse(s2.x, s2.y, R, R * 0.32, 0, 0, Math.PI * 2); cx.fill();
+      pell(cx, s2.x, s2.y, R, R * 0.32, 'rgba(15,8,10,0.35)');
       // reflection on the glossy lane
-      cx.globalAlpha = alpha * 0.18; cx.fillStyle = t.col; cx.beginPath(); cx.ellipse(s2.x, s2.y + R * 0.35, R * 0.8, R * 0.35, 0, 0, Math.PI * 2); cx.fill(); cx.globalAlpha = alpha;
+      cx.globalAlpha = alpha * 0.22; pell(cx, s2.x, s2.y + R * 0.35, R * 0.75, R * 0.3, t.col); cx.globalAlpha = alpha;
       if (ed === 'neon') this.circle(c.x, c.y, R + 2.2, 'rgba(182,255,92,0.35)');
       if (type === 'blackhole') this.circle(c.x, c.y, R + 2.5 + Math.sin(time * 9) * 0.8, 'rgba(176,107,255,0.35)');
       this.circle(c.x, c.y, R + 0.8, ed === 'foil' ? '#9fe8ff' : ed === 'holo' ? `hsl(${(time * 300) % 360},90%,70%)` : '#0e0a10');
       if (type === 'ghost' || type === 'glass') cx.globalAlpha = alpha * (type === 'ghost' ? 0.55 : 0.75);
-      { const gb = cx.createRadialGradient(c.x - R * 0.4, c.y - R * 0.45, R * 0.1, c.x, c.y, R * 1.05); gb.addColorStop(0, GK.shade(t.col, 0.35)); gb.addColorStop(0.55, t.col); gb.addColorStop(1, GK.shade(t.col, -0.55)); this.circle(c.x, c.y, R, gb); }
+      // pixel shading: dark rim, base colour, a lit cap toward the top-left
+      this.circle(c.x, c.y, R, GK.shade(t.col, -0.45));
+      this.circle(c.x - R * 0.12, c.y - R * 0.12, R * 0.86, t.col);
+      this.circle(c.x - R * 0.3, c.y - R * 0.32, R * 0.5, GK.shade(t.col, 0.22));
       if (type === 'mirror') { this.circle(c.x - R * 0.2, c.y - R * 0.2, R * 0.55, '#e8ecf2'); this.circle(c.x + R * 0.25, c.y + R * 0.25, R * 0.4, '#8a909a'); }
       if (type === 'snake') { cx.fillStyle = '#c8ff8a'; cx.fillRect(Math.round(c.x - R * 0.8), Math.round(c.y - 0.5), Math.round(R * 1.6), 1); }
       this.circle(c.x - R * 0.38, c.y - R * 0.4, R * 0.22, 'rgba(255,255,255,0.75)');
@@ -426,7 +543,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       cx.globalAlpha = alpha;
       if (type === 'split' && !(b && b.didSplit)) { cx.fillStyle = '#5a3008'; cx.fillRect(Math.round(c.x - 0.5), Math.round(c.y - R), 1, Math.round(R * 2)); }
       if (type === 'bomb' && !(b && b.exploded)) { cx.fillStyle = (Math.floor(time * 10) % 2) ? '#ffd447' : '#ff6a3d'; cx.fillRect(Math.round(c.x + R * 0.4), Math.round(c.y - R - 1.5), 2, 2); }
-      if (type === 'lucky7' && R > 3) { cx.font = FONT_S; cx.textAlign = 'center'; cx.fillStyle = '#ffe066'; cx.fillText('7', c.x, c.y + 3); }
+      if (type === 'lucky7' && R > 3) ptext(cx, '7', c.x, c.y + 3, FONT_S, '#ffe066', 'center');
       if (type === 'golden' && Math.floor(time * 3) % 3 === 0) { cx.fillStyle = '#fff'; cx.fillRect(Math.round(c.x - R * 0.5), Math.round(c.y - R * 0.5), 1, 1); }
       const ph = (b ? b.rot : 0.4) % (Math.PI * 2);
       if (R > 2.5 && type !== 'blackhole' && Math.cos(ph) > -0.1) {
@@ -438,7 +555,7 @@ var GK = globalThis.GK = globalThis.GK || {};
 
     drawPost(q, time) {
       const cx = this.cx, base = P(q.x, q.z), top = P(q.x, q.z, 22), R = q.r * S0 * base.s;
-      cx.fillStyle = 'rgba(15,8,10,0.35)'; cx.beginPath(); cx.ellipse(base.x, base.y, R * 1.2, R * 0.4, 0, 0, Math.PI * 2); cx.fill();
+      pell(cx, base.x, base.y, R * 1.2, R * 0.4, 'rgba(15,8,10,0.35)');
       for (let y = Math.round(top.y); y < Math.round(base.y); y++) {
         cx.fillStyle = (Math.floor((y + time * 20) / 3) % 2) ? '#ff4a5a' : '#fff3e0';
         cx.fillRect(Math.round(base.x - R), y, Math.round(R * 2), 1);
@@ -475,12 +592,11 @@ var GK = globalThis.GK = globalThis.GK || {};
       // arrowhead at the end of the line
       const e1 = P(lineX(214), 214), e0 = P(lineX(200), 200);
       const dx = e1.x - e0.x, dy = e1.y - e0.y, l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l;
-      cx.strokeStyle = '#ffd27a'; cx.lineWidth = 1.5; cx.beginPath();
-      cx.moveTo(e1.x - ux * 5 - uy * 3, e1.y - uy * 5 + ux * 3); cx.lineTo(e1.x, e1.y); cx.lineTo(e1.x - ux * 5 + uy * 3, e1.y - uy * 5 - ux * 3); cx.stroke();
+      pline(cx, e1.x - ux * 5 - uy * 3, e1.y - uy * 5 + ux * 3, e1.x, e1.y, '#ffd27a', 2);
+      pline(cx, e1.x - ux * 5 + uy * 3, e1.y - uy * 5 - ux * 3, e1.x, e1.y, '#ffd27a', 2);
       if (st.step === 'angle') {
-        cx.font = FONT_S; cx.textAlign = 'center'; cx.fillStyle = '#ffb547';
         const deg = ang * 180 / Math.PI;
-        cx.fillText((deg >= 0 ? '+' : '') + deg.toFixed(1) + '°', e1.x, e1.y - 6);
+        ptext(cx, (deg >= 0 ? '+' : '') + deg.toFixed(1) + '°', e1.x, e1.y - 6, FONT_S, '#ffd27a', 'center', '#2a1416');
       }
     }
 
@@ -558,21 +674,16 @@ var GK = globalThis.GK = globalThis.GK || {};
       this.drawCrowd(st.crowd, time);
       this.drawReturn(st.ret, time);
       this.drawTV(st.tv, time);
-      if (st.replay) { cx.font = FONT_S; cx.textAlign = 'left'; cx.fillStyle = (Math.floor(time * 2) % 2) ? '#ff5a6e' : '#ffd27a'; cx.fillText('● REPLAY', 6, 96); }
+      if (st.replay) ptext(cx, '● REPLAY', 6, 96, FONT_S, (Math.floor(time * 2) % 2) ? '#ff5a6e' : '#ffd27a', 'left', '#140e16');
 
       // Floating score pops: ease out upward, hold, then fade (they live ~1.8s so they can be read).
-      cx.font = '800 7.5px Rubik, system-ui, sans-serif'; cx.textAlign = 'center';
       for (const p of this.pops) {
-        const k = Math.min(1, p.t / 0.6), rise = (1 - (1 - k) * (1 - k)) * 14;
+        const k = Math.min(1, p.t / 0.6), rise = Math.round((1 - (1 - k) * (1 - k)) * 14);
         const q = P(p.x, p.z, p.h + rise);
-        const sc = p.t < 0.15 ? 0.7 + 2 * p.t : 1;
-        cx.globalAlpha = p.t < 1.3 ? 1 : GK.clamp(1 - (p.t - 1.3) / 0.5, 0, 1);
-        cx.save(); cx.translate(q.x, q.y); cx.scale(sc, sc);
-        cx.lineWidth = 2.2; cx.strokeStyle = 'rgba(14,8,18,0.9)'; cx.lineJoin = 'round'; cx.strokeText(p.text, 0, 0);
-        cx.fillStyle = p.col; cx.fillText(p.text, 0, 0);
-        cx.restore();
+        // blink out at the end instead of fading (pixel-art style)
+        if (p.t > 1.35 && Math.floor(p.t * 12) % 2) continue;
+        ptext(cx, p.text, q.x, q.y, '800 7.5px Rubik, system-ui, sans-serif', p.col, 'center', '#140e12');
       }
-      cx.globalAlpha = 1;
       if (this.flash > 0) { cx.fillStyle = 'rgba(255,255,255,' + (this.flash * 0.6) + ')'; cx.fillRect(0, 0, W, H); }
     }
 
@@ -583,7 +694,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       g.clearRect(0, 0, W, H);
       g.fillStyle = 'rgba(6,2,16,0.93)'; g.fillRect(0, Math.round(P(0, C.ZBACK + 18, 34).y) + 1, W, H);
       g.globalCompositeOperation = 'destination-out';
-      const hole = (x, y, r) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.6, 'rgba(0,0,0,0.85)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); };
+      const hole = (x, y, r) => { pdisc(g, x, y, r, 'rgba(0,0,0,0.35)'); pdisc(g, x, y, r * 0.8, 'rgba(0,0,0,0.5)'); pdisc(g, x, y, r * 0.6, 'rgba(0,0,0,1)'); };
       const f = P(0, -20); hole(f.x, f.y, 34);
       for (const b of sim.balls) {
         if (b.gone || b.delay > 0) continue;
@@ -612,17 +723,18 @@ var GK = globalThis.GK = globalThis.GK || {};
   GK.shade = shade;
   // Paint one frame of a TV cartoon (or the idle channel) into any context, scaled to fit w×h.
   GK.drawTVScene = function (ctx, w, h, kind, t, v, theme) {
-    const k = Math.min(w / 38, h / 26);
+    const k = Math.min(w / 38, h / 26), prevSnap = SNAP;
+    SNAP = 2; ctx.imageSmoothingEnabled = false;
     ctx.save(); ctx.setTransform(k, 0, 0, k, (w - 38 * k) / 2, (h - 26 * k) / 2);
     ctx.beginPath(); ctx.rect(0, 0, 38, 26); ctx.clip();
     if (kind && TV_SCENES[kind]) TV_SCENES[kind](ctx, 0, 0, 38, 26, t, v || 0);
     else {
       ctx.fillStyle = '#1a2a3a'; ctx.fillRect(0, 0, 38, 26);
-      ctx.fillStyle = theme ? theme.sign : '#ffb547'; ctx.font = '700 7px Rubik, system-ui, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('LANE TV', 19, 12); ctx.font = '600 4px Rubik, system-ui, sans-serif'; ctx.fillStyle = '#a99bb5'; ctx.fillText('waiting for a strike…', 19, 19);
+      ptext(ctx, 'LANE TV', 19, 12, '700 7px Rubik, system-ui, sans-serif', theme ? theme.sign : '#ffb547', 'center');
+      ptext(ctx, 'waiting for a strike…', 19, 19, '600 4px Rubik, system-ui, sans-serif', '#a99bb5', 'center');
     }
-    ctx.fillStyle = 'rgba(0,0,0,0.15)'; for (let y = 0; y < 26; y += 1) ctx.fillRect(0, y, 38, 0.3);
-    ctx.restore();
+    ctx.fillStyle = 'rgba(0,0,0,0.18)'; for (let y = 0; y < 26; y += 1) ctx.fillRect(0, y, 38, 0.5);
+    ctx.restore(); SNAP = prevSnap;
   };
   GK.Renderer = Renderer;
 })();

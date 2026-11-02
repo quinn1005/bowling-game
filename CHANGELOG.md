@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.1
+
+### Changed
+- **Back to crisp pixel art, but better.** The lane is drawn on a pixel grid twice as fine as before and scaled up with hard square pixels: no smoothing, no blurry gradients. Lighting on the wood, the oil sheen and the darkness of Cosmic lanes use dithered, stepped pixel shading. Pins, balls, shadows, the crowd and the ball return are drawn pixel by pixel with outlines and shading, and the text on the lane (score pops, the neon sign, the TV) is crisp pixel text.
+- **Bowling pins look like real pins:** two thin red stripes around the neck with white between them, instead of a single red blob. The stripes turn with the pin when it falls.
+
 ## v0.6.0
 
 ### New look

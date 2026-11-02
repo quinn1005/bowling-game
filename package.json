@@ -1,6 +1,6 @@
 {
   "name": "gutter-kings",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "private": true,
   "description": "Gutter Kings - a physics bowling roguelike",
   "scripts": {
