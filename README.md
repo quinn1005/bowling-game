@@ -4,6 +4,8 @@ A physics bowling roguelike: hit the target score in a limited number of frames,
 
 ## Play
 
+**In the browser:** https://quinn1005.github.io/bowling-game/ (works on phones too; add it to your home screen to play fullscreen).
+
 Open `game/index.html` in a browser, or serve it and open it on your phone:
 
 ```

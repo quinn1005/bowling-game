@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3.1
+
+### New: play in the browser
+- Gutter Kings can be played in any web browser, including on iPhone: https://quinn1005.github.io/bowling-game/
+- Every push that changes the game republishes the web version (`.github/workflows/pages.yml`).
+- On Android Chrome or iPhone Safari, add it to your home screen to play fullscreen like an app.
+
 ## v0.3.0
 
 ### New
