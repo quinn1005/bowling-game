@@ -19,27 +19,20 @@
 <body>
 <div class="app" id="app">
   <header class="top">
-    <div class="titleblock">
-      <div class="lbl" id="alleyLbl">Lucky Strike Lanes</div>
-      <div class="round" id="round">Qualifier</div>
-    </div>
-    <div class="scorewrap">
-      <div class="lbl" id="target">Target 500</div>
-      <div class="score" id="score">0</div>
-    </div>
-    <div class="bar" id="bar"><i></i></div>
+    <div class="lbl" id="alleyLbl">Lucky Strike Lanes</div>
     <div class="meta">
-      <span class="pill frame" id="frameLbl">Frame 1 of 5 · Roll 1</span>
-      <span class="grow"></span>
       <span class="pill groove" id="grooveLbl" title="Groove: PERFECT throws in a row, +1 Mult each" hidden>♪ 0</span>
-      <span class="pill rr" id="rrLbl" title="Re-racks left">↻ 2</span>
+      <button class="pill rr rrbtn" id="rerackBtn" type="button" title="Re-rack: reset all the pins and take your first roll again"><span id="rrLbl">↻ 2</span></button>
       <span class="pill money" id="money">$4</span>
       <button class="iconbtn" id="menuBtn" type="button" aria-label="Menu"><span></span><span></span><span></span></button>
     </div>
+    <div class="round" id="round">Qualifier</div>
+    <div class="score" id="score">0</div>
+    <div class="bar" id="bar"><i></i></div>
   </header>
 
   <div class="tally" aria-live="polite">
-    <div class="shot" id="shot">Line up your shot</div>
+    <div class="frameinfo"><span class="pill frame" id="frameLbl">Frame 1/5 · Roll 1</span><span class="lbl" id="target" hidden>Target 500</span></div>
     <div class="box chips" id="chipsBox"><small>Points</small><b id="chips">0</b></div>
     <span class="x">×</span>
     <div class="box mult" id="multBox"><small>Mult</small><b id="mult">–</b></div>
@@ -69,6 +62,7 @@
   <div class="ctrl" id="ctrl">
     <div class="cmid">
       <span class="stepLbl" id="stepLbl">Tap to stop the start slider</span>
+      <span class="shot" id="shot" hidden></span>
       <div class="meter sbar" id="sbar" hidden aria-hidden="true"><i></i><span id="sbarLbl">start</span><b id="sneedle"></b></div>
       <div class="meter pbar" id="pbar" hidden aria-hidden="true"><i id="pzone"></i><span>power</span><b id="pneedle"></b></div>
       <div class="meter hbar" id="hbar" hidden aria-hidden="true"><i></i><span class="hl">← hook</span><span class="hr">hook →</span><b id="hneedle"></b></div>
@@ -77,11 +71,10 @@
   </div>
 
   <div class="dock">
-    <div class="slots" id="bag" role="group" aria-label="Ball bag" hidden></div>
+    <div class="rule" id="rule" aria-live="polite"></div>
     <div class="slots" id="cons" role="group" aria-label="Consumables"></div>
-    <button class="rerack" id="rerackBtn" type="button" title="Reset all pins and take your first roll again">↻ Re-rack</button>
+    <div class="slots" id="bag" role="group" aria-label="Ball bag" hidden></div>
   </div>
-  <div class="rule" id="rule" aria-live="polite"></div>
 
   <div class="card" id="card" aria-label="Scorecard"></div>
 
@@ -100,6 +93,7 @@
 <script src="js/frame.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/render.js"></script>
+<script src="js/fame.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/main.js"></script>
 </body>

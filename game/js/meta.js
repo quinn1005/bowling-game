@@ -54,7 +54,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   // in a feat's `unlocks` (the starter set, every Scorecard but one, all memberships) is open
   // from the first run.
   const F = [];
-  const feat = (id, name, desc, unlocks, check) => F.push({ id, name, desc, unlocks, check });
+  const feat = (id, name, desc, unlocks, check, o) => F.push(Object.assign({ id, name, desc, unlocks, check }, o || {}));
   const fr = e => e.t === 'frame';
   const strike = e => fr(e) && GK.isStrikeKind(e.kind);
   const spare = e => fr(e) && GK.isSpareKind(e.kind);
@@ -127,6 +127,13 @@ var GK = globalThis.GK = globalThis.GK || {};
   feat('lunar', 'Moonwalker', 'Reach Lunar Lanes.', ['ball:moon', 'ball:bubble'], e => alleyAt(e, 6));
   feat('drain', 'Down the Drain', 'Reach The Gutter.', ['charm:overtime', 'cons:m_debt'], e => alleyAt(e, 7));
   feat('champion', 'Gutter King', 'Beat the Championship.', ['league:pro', 'charm:fourth_ball', 'charm:shadow_bowler'], e => e.t === 'run' && e.won);
+  // Secret feats: shown as ??? until earned. Quinn, Levi and Kaleb's signature balls.
+  const first = e => e.ctx.rolls[0] || {};
+  feat('quinn', 'Up the Gutter', 'Roll a strike from the outer 5 boards with less than 30% hook on the dial. Let the ball do the work.', ['ball:twohander'],
+    e => strike(e) && Math.abs(first(e).startX || 0) >= (first(e).lhw || GK.C.LHW) - 5.3 && e.ctx.maxHook < 0.3, { secret: true });
+  feat('levi', 'Lofted', 'Roll a strike with the power bar maxed out.', ['ball:loftduck'], e => strike(e) && (first(e).power || 0) >= 0.95, { secret: true });
+  feat('kaleb', 'The Whole Lane', 'Roll a strike after your ball crosses 20 or more boards.', ['ball:wideswing'], e => strike(e) && (first(e).boards || 0) >= 20, { secret: true });
+  feat('regulars', 'The Regulars', 'Earn all three secret signature balls.', ['charm:regulars'], (e, m) => !!(m.feats.quinn && m.feats.levi && m.feats.kaleb), { secret: true });
   GK.FEATS = F;
 
   GK.LOCKED = new Set(F.flatMap(f => f.unlocks));
@@ -151,7 +158,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     for (const f of F) {
       if (meta.feats[f.id]) continue;
       let ok = false;
-      try { ok = !!f.check(e); } catch (err) { ok = false; }
+      try { ok = !!f.check(e, meta); } catch (err) { ok = false; }
       if (ok) { meta.feats[f.id] = true; out.push(f); }
     }
     return out;

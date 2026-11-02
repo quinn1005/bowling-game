@@ -9,7 +9,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   UI.$ = $;
 
   UI.bump = el => { el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); };
-  UI.shot = t => { $('shot').textContent = t; };
+  UI.shot = t => { const el = $('shot'); el.textContent = t; if (UI.onShot) UI.onShot(); };
   UI.tally = (c, m, f) => {
     $('chips').textContent = c == null ? '0' : fmt(c);
     $('mult').textContent = m == null ? '–' : (Math.round(m * 100) / 100).toLocaleString('en-US');
@@ -74,9 +74,9 @@ var GK = globalThis.GK = globalThis.GK || {};
       $('bar').firstElementChild.style.width = pct + '%';
       $('bar').classList.toggle('done', pct >= 100);
       const roll = rs.cur ? rs.cur.rollIdx + 1 : 1;
-      $('frameLbl').textContent = run.practice ? 'Frame ' + (rs.frameIdx + 1) + ' · Roll ' + roll : 'Frame ' + Math.min(rs.framesMax, rs.frameIdx + 1) + ' of ' + rs.framesMax + ' · Roll ' + roll;
+      $('frameLbl').textContent = run.practice ? 'Frame ' + (rs.frameIdx + 1) + ' · Roll ' + roll : 'Frame ' + Math.min(rs.framesMax, rs.frameIdx + 1) + '/' + rs.framesMax + ' · Roll ' + roll + (champ ? ' · King ' + fmt(rs.kingTotal) : '');
       $('rrLbl').textContent = '↻ ' + (run.practice ? '∞' : rs.reracks);
-      $('rrLbl').title = rs.reracks + ' re-racks left this round';
+      $('rrLbl').title = 'Re-rack (' + rs.reracks + ' left this round): reset all the pins and take your first roll again';
     }
   };
 
@@ -220,6 +220,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         const L = GK.LEAGUES[id], open = leagueOpen(id), f = featFor('league:' + id);
         return `<button class="choice" data-l="${id}" aria-pressed="${id === league}" ${open ? '' : 'disabled'}><b>${esc(L.name)}</b><span>${open ? esc(L.desc) : 'Locked · feat: ' + esc(f ? f.name + ' (' + f.desc + ')' : '')}</span></button>`;
       }).join('')}</div>
+      ${meta.wins ? '<button class="btn alt small" data-a="wall">Visit the Wall of Fame</button>' : ''}
       <h3>Ascension</h3>
       ${maxAsc ? `<div class="stepper"><button class="btn alt small" data-a="ascdown" ${asc ? '' : 'disabled'}>−</button><div><b>Level ${asc}</b><p class="dim">${asc ? GK.ASCENSION.slice(1, asc + 1).map(a => esc(a.desc)).join('<br>') : 'Standard difficulty.'}</p></div><button class="btn alt small" data-a="ascup" ${asc < maxAsc ? '' : 'disabled'}>+</button></div>` : '<p class="dim">Beat the Gutter King to unlock Ascension levels: harder runs that stack a new rule each level.</p>'}
       <div class="seedrow"><input id="seedIn" placeholder="Seed (optional)" maxlength="8" aria-label="Seed"><button class="btn small alt" data-a="back">Back</button></div>
@@ -248,12 +249,14 @@ var GK = globalThis.GK = globalThis.GK || {};
       <p class="dim">Most balls, charms, equipment, Lane Tricks and Black Market items start locked. Each feat unlocks the items that match its theme for future runs.</p>
       <div class="bar unlockbar"><i style="width:${pct}%"></i></div>
       <p class="dim">${prog.have} of ${prog.total} items unlocked · ${nDone} of ${GK.FEATS.length} feats</p>
-      <div>${GK.FEATS.map(f => `<div class="feat"><b class="${done[f.id] ? 'ok' : 'no'}">${done[f.id] ? 'DONE' : 'LOCKED'}</b><b>${esc(f.name)}</b><span>${esc(f.desc)} Unlocks ${esc(f.unlocks.map(k => GK.unlockName(k) + ' (' + KIND[k.split(':')[0]] + ')').join(', '))}.</span></div>`).join('')}</div>
+      <div>${GK.FEATS.map(f => f.secret && !done[f.id]
+        ? `<div class="feat secret"><b class="no">SECRET</b><b>???</b><span>A secret feat. Nobody at the alley will say what it takes.</span></div>`
+        : `<div class="feat${f.secret ? ' secret' : ''}"><b class="${done[f.id] ? 'ok' : 'no'}">${done[f.id] ? 'DONE' : 'LOCKED'}</b><b>${esc(f.name)}</b><span>${esc(f.desc)} Unlocks ${esc(f.unlocks.map(k => GK.unlockName(k) + ' (' + KIND[k.split(':')[0]] + ')').join(', '))}.</span></div>`).join('')}</div>
       <h3>Ascension</h3><p class="dim">${meta.maxAsc ? 'Unlocked up to level ' + meta.maxAsc + ' of ' + GK.MAX_ASC + '.' : 'Beat the Gutter King to unlock.'}</p>
       <h3>Your daily runs</h3>
       ${log.length ? '<div class="story">' + log.map(x => `<div><span>${esc(x.date)}</span><b>${esc(x.label)} · best frame ${fmt(x.best || 0)}</b></div>`).join('') + '</div>' : '<p class="dim">No daily runs yet.</p>'}
       <button class="btn" data-a="ok">Close</button>
-    </div>`, r => UI.on(r, '[data-a=ok]', UI.hideModal));
+    </div>`, r => { UI.on(r, '[data-a=ok]', UI.hideModal); UI.on(r, '[data-a=wall]', () => { UI.hideModal(); UI.wallOfFame(null, UI.hideLayer, 'Back'); }); });
   };
 
   UI.how = function (onBack) {
@@ -266,7 +269,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       <p><b>Groove:</b> PERFECT throws in a row build Groove. Each stack adds +1 Mult to every frame until you miss the zone.</p>
       <p><b>Score:</b> every frame scores <span style="color:var(--chips)">Points</span> × <span style="color:var(--mult)">Mult</span>. The shot sets the base (Strike, Spare, Split conversion, Double, Turkey…). Each pin adds Points. Pins knocking over pins, late wobblers and kickback bangs add bonus Points.</p>
       <p><b>Rounds:</b> reach the target within your frames. Each alley has a Qualifier, a Heat and a Boss Match. Miss a target and the run ends.</p>
-      <p><b>Re-racks:</b> after a bad first roll, spend a re-rack to reset all pins and take roll one again.</p>
+      <p><b>Re-racks:</b> after a bad first roll, tap the glowing <b>↻</b> button at the top to spend a re-rack: all pins reset and you take roll one again.</p>
       <p><b>Bosses</b> change every run: each alley has a pool of bosses and you meet one of them.</p>
       <p><b>Skipping:</b> you can skip a Qualifier or Heat. You get no score, pay or shop, but you take that round's reward tag (cash, a coupon, a free charm and more).</p>
       <p><b>Between rounds</b> you may run into the Lost &amp; Found, a vending machine, a shady bowler or the lane mechanic.</p>
@@ -356,6 +359,27 @@ var GK = globalThis.GK = globalThis.GK || {};
 
   const roundLabel = h => h.champ ? 'Championship' : (h.alley > GK.ALLEY_COUNT ? 'E' + (h.alley - GK.ALLEY_COUNT) : 'A' + (h.alley + 1)) + ' ' + GK.ROUND_NAMES[h.round];
   // End of run: what happened round by round, the best frame (with a replay) and a share line.
+  // Wall of Fame: Kaleb, Quinn (centre) and Levi, with an empty frame below for the new champion.
+  UI.wallOfFame = function (run, onNext, btnLabel) {
+    const frame = (who, name, sub) => `<figure class="fame${who === 'you' ? ' you' : ''}"><canvas width="${GK.PORTRAIT.W}" height="${GK.PORTRAIT.H}" data-who="${who}"></canvas><figcaption><b>${esc(name)}</b><small>${esc(sub)}</small></figcaption></figure>`;
+    const d = new Date(), date = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    UI.layer(`<div class="panel wall">
+      <div class="lbl">Lucky Strike Lanes · Est. 1974</div>
+      <h2>Wall of Fame</h2>
+      <p class="dim">The Regulars have held this lane longer than anyone can remember. Today, someone new earned a spot.</p>
+      <div class="famerow">
+        ${frame('kaleb', 'Kaleb', 'The Whole Lane')}
+        ${frame('quinn', 'Quinn', 'The Two-Hander')}
+        ${frame('levi', 'Levi', 'The Loft Duck')}
+      </div>
+      <div class="famerow one">${frame('you', 'You', run ? 'Gutter King slayer · ' + date : 'Your spot')}</div>
+      <button class="btn" data-a="next" data-focus>${esc(btnLabel || 'Continue')}</button>
+    </div>`, r => {
+      r.querySelectorAll('canvas[data-who]').forEach(c => GK.drawPortrait(c.getContext('2d'), c.dataset.who));
+      UI.on(r, '[data-a=next]', onNext);
+    });
+  };
+
   UI.end = function (run, won, meta, h) {
     const s = run.stats, rs = run.rs, hist = run.history || [], b = run.best;
     const reached = GK.isChamp(run) ? 'Championship' : 'Alley ' + (run.alley + 1) + ', ' + GK.roundName(run);

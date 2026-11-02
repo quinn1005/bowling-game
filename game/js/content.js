@@ -94,6 +94,16 @@ var GK = globalThis.GK = globalThis.GK || {};
   ball('neonball', { name: 'Neon', full: 'Neon Ball', cost: 7, m: 6, col: '#39ff8a', hi: '#e0ffe8', desc: 'Pins it knocks down glow: +1 Mult for each one.' });
   ball('moon', { name: 'Moon', full: 'Moon Ball', cost: 7, m: 6, col: '#c8c8d0', hi: '#ffffff', desc: 'Brings low gravity with it: pins topple easily and float away when hit.' });
 
+  // ---------- The Regulars: signature balls of Quinn, Levi and Kaleb ----------
+  // Unlocked by secret feats. Each one plays like its owner bowls.
+  ball('twohander', { name: 'Two-Hander', full: 'Quinn\'s Two-Hander', cost: 9, m: 6, col: '#7a1f35', hi: '#d86a86', regular: 'Quinn',
+    desc: 'Quinn\'s ball. Thrown two-handed with low revs while the aggressive coverstock does the work: it skids clean through the oil, then hooks strongly toward the pocket on dry boards, more as the lane breaks down. Starts right on the gutter edge. A strike from the outside boards into the pocket: ×2 Mult.' });
+  ball('loftduck', { name: 'Loft Duck', full: 'Levi\'s Loft Duck', cost: 9, m: 7, col: '#ffd23a', hi: '#fff3a8', regular: 'Levi',
+    desc: 'Levi\'s ball. Lofted way out onto the lane: it flies over the first third with no hook, then lands with a THUD that shakes the whole deck. Squeaks on every pin. +15 Points for every pin that falls late.' });
+  ball('wideswing', { name: 'Wide Swing', full: 'Kaleb\'s Wide Swing', cost: 9, m: 6, col: '#7fae84', hi: '#d4f0cf', regular: 'Kaleb',
+    desc: 'Kaleb\'s ball. Plays the whole lane: the angle slider swings twice as wide and it hooks back hard on the backend. +5 Points for every board it crosses, ×1.5 Mult if it crosses 25 or more.' });
+  add('regulars', 'The Regulars', 'rare', 10, 'xmult', 'Quinn, Levi and Kaleb\'s usual table. ×1.5 Mult for each of their signature balls in your bag.', { score: (c, s) => { const n = c.run.bag.filter(b => GK.BALLS[b.type] && GK.BALLS[b.type].regular).length; if (n) s.xmult(Math.pow(1.5, n)); } });
+
   // ---------- pin types ----------
   GK.PINS.bouncy = { name: 'Bouncy Pin', desc: 'When it falls it springs forward, knocking over pins on the far side. 5 Points.', chips: 5, body: '#ffd447', shade: '#d0a020', band: '#2a6ad9' };
   GK.PINS.mirror = { name: 'Mirror Pin', desc: 'Copies its partner across the rack: when the mirrored pin falls, it falls too. 8 Points.', chips: 8, body: '#d8e0ea', shade: '#9aa6b4', band: '#5a6a80' };

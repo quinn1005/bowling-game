@@ -40,6 +40,7 @@ Same setup as Neon Bastion (`quinn1005/Roguelike-App`): Capacitor wraps `game/` 
 
 - `core.js` constants, projection, seeded RNG (`GK.stream(seed, tag)` gives independent streams).
 - `data.js` all content as data: shots, balls, charms (score hooks), pins, consumables, equipment, memberships, alleys/bosses.
+- `fame.js` pixel portraits for the Wall of Fame (shown after beating the Gutter King).
 - `content.js` the v0.7 expansion: more charms, balls, pin types (Bouncy, Mirror), equipment, memberships and Black Market items, appended to the tables in `data.js`.
 - `physics.js` `GK.Sim`: 2D lane sim, fixed 240 Hz step, emits events (`down`, `first`, `wall`, `pit`, `explode`, `ballBounce`…) and per-roll counters. No DOM.
 - `scoring.js` frame pipeline: shot base → rolls (pins, pin types, ball, ball edition) → charms (+edition, Copycat, Lucky Seven retrigger) → round modifiers. Returns animation steps.

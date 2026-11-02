@@ -203,6 +203,8 @@
       case 'shards': sfx.shatter(); R.burst(e.x, e.z, '#bff4ff', 8, 50); break;
       case 'pit': break;
       case 'rebound': sfx.bounce(); R.pop(e.x, e.z, 10, 'REBOUND', '#7be38a'); break;
+      case 'squeak': sfx.squeak(); R.pop(e.x, e.z, 24, 'SQUEAK', '#ffd23a'); break;
+      case 'thud': sfx.thud(); GK.haptic('heavy'); R.shake = 6; R.burst(e.x, e.z, '#e8c890', 8, 25); R.pop(e.x, e.z, 8, 'THUD!', '#ffd23a'); break;
     }
   }
 
@@ -333,7 +335,9 @@
     const k = kind === 'split' ? (leave710 ? 'seven10' : 'split') : kind;
     if (!['strike', 'double', 'turkey', 'spare', 'split', 'seven10'].includes(k)) return;
     tv = { kind: k, t: 0, v: Math.floor(Math.random() * 2) };
-    lastTv = { kind: k, v: tv.v };
+    // Rarely, the TV shows one of the Regulars bowling instead.
+    if (k !== 'split' && k !== 'seven10' && Math.random() < 0.12) tv.kind = ['quinn', 'levi', 'kaleb'][Math.floor(Math.random() * 3)];
+    lastTv = { kind: tv.kind, v: tv.v };
   }
 
   const stepText = st => st.op === 'chips' ? '+' + fmt(st.v) + ' Points' : st.op === 'mult' ? '+' + (Math.round(st.v * 10) / 10) + ' Mult' : st.op === 'xmult' ? '×' + (Math.round(st.v * 100) / 100) + ' Mult' : st.op === 'money' ? '+$' + st.v : '';
@@ -431,7 +435,7 @@
       bumpMeta(); GK.clearSave();
       setPhase('menu');
       const tk = busyToken;
-      setTimeout(() => tk === busyToken && showEnd(true), 900);
+      setTimeout(() => tk === busyToken && UI.wallOfFame(run, () => showEnd(true)), 900);
       return;
     }
     feats({ t: 'reach', run });
@@ -614,10 +618,14 @@
   function pickBall(i) {
     if (!run || !run.bag[i]) return;
     if (GK.isStuck(run, i)) { sfx.nope(); UI.toast(GK.BALLS[run.bag[i].type].full + ' is stuck in the ball return. Throw another ball first.'); return; }
-    sel = i; sfx.tick(760); refresh();
+    sel = i; sfx.tick(760);
+    aimX = GK.clamp(aimX, -aimLim(), aimLim());
+    refresh();
   }
-  const aimLim = () => C.LHW - C.BALL_R - 0.5 - (C.LHW - (laneOf().lhw || C.LHW));
-  const angLim = () => 0.085 * Math.max(1, GK.equipMods(run).aim) * GK.equipMods(run).angRange;
+  // Quinn's Two-Hander can start right on the gutter edge; Kaleb's Wide Swing gets twice the angle.
+  const selType = () => run && run.bag[sel] ? run.bag[sel].type : 'house';
+  const aimLim = () => (selType() === 'twohander' ? C.LHW - 1.2 : C.LHW - C.BALL_R - 0.5) - (C.LHW - (laneOf().lhw || C.LHW));
+  const angLim = () => 0.085 * Math.max(1, GK.equipMods(run).aim) * GK.equipMods(run).angRange * (selType() === 'wideswing' ? 2 : 1);
   let zoneMid = null; // Lucky Socks: the PERFECT zone wanders to a new spot each throw
   function zone() {
     const eq = GK.equipMods(run), half = (PZONE[1] - PZONE[0]) / 2 * eq.zone;
@@ -659,6 +667,7 @@
     if (s2 === 'hook') dialT0 = performance.now();
     syncCtrl();
   }
+  UI.onShot = () => syncCtrl();
   function syncCtrl() {
     const on = phase === 'aim';
     $('ctrl').classList.toggle('off', !on);
@@ -669,7 +678,10 @@
     $('hbar').hidden = !(on && step === 'hook');
     $('sbar').hidden = !(on && (step === 'pos' || step === 'angle'));
     $('sbarLbl').textContent = step === 'angle' ? 'angle' : 'start';
-    $('stepLbl').hidden = on;
+    // While the ball rolls and the frame scores, the control row shows the play-by-play instead.
+    const showShot = !on && phase !== 'call' && phase !== 'replay' && !!$('shot').textContent;
+    $('stepLbl').hidden = on || showShot;
+    $('shot').hidden = !showShot;
     const z = zone();
     $('pzone').style.left = z[0] * 100 + '%'; $('pzone').style.width = (z[1] - z[0]) * 100 + '%';
     const g = run && run.rs ? run.rs.groove || 0 : 0;
@@ -748,7 +760,8 @@
   GK.debug.pickBall = i => pickBall(i);
   GK.debug.showEvent = ev => { UI.hideModal(); showEvent(ev); };
   GK.debug.showEnd = won => { busyToken++; UI.hideModal(); showEnd(won); };
-  GK.debug.tv = k => tvShow(k, false);
+  GK.debug.wall = () => { busyToken++; UI.hideModal(); UI.wallOfFame(run, () => showEnd(true)); };
+  GK.debug.tv = k => { if (['quinn', 'levi', 'kaleb'].includes(k)) { tv = { kind: k, t: 0, v: 0 }; lastTv = { kind: k, v: 0 }; } else tvShow(k, false); };
   GK.debug.jump = (alley, round) => { busyToken++; UI.hideLayer(); UI.hideModal(); run.alley = alley; run.round = round; toIntro(); };
 
   // ---------- loop ----------

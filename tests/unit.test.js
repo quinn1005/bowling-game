@@ -562,3 +562,34 @@ test('unlocks: most content starts locked, every locked item has a feat, themed 
     assert.strictEqual(GK.unlockProgress(meta).have, GK.FEATS.filter(f => meta.feats[f.id]).reduce((a, f) => a + f.unlocks.filter(u => !u.startsWith('league:')).length, 0));
   } finally { GK._meta = undefined; }
 });
+
+test('The Regulars: signature balls play like their owners and their feats are secret', () => {
+  const sim = (type, prm) => { const s = new GK.Sim({ rng: GK.makeRng(3), lane: { oil: 'house' }, rack: GK.padRack(), wear: GK.newWear() }); s.launch({ type }, Object.assign({ aim: 0, spin: 0, speed: 400 }, prm), {}); let lift = 0; while (s.rolling) { s.step(); if (s.balls[0]) lift = Math.max(lift, s.balls[0].lift || 0); } return { r: s.summarize(), lift }; };
+  // Quinn's Two-Hander hooks into the pocket from the outside boards with no hook on the dial
+  const q = sim('twohander', { aimX: 17 }).r;
+  assert.ok(q.pocket && q.pins >= 9, 'two-hander finds the pocket: ' + JSON.stringify(q.pins));
+  assert.ok(!sim('house', { aimX: 16 }).r.pocket, 'a house ball from out there does not');
+  // Levi's Loft Duck flies, then lands with a thud
+  const l = sim('loftduck', { aimX: 2, spin: 0.8 });
+  assert.ok(l.lift > 10 && l.r.thuds === 1);
+  // Kaleb's Wide Swing: points per board crossed
+  const run = GK.newRun({ seed: 2 });
+  const f = { kind: 'open', rolls: [roll({ ball: 'wideswing', down: pins(5), pins: 5, boards: 26 })] };
+  const base = GK.scoreFrame({ kind: 'open', rolls: [roll({ down: pins(5), pins: 5, boards: 26 })] }, run);
+  const ws = GK.scoreFrame(f, run);
+  assert.strictEqual(ws.chips, base.chips + 130); assert.ok(Math.abs(ws.mult - base.mult * 1.5) < 1e-9);
+  for (const t of ['twohander', 'loftduck', 'wideswing']) assert.ok(/Quinn|Levi|Kaleb/.test(GK.BALLS[t].full + GK.BALLS[t].desc));
+  // The Regulars charm: ×1.5 per signature ball in the bag
+  run.bag = [{ type: 'twohander' }, { type: 'loftduck' }, { type: 'house' }];
+  run.charms = [GK.charmInst('regulars')];
+  assert.ok(Math.abs(GK.scoreFrame({ kind: 'open', rolls: [roll({ down: pins(5), pins: 5 })] }, run).mult - 2.25) < 1e-9);
+  // secret feats
+  const meta = { feats: {} };
+  const ctx = r0 => ({ rolls: [Object.assign({ pins: 10, down: [], lhw: GK.C.LHW }, r0)], maxHook: 0.1, throws: 1, pins: 10 });
+  const fire = (r0, extra) => GK.checkFeats(meta, Object.assign({ t: 'frame', kind: 'strike', score: 10, ctx: Object.assign(ctx(r0), extra || {}), run }));
+  assert.ok(fire({ startX: 16 }).some(x => x.id === 'quinn'));
+  assert.ok(fire({ power: 0.97 }).some(x => x.id === 'levi'));
+  const last = fire({ boards: 22 }).map(x => x.id);
+  assert.ok(last.includes('kaleb') && last.includes('regulars'), 'all three earn The Regulars: ' + last);
+  for (const id of ['quinn', 'levi', 'kaleb', 'regulars']) assert.ok(GK.FEATS.find(x => x.id === id).secret);
+});

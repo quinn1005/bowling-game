@@ -1,5 +1,22 @@
 # Changelog
 
+## v0.9.0
+
+### The Regulars
+- **Quinn, Levi and Kaleb are in the game.** The three regulars at Lucky Strike Lanes sit in the crowd at the bottom of every lane: Kaleb (curls, a big grin and a green polo), Quinn (long hair, a burgundy sweater and round shades, worn on the face when the lights go down) and Levi (a top bun and the rubber-duck shirt).
+- **Three signature balls**, each unlocked by a secret feat:
+  - **Quinn's Two-Hander:** low revs, aggressive coverstock. It skids clean through the oil, then hooks strongly toward the pocket on dry boards, and more as the lane breaks down. Starts right on the gutter edge. A strike from the outside boards into the pocket gets ×2 Mult.
+  - **Levi's Loft Duck:** lofted over the first third of the lane, then lands with a THUD that shakes the deck. Squeaks on every pin. +15 Points per late pin.
+  - **Kaleb's Wide Swing:** the angle slider swings twice as wide and the ball hooks back hard. +5 Points per board crossed, ×1.5 Mult past 25 boards.
+- **The Regulars** (secret Rare charm): ×1.5 Mult for each of their signature balls in your bag.
+- **Secret feats** show as ??? on the Feats screen until you earn them.
+- **Rare lane TV cartoons** of the three of them bowling their own way.
+- **Wall of Fame:** beat the Gutter King to see framed portraits of Kaleb, Quinn and Levi, with an empty frame below for you. Revisit it from the Feats screen.
+
+### Bigger lane
+- **The lane takes up more of the screen:** about 11% taller on a phone. The Groove, re-rack and money counters moved into the header. Consumables now sit beside the ball description. The re-rack button is the glowing ↻ counter at the top.
+- **Fixed the lane shrinking:** picking a ball with a drilling or edition tag made its description wrap to a third line, which squeezed the lane. Every row now has a fixed height, so the lane only resizes when the window does.
+
 ## v0.8.0
 
 ### Unlocks

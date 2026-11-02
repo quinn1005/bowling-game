@@ -139,7 +139,92 @@ var GK = globalThis.GK = globalThis.GK || {};
     else if (pose === 1) { px(cx, x - 5, y - 8, 3, 2, '#e8c39a'); px(cx, x + 3, y - 12, 2, 4, '#e8c39a'); }
     else { px(cx, x - 4, y - 12, 2, 4, '#e8c39a'); px(cx, x + 3, y - 8, 3, 2, '#e8c39a'); }
   }
+  // The Regulars as tiny TV characters (about 6×14 px). pose: 0 idle, 1 throw, 2 cheer.
+  const REG = {
+    quinn: { shirt: '#7a1f35', skin: '#f2d2bc', hair: '#3a2618' },
+    levi: { shirt: '#3a8ad0', skin: '#f0d0b8', hair: '#2a1c14' },
+    kaleb: { shirt: '#8fb48f', skin: '#f0cdb0', hair: '#6a4528' }
+  };
+  function regular(cx, x, y, who, pose, t) {
+    const c = REG[who];
+    // legs and body
+    px(cx, x - 2, y - 4, 2, 4, '#2a2a3a'); px(cx, x + 1, y - 4, 2, 4, '#2a2a3a');
+    px(cx, x - 2, y - 9, 5, 5, c.shirt);
+    if (who === 'levi') { px(cx, x, y - 9, 1, 5, '#5ab0f0'); px(cx, x - 2, y - 8, 1, 1, '#ffd23a'); px(cx, x + 2, y - 6, 1, 1, '#ffd23a'); }
+    if (who === 'kaleb') px(cx, x - 2, y - 9, 1, 1, '#8a5a2a'), px(cx, x - 1, y - 8, 1, 1, '#8a5a2a'), px(cx, x, y - 7, 1, 1, '#8a5a2a');
+    // head
+    px(cx, x - 1, y - 13, 3, 4, c.skin);
+    if (who === 'quinn') {
+      px(cx, x - 2, y - 14, 5, 1, c.hair); px(cx, x - 2, y - 13, 1, 6, c.hair); px(cx, x + 2, y - 13, 1, 6, c.hair);
+      px(cx, x, y - 10, 1, 1, '#8a4a2a');
+      px(cx, x - 1, y - 12, 1, 1, '#111'); px(cx, x + 1, y - 12, 1, 1, '#111'); // shades
+    } else if (who === 'levi') {
+      px(cx, x - 1, y - 14, 3, 1, c.hair); px(cx, x, y - 16, 1, 2, c.hair); px(cx, x - 2, y - 13, 1, 2, c.hair);
+      px(cx, x - 1, y - 12, 1, 1, '#000'); px(cx, x + 1, y - 12, 1, 1, '#000');
+    } else {
+      // messy curls: uneven bumps on top, loose curls down the sides
+      px(cx, x - 2, y - 15, 5, 2, c.hair); px(cx, x - 2, y - 16, 1, 1, c.hair); px(cx, x + 1, y - 16, 2, 1, c.hair);
+      px(cx, x - 3, y - 14, 1, 2, c.hair); px(cx, x - 2, y - 12, 1, 1, c.hair); px(cx, x - 3, y - 11, 1, 1, c.hair);
+      px(cx, x + 3, y - 15, 1, 2, c.hair); px(cx, x + 2, y - 12, 1, 1, c.hair); px(cx, x + 3, y - 11, 1, 1, c.hair);
+      px(cx, x, y - 16, 1, 1, '#8a6038');
+      px(cx, x - 1, y - 12, 1, 1, '#000'); px(cx, x + 1, y - 12, 1, 1, '#000'); px(cx, x - 1, y - 10, 3, 1, '#ffffff');
+    }
+    // arms
+    if (pose === 1) {
+      if (who === 'quinn') { px(cx, x + 2, y - 8, 3, 1, c.skin); px(cx, x + 2, y - 7, 3, 1, c.skin); } // both hands on the ball
+      else px(cx, x + 3, y - 8, 3, 1, c.skin);
+    } else if (pose === 2) { px(cx, x - 3, y - 13 - (Math.floor(t * 8) % 2), 1, 4, c.skin); px(cx, x + 3, y - 13 - (Math.floor(t * 8 + 1) % 2), 1, 4, c.skin); }
+    else { px(cx, x - 3, y - 9, 1, 4, c.skin); px(cx, x + 3, y - 9, 1, 4, c.skin); }
+  }
+  // Top-down mini lane for the hook cartoons: lane across the screen, pins on the right.
+  function miniLane(cx, sx, sy, sw, t, hitT) {
+    px(cx, sx + 8, sy + 6, sw - 8, 1, '#2a1416'); px(cx, sx + 8, sy + 18, sw - 8, 1, '#2a1416');
+    px(cx, sx + 8, sy + 7, sw - 8, 11, '#d8a56b');
+    for (let i = 0; i < 4; i++) px(cx, sx + 14 + i * 4, sy + 9 + i * 2 % 6, 1, 1, '#8a6a3a');
+    const spots = [[30, 12], [32, 11], [32, 13], [34, 10], [34, 12], [34, 14], [36, 9], [36, 11], [36, 13], [36, 15]];
+    spots.forEach(([x, y], i) => {
+      if (t < hitT) { px(cx, sx + x, sy + y, 1, 1, '#ffffff'); }
+      else { const k = t - hitT, a = i * 0.9; px(cx, sx + x + Math.cos(a) * k * 14, sy + y + Math.sin(a) * k * 9, 1, 1, '#ffffff'); }
+    });
+  }
   const TV_SCENES = {
+    // Quinn: two hands, outside line up the gutter, the ball hooks itself into the pocket.
+    quinn(cx, sx, sy, sw, sh, t) {
+      px(cx, sx, sy, sw, sh, '#2a0e18');
+      miniLane(cx, sx, sy, sw, t, 1.35);
+      const u = Math.min(1, t / 1.35), bx = sx + 10 + u * 20, by = sy + 17 - 4.5 * Math.pow(u, 2.6);
+      if (t < 1.6) pdisc(cx, bx, by, 1.5, '#7a1f35');
+      regular(cx, sx + 4, sy + 24, 'quinn', t < 0.25 ? 1 : 0, t);
+      if (t > 1.4) ptext(cx, 'POCKET!', sx + sw / 2 + 2, sy + 5, FONT_S, '#ffd447', 'center', '#000000');
+      caption(cx, sx, sy, sw, sh, 'QUINN', '#d86a86', t);
+    },
+    // Levi: the ball goes up, up... THUD. The screen shakes, the duck squeaks into the pins.
+    levi(cx, sx, sy, sw, sh, t) {
+      const shake = t > 0.7 && t < 1.0 ? Math.round(Math.sin(t * 90) * 1.5) : 0;
+      sy += shake;
+      px(cx, sx, sy - shake, sw, sh, '#10243a');
+      px(cx, sx, sy + 19, sw, 2, '#d8a56b');
+      for (let i = 0; i < 3; i++) tinyPin(cx, sx + 30 + i * 3, sy + 19, t > 1.5 ? (i - 1) * 1.2 : 0, true);
+      let bx, by;
+      if (t < 0.7) { const u = t / 0.7; bx = sx + 7 + u * 11; by = sy + 16 - 14 * 4 * u * (1 - u) * 0.8; }
+      else { const u = Math.min(1, (t - 0.7) / 0.8); bx = sx + 18 + u * 12; by = sy + 17; }
+      pdisc(cx, bx, by, 2, '#ffd23a'); px(cx, bx + 1, by - 1, 1, 1, '#000'); px(cx, bx + 2, by, 1, 1, '#ff8a1a');
+      if (t > 0.7 && t < 1.2) { ptext(cx, 'THUD', sx + 19, sy + 7, FONT_S, '#ffd23a', 'center', '#000000'); px(cx, sx + 15, sy + 18, 1, 1, '#e8c890'); px(cx, sx + 21, sy + 18, 1, 1, '#e8c890'); }
+      if (t > 1.5 && t < 2.2) ptext(cx, 'SQUEAK', sx + 22, sy + 7, FONT_S, '#ffffff', 'center', '#000000');
+      regular(cx, sx + 4, sy + 21, 'levi', t < 0.3 ? 1 : t > 1.6 ? 2 : 0, t);
+      caption(cx, sx, sy - shake, sw, sh, 'LEVI', '#ffd23a', t);
+    },
+    // Kaleb: out wide to one side, then the hook brings it all the way back across.
+    kaleb(cx, sx, sy, sw, sh, t) {
+      px(cx, sx, sy, sw, sh, '#14281a');
+      miniLane(cx, sx, sy, sw, t, 1.45);
+      const u = Math.min(1, t / 1.45), bx = sx + 10 + u * 20, by = sy + 12 + 5.2 * Math.sin(u * Math.PI * 1.15) * (1 - u * 0.15);
+      if (t < 1.7) { pdisc(cx, bx, by, 1.5, '#7fae84'); for (let k = 1; k < 5; k++) { const uu = Math.max(0, u - k * 0.05); px(cx, sx + 10 + uu * 20, sy + 12 + 5.2 * Math.sin(uu * Math.PI * 1.15) * (1 - uu * 0.15), 1, 1, 'rgba(255,255,255,0.35)'); } }
+      regular(cx, sx + 4, sy + 24, 'kaleb', t < 0.25 ? 1 : t > 1.6 ? 2 : 0, t);
+      if (t > 0.3 && t < 1.2) ptext(cx, 'WIDE!', sx + sw / 2 + 2, sy + 5, FONT_S, '#ffffff', 'center', '#000000');
+      if (t > 1.5) ptext(cx, 'BACK!', sx + sw / 2 + 2, sy + 5, FONT_S, '#ffd447', 'center', '#000000');
+      caption(cx, sx, sy, sw, sh, 'KALEB', '#a8e0a8', t);
+    },
     strike(cx, sx, sy, sw, sh, t, v) {
       px(cx, sx, sy, sw, sh, v % 2 ? '#2a1446' : '#14324a');
       if (v % 2 === 0) {
@@ -451,29 +536,63 @@ var GK = globalThis.GK = globalThis.GK || {};
       cx.fillStyle = (tv && tv.t < 3.2) ? '#ff3a3a' : '#3a5a3a'; cx.fillRect(X + w - 4, Y + h - 2, 2, 1);
     }
 
-    // A few spectators in the front-left corner: they jump on strikes, clap spares, slump on gutters.
-    drawCrowd(cr, time) {
+    // The Regulars watch from the front-left corner: Kaleb, Quinn and Levi.
+    // They jump on strikes, clap spares and slump on gutters. On dark lanes Quinn's shades go on.
+    drawCrowd(cr, time, dark) {
       const cx = this.cx, mood = cr ? cr.mood : 'idle', t = cr ? cr.t : 0;
-      const people = [[9, '#c84a5a', '#e8c39a', '#3a2418'], [24, '#4a7ac8', '#c8956a', '#1a1a22'], [39, '#e0b028', '#f0d0a8', '#8a4a20']];
-      people.forEach(([x, shirt, skin, hair], i) => {
+      const people = [
+        { x: 9, who: 'kaleb', shirt: '#8fb48f', skin: '#f0cdb0', hair: '#6a4528', w: 6.2 },
+        { x: 24, who: 'quinn', shirt: '#7a1f35', skin: '#f2d2bc', hair: '#3a2618', w: 6.2 },
+        { x: 39, who: 'levi', shirt: '#3a8ad0', skin: '#f0d0b8', hair: '#2a1c14', w: 7.2 }
+      ];
+      people.forEach(({ x, who, shirt, skin, hair, w }, i) => {
         let dy = Math.sin(time * 2 + i) * 0.5, arms = 0, slump = false;
         if (mood === 'cheer') { dy = -Math.abs(Math.sin(t * 10 + i * 1.3)) * 5; arms = 2; }
         else if (mood === 'clap') { dy = -Math.abs(Math.sin(t * 9 + i)) * 1.5; arms = 1; }
         else if (mood === 'groan') { dy = 1.5; slump = true; }
         const by = H - 8 + dy, sh = slump ? GK.shade(shirt, -0.45) : shirt;
+        const hy = by - 4 + (slump ? 2 : 0);
+        // Quinn's long hair falls behind the shoulders
+        if (who === 'quinn') { pell(cx, x, hy + 3, 4.6, 6.5, '#0c0810', 'top'); pell(cx, x, hy + 3, 4.1, 6, hair, 'top'); }
         // shoulders and body
-        pell(cx, x, by + 6, 7.2, 7.5, '#0c0810', 'top');
-        pell(cx, x, by + 6, 6.2, 6.6, sh, 'top'); cx.fillRect(sp(x - 6.5), sp(by + 6), 13, 4);
+        pell(cx, x, by + 6, w + 1, 7.5, '#0c0810', 'top');
+        pell(cx, x, by + 6, w, 6.6, sh, 'top'); cx.fillRect(sp(x - w - 0.3), sp(by + 6), Math.round((w + 0.3) * 2), 4);
         pell(cx, x + 2, by + 6, 3.4, 5.2, GK.shade(sh, -0.28), 'top');
         pell(cx, x - 2.6, by + 4, 1.6, 2.6, GK.shade(sh, 0.2), 'top');
+        if (who === 'levi') {
+          // open rubber-duck shirt over a blue tee
+          cx.fillStyle = slump ? '#2a5a88' : '#5ab0f0'; cx.fillRect(sp(x - 1), sp(by + 1), 2, 9);
+          cx.fillStyle = '#ffd23a';
+          for (const [dx, dz] of [[-4.5, 3], [-3, 6], [3.5, 2.5], [4.5, 6], [-5.5, 8], [5.5, 8.5]]) cx.fillRect(sp(x + dx), sp(by + dz), 1, 1);
+        }
+        if (who === 'kaleb') { pline(cx, x - 5, by + 1, x + 3, by + 9, '#8a5a2a', 1); }
+        if (who === 'quinn') {
+          // gold chain, and the round shades hooked on the sweater (or worn when it's dark)
+          cx.fillStyle = '#e8c860'; cx.fillRect(sp(x), sp(by + 3), 1, 1);
+          if (!dark) { this.circle(x - 1.2, by + 5.2, 1, '#111014'); this.circle(x - 1.2, by + 7.6, 1, '#111014'); }
+        }
         if (arms === 2) { pline(cx, x - 5, by + 2, x - 8, by - 6, skin, 3); pline(cx, x + 5, by + 2, x + 8, by - 6, skin, 3); }
         if (arms === 1) { const k = Math.floor(t * 8 + i) % 2 ? 1.5 : 3.5; cx.fillStyle = skin; this.circle(x - k, by + 1, 1.3, skin); this.circle(x + k, by + 1, 1.3, skin); }
         // head
-        const hy = by - 4 + (slump ? 2 : 0);
         this.circle(x, hy, 3.6, '#0c0810');
         this.circle(x, hy, 3.1, skin);
-        pell(cx, x, hy - 0.6, 3.3, 2.4, hair, 'top');
-        cx.fillStyle = GK.shade(skin, -0.25); cx.fillRect(sp(x + 1.5), sp(hy - 0.5), 1, 2);
+        if (who === 'kaleb') {
+          // big curly hair
+          for (const [dx, dz, r] of [[-3, -1.2, 1.8], [3, -1.2, 1.8], [-2, -2.8, 1.9], [0.4, -3.4, 2], [2.6, -2.6, 1.8], [-3.4, 1, 1.4], [3.4, 1, 1.4]]) this.circle(x + dx, hy + dz, r, hair);
+          this.circle(x - 0.8, hy - 3, 0.7, GK.shade(hair, 0.3));
+          // the grin (wider when cheering)
+          cx.fillStyle = '#ffffff'; cx.fillRect(sp(x - (arms === 2 ? 2 : 1)), sp(hy + 1), arms === 2 ? 4 : 3, 1);
+        } else if (who === 'levi') {
+          pell(cx, x, hy - 0.8, 3.3, 2.2, hair, 'top');
+          this.circle(x, hy - 3.8, 1.4, hair); // top bun
+          cx.fillStyle = GK.shade(skin, -0.12); cx.fillRect(sp(x - 1.5), sp(hy + 1.5), 3, 1);
+        } else {
+          pell(cx, x, hy - 0.8, 3.4, 2.3, hair, 'top');
+          cx.fillStyle = hair; cx.fillRect(sp(x - 3.4), sp(hy - 1), 1, 5); cx.fillRect(sp(x + 2.6), sp(hy - 1), 1, 5);
+          cx.fillStyle = '#8a4a2a'; cx.fillRect(sp(x - 0.5), sp(hy + 1.8), 1, 1); // goatee
+          if (dark) { cx.fillStyle = '#111014'; cx.fillRect(sp(x - 2), sp(hy - 0.6), 2, 1); cx.fillRect(sp(x + 0.5), sp(hy - 0.6), 2, 1); }
+        }
+        if (who !== 'kaleb') { cx.fillStyle = GK.shade(skin, -0.25); cx.fillRect(sp(x + 1.5), sp(hy - 0.5), 1, 2); }
       });
       if (mood === 'cheer' && t < 1.8) ptext(cx, 'YEAH!', 24, H - 26 - Math.round(t * 6), '800 7px Rubik, system-ui, sans-serif', '#ffd27a', 'center', '#140e16');
       if (mood === 'groan' && t < 1.8) ptext(cx, 'ohh…', 24, H - 24, '800 7px Rubik, system-ui, sans-serif', '#c9b7d3', 'center', '#140e16');
@@ -523,9 +642,10 @@ var GK = globalThis.GK = globalThis.GK || {};
 
     drawBall(b, x, z, r, type, ed, time, alpha = 1) {
       const t = GK.BALLS[type] || GK.BALLS.house, cx = this.cx;
-      const c = P(x, z, r), R = r * S0 * c.s, s2 = P(x, z);
+      const lift = (b && b.lift) || 0;
+      const c = P(x, z, r + lift), R = r * S0 * c.s, s2 = P(x, z);
       cx.globalAlpha = alpha;
-      pell(cx, s2.x, s2.y, R, R * 0.32, 'rgba(15,8,10,0.35)');
+      pell(cx, s2.x, s2.y, R * (1 - lift / 40), R * 0.32 * (1 - lift / 40), 'rgba(15,8,10,0.35)');
       // reflection on the glossy lane
       cx.globalAlpha = alpha * 0.22; pell(cx, s2.x, s2.y + R * 0.35, R * 0.75, R * 0.3, t.col); cx.globalAlpha = alpha;
       if (ed === 'neon') this.circle(c.x, c.y, R + 2.2, 'rgba(182,255,92,0.35)');
@@ -574,6 +694,19 @@ var GK = globalThis.GK = globalThis.GK || {};
         case 'chain': px(-0.5, -0.1, '#d0d0e0', 2, 1); px(0.1, -0.1, '#d0d0e0', 2, 1); break;
         case 'moon': px(-0.3, 0.2, '#8a8a96', 2, 2); px(0.3, -0.2, '#8a8a96', 1, 1); px(0.2, 0.45, '#8a8a96', 1, 1); break;
         case 'twin': px(-0.05, -0.7, '#0e3a5a', 1, Math.round(R * 1.4)); break;
+        // The Regulars
+        case 'twohander': { // Quinn's round shades
+          const L = Math.max(1, Math.round(R * 0.32));
+          this.circle(c.x - R * 0.36, c.y - R * 0.1, L, '#111014'); this.circle(c.x + R * 0.36, c.y - R * 0.1, L, '#111014');
+          px(-0.36, -0.1 - 0.05, '#c8ccd4', Math.max(1, Math.round(R * 0.72)), 1);
+          px(-0.45, -0.25, '#6a6f7a'); px(0.27, -0.25, '#6a6f7a');
+          break;
+        }
+        case 'loftduck': // Levi's rubber duck: eye, beak, wing
+          px(0.15, -0.35, '#111014'); px(0.45, -0.15, '#ff8a1a', 2, 1); px(0.5, -0.05, '#e06a10', 2, 1); px(-0.45, 0.15, '#e8b420', 3, 2); break;
+        case 'wideswing': // Kaleb's big grin
+          px(-0.35, 0.05, '#ffffff', 1, 1); px(-0.25, 0.2, '#ffffff', Math.max(1, Math.round(R * 0.5)), 1); px(0.35, 0.05, '#ffffff', 1, 1);
+          px(-0.25, -0.35, '#2a3a2a'); px(0.2, -0.35, '#2a3a2a'); break;
       }
     }
 
@@ -721,7 +854,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       }
       cx.drawImage(this.vig, 0, 0, W, H);
       this.drawMonitor(sim, time);
-      this.drawCrowd(st.crowd, time);
+      this.drawCrowd(st.crowd, time, st.dark);
       this.drawReturn(st.ret, time);
       this.drawTV(st.tv, time);
       if (st.replay) ptext(cx, '● REPLAY', 6, 96, FONT_S, (Math.floor(time * 2) % 2) ? '#ff5a6e' : '#ffd27a', 'left', '#140e16');

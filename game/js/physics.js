@@ -108,7 +108,10 @@ var GK = globalThis.GK = globalThis.GK || {};
       this.bumpers = !!mods.bumpers;
       let spin = prm.spin * (mods.hook || 1);
       if (mods.wild) spin = GK.clamp(spin + (this.rng() * 2 - 1) * 0.9, -1.2, 1.2);
-      if (t === 'ice' || t === 'wrecking') spin = 0;
+      if (t === 'ice' || t === 'wrecking' || t === 'loftduck') spin = 0;
+      // Quinn's Two-Hander: low revs off the hand, but the aggressive coverstock adds its own hook
+      // toward the middle of the lane. The dial only matters about half as much.
+      if (t === 'twohander') { const dir = Math.abs(prm.aimX) > 1 ? -Math.sign(prm.aimX) : Math.sign(prm.spin || -1); spin = prm.spin * (mods.hook || 1) * 0.5 + dir * 0.55; }
       this.rebound = !!mods.rebound;
       this.lowgRoll = t === 'moon';
       const speed = t === 'wrecking' ? prm.speed * 0.75 : prm.speed;
@@ -143,7 +146,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       this.roll = {
         events: [], ball: t, carry: 0, late: 0, walls: 0, pit: 0, ballBounces: 0, explosions: 0, blasted: 0,
         swallowed: 0, firstPin: 0, firstT: -1, rubber: 0, gutterBall: false, contact: false, shattered: false, rebounded: false, direct: 0,
-        gutterPins: 0, xMin: Infinity, xMax: -Infinity, firstOff: null, painted: [], zaps: 0
+        gutterPins: 0, xMin: Infinity, xMax: -Infinity, firstOff: null, painted: [], zaps: 0, startX: prm.aimX, thuds: 0
       };
       for (const p of this.pins) { p.ballHit = false; p.wobbled = false; }
       this.rolling = true; this.throwT = 0; this.settleT = 0;
@@ -274,10 +277,21 @@ var GK = globalThis.GK = globalThis.GK || {};
         if (b.gutter) {
           const gx = Math.sign(b.x) * (lhw + this.gut / 2);
           b.x += (gx - b.x) * Math.min(1, dt * 12); b.vx = 0; b.z += b.vz * dt;
+        } else if (b.type === 'loftduck' && !b.landed && b.kind === 'main') {
+          // Levi's Loft Duck: in the air over the first third of the lane. No oil, no hook, no gutter.
+          b.x += b.vx * dt; b.z += b.vz * dt;
+          const u = GK.clamp((b.z - C.BALL_Z0) / (GK.LOFT_Z - C.BALL_Z0), 0, 1);
+          b.lift = 16 * 4 * u * (1 - u);
+          if (Math.abs(b.x) > lhw - b.r * 0.5) b.x = Math.sign(b.x) * (lhw - b.r * 0.5);
+          if (b.z >= GK.LOFT_Z) this.thud(b);
         } else {
           const oil = GK.oilEff(this.oil, this.wear, b.x, b.z, lhw);
           const hO = b.flare ? this.hookOil * 0.35 : this.hookOil, hD = b.flare ? this.hookDry * 1.45 : this.hookDry;
           let ax = b.spin * (hO + (hD - hO) * (1 - oil));
+          // The Two-Hander skids clean through oil and reads dry boards early and strong;
+          // Kaleb's Wide Swing hooks hard on the backend.
+          if (b.type === 'twohander') ax = b.spin * (hO * 0.4 + (hD * 1.35 - hO * 0.4) * (1 - oil));
+          if (b.type === 'wideswing' && b.z > 150) ax *= 1.3;
           if (b.type === 'bubble' && !b.touched) ax = oil > 0.3 ? 0 : ax * 2;
           if (b.type === 'pinball' && !b.touched) ax += (this.rng() - 0.5) * 900;
           if (this.warp) ax += this.warp * Math.sin(b.z / 38 + this.warpPh);
@@ -383,6 +397,7 @@ var GK = globalThis.GK = globalThis.GK || {};
             }
             this.afterHit(p, false, j, b);
             if (b.type === 'spiked') { b.vx *= 0.82; b.vz *= 0.82; }
+            if (b.type === 'loftduck') this.emit({ t: 'squeak', x: p.x, z: p.z });
             if (b.type === 'sticky' && b.sticks < 3 && !p.carried && b.kind === 'main') {
               if (p.standing) this.topple(p, { x: b.vx, z: b.vz }, 'ball');
               const dx = p.x - b.x, dz = p.z - b.z, d = Math.hypot(dx, dz) || 1, rr = b.r + 2.2;
@@ -492,6 +507,19 @@ var GK = globalThis.GK = globalThis.GK || {};
     }
 
     // Per-step behaviour of the special balls (and main-ball tracking for charms).
+    // The Loft Duck lands hard: the whole deck shakes, pins wobble and some fall late.
+    thud(b) {
+      b.landed = true; b.lift = 0; b.vz *= 0.93;
+      const R = this.roll; if (R) R.thuds++;
+      for (const p of this.pins) {
+        if (!p.standing || p.gone || p.cleared) continue;
+        const d = Math.hypot(p.x - b.x, p.z - b.z);
+        p.wob = Math.max(p.wob, GK.clamp(0.9 - d / 400, 0.35, 0.9)); p.wobbled = true; p.wobDir = { x: this.rng() - 0.5, z: 1 };
+        if (!p.fallAt && p.hp <= 1 && this.rng() < 0.08) p.fallAt = this.time + 0.9 + this.rng() * 0.8;
+      }
+      this.emit({ t: 'thud', x: b.x, z: b.z });
+    }
+
     special(b, dt, lhw) {
       const R = this.roll;
       if (R && b.kind === 'main') { R.xMin = Math.min(R.xMin, b.x); R.xMax = Math.max(R.xMax, b.x); }
@@ -560,6 +588,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         wobbles: this.pins.filter(p => p.standing && !p.gone && p.wobbled).length,
         leadDown: newly.filter(p => p.type === 'lead').length,
         painted: R ? R.painted.slice() : [], zaps: R ? R.zaps : 0,
+        startX: R ? R.startX : 0, lhw: this.lhw, thuds: R ? R.thuds : 0,
         standing: this.standing().map(p => p.n)
       };
     }
@@ -607,6 +636,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     return out;
   }
 
+  GK.LOFT_Z = 95; // where the Loft Duck comes down
   // Pendulum Ball: a steady side-to-side swing whose phase is set by the moment you let go.
   GK.pendulumPath = function (aimX, aim, phase, lhw) {
     const out = [], lim = (lhw || C.LHW) - 2;

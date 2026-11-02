@@ -62,7 +62,7 @@ const must = (c, m) => { if (!c) throw new Error(m); };
   }
 
   // a throw with each new ball
-  const balls = ['pinball', 'disco', 'boomerang', 'sticky', 'rubber', 'paint', 'pendulum', 'twin', 'lightning', 'snowball', 'wrecking', 'duster', 'bubble', 'jelly', 'chain', 'spiked', 'neonball', 'moon'];
+  const balls = ['twohander', 'loftduck', 'wideswing', 'pinball', 'disco', 'boomerang', 'sticky', 'rubber', 'paint', 'pendulum', 'twin', 'lightning', 'snowball', 'wrecking', 'duster', 'bubble', 'jelly', 'chain', 'spiked', 'neonball', 'moon'];
   for (let i = 0; i < balls.length; i++) {
     const p = await waitPhase(['aim', 'shop', 'menu']);
     if (p !== 'aim') {
@@ -74,9 +74,24 @@ const must = (c, m) => { if (!c) throw new Error(m); };
     await page.evaluate(t => { const r = GK.debug.run; r.bag[0] = { type: t, ed: null }; GK.debug.select(0); }, balls[i]);
     await page.evaluate(() => GK.debug.throw({ aimX: 3, aim: -0.01, speed: 380, spin: 0.3, phase: 1.2 }));
     await page.waitForTimeout(650);
-    if (['disco', 'lightning', 'chain', 'twin', 'pendulum', 'sticky'].includes(balls[i])) await snap('c4-' + balls[i]);
+    if (['twohander', 'loftduck', 'wideswing', 'disco', 'lightning', 'chain', 'twin', 'pendulum', 'sticky'].includes(balls[i])) await snap('c4-' + balls[i]);
   }
   await waitPhase(['aim', 'shop', 'menu']);
+
+  // layout: the lane never changes size when picking balls (tagged balls used to push it smaller)
+  if (await phase() !== 'aim') { await page.evaluate(() => { GK.debug.run.money = 40; GK.debug.jump(0, 0); }); await page.waitForSelector('#layer [data-a=go]'); await page.click('#layer [data-a=go]'); await waitPhase(['aim']); }
+  await page.evaluate(() => { const r = GK.debug.run; r.bag = [{ type: 'house', ed: null }, { type: 'twohander', ed: 'holo', drill: 'strong' }, { type: 'wideswing', ed: 'neon', drill: 'illegal' }]; GK.debug.select(0); });
+  const sizes = new Set();
+  for (const i of [0, 1, 2, 0, 2, 1]) { await page.evaluate(i => GK.debug.pickBall(i), i); await page.waitForTimeout(120); sizes.add(await page.$eval('#lanebox', e => Math.round(e.getBoundingClientRect().height))); }
+  must(sizes.size === 1, 'lane changed size when picking balls: ' + [...sizes]);
+
+  // the Wall of Fame after beating the Gutter King
+  await page.evaluate(() => GK.debug.wall());
+  await page.waitForSelector('#layer .wall');
+  must(await page.$$eval('#layer canvas[data-who]', cs => cs.map(c => c.dataset.who).join(',')) === 'kaleb,quinn,levi,you', 'wall of fame portraits out of order');
+  await snap('c5-wall-of-fame');
+  await page.click('#layer [data-a=next]');
+  await page.waitForSelector('#layer [data-a=endless]');
   console.log('OK: 15-pin rack, equipment overlays, Black Market pickers and every new ball work');
   await close();
   if (errors.length) { console.error('PAGE ERRORS:\n' + [...new Set(errors)].join('\n')); process.exit(1); }

@@ -61,6 +61,8 @@ GK.sfx = (() => {
     bounce() { tone(300, 0, 0.1, 'triangle', 0.12, 520); },
     ghost() { tone(700, 0, 0.25, 'sine', 0.05, 350); },
     swallow() { tone(400, 0, 0.3, 'sine', 0.1, 60); },
+    squeak() { tone(1400, 0, 0.09, 'square', 0.04, 2100); tone(1900, 0.07, 0.08, 'square', 0.03, 1300); },
+    thud() { tone(70, 0, 0.35, 'sine', 0.4, 35); noise(0, 0.18, 300, 1, 0.5, 'lowpass'); },
     buy() { [660, 880].forEach((f, i) => tone(f, i * 0.06, 0.08, 'square', 0.05)); },
     nope() { tone(160, 0, 0.12, 'square', 0.05); tone(120, 0.1, 0.15, 'square', 0.05); },
     win() { [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) => tone(f, i * 0.09, 0.18, 'square', 0.05)); },

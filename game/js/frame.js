@@ -105,6 +105,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     // Lucky Coin: the first throw of every round counts as PERFECT.
     if (fl.luckyCoin && !rs.coinUsed) { rs.coinUsed = true; if (prm.perfect === false) cur.coin = true; prm = Object.assign({}, prm, { perfect: true }); }
     cur.perfect = prm.perfect;
+    cur.power = prm.power;
     // Lucky Wristband: once per round, a wild hook is pulled back to half.
     if (eq.tame && !rs.tamed && Math.abs(prm.spin) > 0.7) { rs.tamed = true; cur.tamed = true; prm = Object.assign({}, prm, { spin: prm.spin * 0.5 }); }
     cur.maxHook = Math.max(cur.maxHook || 0, Math.abs(prm.spin || 0));
@@ -129,7 +130,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     }
     const rec = sim.summarize();
     cur.pending = null;
-    rec.ball = cur.ball.type; rec.edition = cur.ball.ed; rec.perfect = cur.perfect;
+    rec.ball = cur.ball.type; rec.edition = cur.ball.ed; rec.perfect = cur.perfect; rec.power = cur.power;
     run.stats.pins += rec.pins;
     // Groove: consecutive PERFECT throws this round.
     if (cur.perfect === true) {

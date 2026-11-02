@@ -143,6 +143,9 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (bt === 'bouncer' && r.ballBounces) bs.chips(6 * r.ballBounces, bname + ': ' + r.ballBounces + ' bounce');
       if (bt === 'golden' && r.pins) bs.money(r.pins, bname);
       if (bt === 'glass') bs.xmult(2, bname);
+      if (bt === 'twohander' && GK.isStrikeKind(f.kind) && f.rolls.length === 1 && r.pocket && Math.abs(r.startX || 0) >= (r.lhw || GK.C.LHW) - 5.3) bs.xmult(2, bname + ': outside line into the pocket');
+      if (bt === 'loftduck' && r.late) bs.chips(15 * r.late, bname + ': ' + r.late + ' late pin' + (r.late > 1 ? 's' : ''));
+      if (bt === 'wideswing' && r.boards) { bs.chips(5 * r.boards, bname + ': ' + r.boards + ' boards'); if (r.boards >= 25) bs.xmult(1.5, bname + ': the whole lane'); }
       if (bt === 'neonball' && r.pins) bs.mult(r.pins, bname + ': ' + r.pins + ' glowing pin' + (r.pins > 1 ? 's' : ''));
       if (bt === 'tiny' && r.direct) bs.mult(r.direct, bname + ': ' + r.direct + ' direct hit' + (r.direct > 1 ? 's' : ''));
       if (bt === 'lucky7' && r.pins === 7) { retrigger = true; push({ src: 'ball', idx: ri, op: 'note', v: 0, label: 'Lucky Seven! Charms trigger twice' }); }
