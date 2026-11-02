@@ -99,12 +99,25 @@ var GK = globalThis.GK = globalThis.GK || {};
         const n = Math.min(left.length, 1 + (rr() < 0.4 ? 1 : 0));
         const drop = rr.shuffle(left.slice()).slice(0, n);
         drop.forEach(p => { sim.topple(p, { x: rr() - 0.5, z: 1 }, 'drop'); p.fallT = 0.3; p.counted = true; });
-        rec.down.push(...drop.map(p => ({ n: p.n, type: p.type, by: 'drop' })));
-        rec.pins += drop.length; rec.dropped = drop.length; run.stats.pins += drop.length;
-        notes.push({ t: 'respot', text: 'The pinsetter fumbled and dropped ' + (n > 1 ? n + ' pins' : 'a pin') + '!', pins: drop.map(p => p.n) });
+        const downs = drop.map(p => ({ n: p.n, type: p.type, by: 'drop' }));
+        run.stats.pins += drop.length;
+        if (drop.length === left.length) {
+          // It dropped everything that was left: no strike, it's a free spare. The dropped pins
+          // go on a second "roll" by the pinsetter so the scorecard reads 9 /.
+          cur.freeSpare = { ball: 'pinsetter', edition: null, down: downs, pins: drop.length, carry: 0, late: 0, walls: 0, pit: 0, ballBounces: 0, explosions: 0, blasted: 0, swallowed: 0, firstPin: 0, fast: 0, rubber: 0, gutterBall: false, dropped: drop.length, standing: [] };
+          notes.push({ t: 'respot', text: 'The pinsetter dropped the last ' + (n > 1 ? n + ' pins' : 'pin') + '. Free spare!', pins: drop.map(p => p.n) });
+        } else {
+          rec.down.push(...downs);
+          rec.pins += drop.length; rec.dropped = drop.length;
+          notes.push({ t: 'respot', text: 'The pinsetter fumbled and dropped ' + (n > 1 ? n + ' pins' : 'a pin') + '!', pins: drop.map(p => p.n) });
+        }
       }
     }
     cur.rolls.push(rec);
+    if (cur.freeSpare) {
+      cur.rolls.push(cur.freeSpare); cur.freeSpare = null;
+      return { next: 'score', kind: 'spare', notes, rec };
+    }
     const standing = sim.standing();
     if (standing.length === 0) {
       const kind = GK.classify(cur.rolls, true, cur.splitLeave, rs.streak);

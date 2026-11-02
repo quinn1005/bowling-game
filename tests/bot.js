@@ -5,8 +5,9 @@
 const GK = require('./load');
 
 const SKILL = {
-  good: { aim: 1.6, ang: 0.006, power: 0.045, hook: 0.25 },
-  great: { aim: 0.9, ang: 0.004, power: 0.028, hook: 0.15 }
+  // Timing error on the start and angle sliders: ~40ms (good) or ~25ms (great) at their sweep speeds.
+  good: { aim: 1.3, ang: 0.009, power: 0.045, hook: 0.25 },
+  great: { aim: 0.8, ang: 0.006, power: 0.028, hook: 0.15 }
 };
 const gauss = rng => { let u = 0; for (let i = 0; i < 6; i++) u += rng(); return (u - 3) / Math.sqrt(0.5); };
 

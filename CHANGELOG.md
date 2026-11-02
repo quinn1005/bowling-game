@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.5.1
+
+### Changed
+- **Every step of a throw is now timed.** The ball slides back and forth across the approach: tap to stop it on your starting spot. Then the aim arrow swings side to side: tap to lock your angle. Then the power bar and hook dial as before. Tap anywhere on the lane or press Set; on a keyboard, Space taps and Esc goes back.
+- Anchor Shoes now slow the angle slider, and Slide Shoes widen how far it swings.
+- **Pinsetter fumbles never give you a strike.** If the pinsetter drops the last pin (or pins) you left standing, it's a free Spare instead. The scorecard shows the pinsetter's pins as a second roll.
+
 ## v0.5.0
 
 ### New

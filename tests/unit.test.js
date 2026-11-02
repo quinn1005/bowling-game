@@ -304,3 +304,23 @@ test('pinsetter fumble: drops leftover pins after the first roll and counts them
     assert.ok(out.rec.dropped >= 1 && out.rec.down.filter(d => d.by === 'drop').length === out.rec.dropped);
   } finally { GK.MISHAPS.respot = prev; }
 });
+
+test('pinsetter fumble that drops the last standing pin is a free spare, not a strike', () => {
+  const run = GK.newRun({ seed: 8 });
+  run.rack = GK.padRack(['none', 'none', 'none', 'none', 'none', 'none', 'none', 'none', 'none', 'std']);
+  GK.startRound(run);
+  const prev = GK.MISHAPS.respot; GK.MISHAPS.respot = 1;
+  try {
+    const sim = GK.beginFrame(run);
+    GK.launch(run, sim, 0, { aimX: -14, aim: -0.02, spin: 0, speed: 300 });
+    sim.simulate();
+    const out = GK.afterRoll(run, sim);
+    assert.strictEqual(out.next, 'score');
+    assert.strictEqual(out.kind, 'spare');
+    assert.strictEqual(run.rs.cur.rolls.length, 2);
+    assert.strictEqual(run.rs.cur.rolls[0].pins, 0);
+    assert.strictEqual(run.rs.cur.rolls[1].ball, 'pinsetter');
+    const res = GK.scoreCurrent(run, out.kind);
+    assert.ok(res.score > 0);
+  } finally { GK.MISHAPS.respot = prev; }
+});

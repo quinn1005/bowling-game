@@ -15,11 +15,11 @@ What the game has:
 - Every alley has its lane gimmick and boss from the design doc (Secretary call-your-shot, Mechanic, Cosmic darkness + DJ Strobe, narrow lane + Bookie, ice + Old Man Winter, moving posts + Ringmaster tilt, low gravity + Astronaut scramble, magnetic gutters + Gutter King charm theft, Championship head-to-head).
 - All 16 balls from the design doc, ball/charm editions (Foil, Holo, Neon), 36 charms, 8 pin types, 7 Scorecards, 12 Lane Tricks, 5 Black Market items, 6 equipment pieces, 8 Alley Memberships.
 - Pro Shop between rounds: 2 charms, 1 ball, 2 goods, a per-alley membership, rerolls, selling, charm reordering.
-- Controls: drag to set the start spot, drag to set the angle, time a fast power bar (narrow green PERFECT zone; overpowered throws wobble), then stop a sweeping hook dial. PERFECT throws in a row build Groove (+1 Mult per stack).
+- Controls: four timed sliders, each stopped with a tap: start spot (period 1.0 s), angle (0.8 s), a fast power bar (narrow green PERFECT zone; overpowered throws wobble), then stop a sweeping hook dial. PERFECT throws in a row build Groove (+1 Mult per stack).
 - Oil patterns per alley (`GK.OIL` / `GK.oilAt` in `core.js`) drive the hook in physics and are drawn on the lane as a blue sheen.
 - Leagues, Ascension levels and feat unlocks (`meta.js`). Locked balls/charms never appear in the shop. Racks have 13 spots; 11-13 are optional back-row pins.
 - Reactive oil: `rs.wear` (`GK.newWear`, `GK.oilEff` in `core.js`) is a boards × 6in grid kept per round; `Sim.wearLine` strips oil under the ball and adds carrydown past the pattern. The renderer redraws its oil layer after each roll (`setWear`).
-- Mishaps (`GK.MISHAPS` in `frame.js`): 5% pinsetter fumble after roll 1 (drops 1-2 standing pins, counted as down), 6% ball jams in the return (`rs.stuck`) until a different ball is thrown.
+- Mishaps (`GK.MISHAPS` in `frame.js`): 5% pinsetter fumble after roll 1 (drops 1-2 standing pins, counted as down; if that clears the rack it's a free Spare scored as a second 'pinsetter' roll, never a Strike), 6% ball jams in the return (`rs.stuck`) until a different ball is thrown.
 - Ball return (right of the approach) replaces the bag buttons: tap a ball to select it (`Renderer.drawReturn` / `returnHit`). Lane TV with pixel cartoons for strikes, doubles, turkeys, spares, splits and the 7-10 (`TV_SCENES` in `render.js`).
 - Slow-motion replays of strikes and 7-10 conversions, end-of-run story with best-frame replay, crowd reactions, daily result sharing.
 - Points × Mult scoring (the design doc's "Chips" are called Points in game) animated step by step; charms fire left to right.

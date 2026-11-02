@@ -171,8 +171,8 @@ var GK = globalThis.GK = globalThis.GK || {};
   GK.EQUIP = {
     steady_glove: { slot: 'gloves', name: 'Steady Glove', cost: 6, desc: 'The power bar moves 35% slower.', bar: 1.35 },
     power_glove: { slot: 'gloves', name: 'Power Glove', cost: 6, desc: 'Throws are 12% faster.', speed: 1.12 },
-    anchor_shoes: { slot: 'shoes', name: 'Anchor Shoes', cost: 6, desc: 'Finer aim: dragging changes the angle 40% less.', aim: 0.6 },
-    slide_shoes: { slot: 'shoes', name: 'Slide Shoes', cost: 6, desc: 'A longer slide: your angle reaches 40% wider.', aim: 1.4 },
+    anchor_shoes: { slot: 'shoes', name: 'Anchor Shoes', cost: 6, desc: 'The angle slider swings 40% slower.', aim: 0.6 },
+    slide_shoes: { slot: 'shoes', name: 'Slide Shoes', cost: 6, desc: 'A longer slide: the angle slider reaches 40% wider angles.', aim: 1.4 },
     wrist_brace: { slot: 'wrist', name: 'Wrist Brace', cost: 6, desc: 'The PERFECT zone on the power bar is 60% wider.', zone: 1.6 },
     snap_wrist: { slot: 'wrist', name: 'Snap Wrist', cost: 6, desc: 'Throws past the PERFECT zone stay on line instead of wobbling.', noWobble: true },
     hook_glove: { slot: 'gloves', name: 'Hook Glove', cost: 6, desc: 'The hook dial swings 35% slower.', dial: 1.35 }

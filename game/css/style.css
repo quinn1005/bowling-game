@@ -119,6 +119,10 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 .pbar i { position: absolute; top: 0; bottom: 0; background: var(--good); box-shadow: 0 0 6px var(--good); }
 .pbar b { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; background: var(--fg); border: 1px solid var(--ink); }
 
+.sbar { position: relative; height: 22px; background: repeating-linear-gradient(90deg, #4a3046 0 9%, #3b2a39 9% 18%); border: 2px solid var(--ink); }
+.sbar i { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--fg); opacity: 0.5; }
+.sbar span { position: absolute; left: 0; right: 0; top: 3px; text-align: center; font-family: var(--label); font-size: 8px; text-transform: uppercase; color: var(--fg); opacity: 0.8; }
+.sbar b { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; background: var(--marquee); border: 1px solid var(--ink); }
 .hbar { position: relative; height: 22px; background: linear-gradient(90deg, #ff5a6e, #3b2a39 35%, #3b2a39 65%, #39c6d6); border: 2px solid var(--ink); }
 .hbar i { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--fg); opacity: 0.6; }
 .hbar span { position: absolute; top: 3px; font-family: var(--label); font-size: 8px; text-transform: uppercase; color: var(--fg); opacity: 0.8; }

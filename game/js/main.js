@@ -4,7 +4,7 @@
   const GK = window.GK, UI = GK.UI, $ = UI.$, C = GK.C, fmt = GK.fmt, sfx = GK.sfx;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-  let run = null, sim = null, phase = 'menu', sel = 0, aimX = 0, gesture = null;
+  let run = null, sim = null, phase = 'menu', sel = 0, aimX = 0;
   let glow = null, fast = false, hitStop = 0, busyToken = 0;
   let meta = GK.meta();
   GK._meta = meta;
@@ -15,7 +15,7 @@
 
   const cv = $('lane');
   const R = new GK.Renderer(cv);
-  GK.debug = { get run() { return run; }, get sim() { return sim; }, get phase() { return phase; } };
+  GK.debug = { get run() { return run; }, get sim() { return sim; }, get phase() { return phase; }, get aimX() { return aimX; } };
 
   // ---------- sizing ----------
   function fit() {
@@ -106,7 +106,7 @@
     sim.onEvent = onSimEvent;
     R.setWear(run.rs.wear);
     pickGlow();
-    step = 'pos';
+    step = 'pos'; posT0 = performance.now();
     resetTally();
     const rs = run.rs;
     UI.shot('Frame ' + (rs.frameIdx + 1) + ' · line up your shot');
@@ -144,7 +144,7 @@
     const b = run.bag[sel];
     if (b.type === 'snake' && !prm.path) prm.path = GK.snakePath(prm.aimX, prm.aim, laneOf().lhw || C.LHW);
     GK.launch(run, sim, sel, prm);
-    hitStop = 0; step = 'pos'; recFrames = [];
+    hitStop = 0; step = 'pos'; posT0 = performance.now(); recFrames = [];
     UI.shot(GK.BALLS[b.type].full + ' away');
     setPhase('rolling');
   }
@@ -467,20 +467,16 @@
     });
   });
 
-  // ---------- input: 1) slide to set the start, 2) set the angle, 3) time the power bar ----------
-  // Drag on the lane adjusts the current step; a tap (or the Set button / Space) locks it in.
-  // On the power step the bar sweeps up and down and the tap that stops it throws the ball.
-  // Four steps: start spot → angle → power bar → hook dial. The last tap throws.
-  // Tuned to be demanding: the power bar sweeps fast and the PERFECT zone is narrow.
-  let step = 'pos', aimAng = 0, powerT0 = 0, dialT0 = 0, lockedPower = null;
-  const PZONE = [0.83, 0.89], POWER_PERIOD = 0.8, DIAL_PERIOD = 0.7;
+  // ---------- input ----------
+  // Four timed steps, each a tap to stop a sweeping slider: start spot → angle → power → hook.
+  // The last tap throws. Tuned to be demanding: the sliders are quick and the PERFECT zone narrow.
+  let step = 'pos', aimAng = 0, posT0 = performance.now(), angT0 = 0, powerT0 = 0, dialT0 = 0, lockedPower = null;
+  const PZONE = [0.83, 0.89], POS_PERIOD = 1.0, ANG_PERIOD = 0.8, POWER_PERIOD = 0.8, DIAL_PERIOD = 0.7;
   function pickBall(i) {
     if (!run || !run.bag[i]) return;
     if (GK.isStuck(run, i)) { sfx.nope(); UI.toast(GK.BALLS[run.bag[i].type].full + ' is stuck in the ball return. Throw another ball first.'); return; }
     sel = i; sfx.tick(760); refresh();
   }
-  function rectInfo() { const r = cv.getBoundingClientRect(); return { r, k: r.width / C.W }; }
-  function pt(e) { const { r } = rectInfo(); return { x: e.clientX - r.left, y: e.clientY - r.top, t: performance.now() }; }
   const aimLim = () => C.LHW - C.BALL_R - 0.5 - (C.LHW - (laneOf().lhw || C.LHW));
   const angLim = () => 0.085 * Math.max(1, GK.equipMods(run).aim);
   function zone() {
@@ -489,16 +485,25 @@
   }
   const tri = u => { u %= 2; return u < 1 ? u : 2 - u; };
   function powerNow() { return tri((performance.now() - powerT0) / 1000 / (POWER_PERIOD * GK.equipMods(run).bar)); }
+  // Start slider: the ball glides across the approach; angle slider: the arrow swings side to side.
+  // Both start from the centre. Anchor Shoes slow the angle swing; Slide Shoes widen its range.
+  function posNow() { return (tri((performance.now() - posT0) / 1000 / POS_PERIOD + 0.5) * 2 - 1) * aimLim(); }
+  function angNow() {
+    const a = GK.equipMods(run).aim, per = ANG_PERIOD * Math.max(1, a) / Math.min(1, a);
+    return (tri((performance.now() - angT0) / 1000 / per + 0.5) * 2 - 1) * angLim();
+  }
   // Hook dial: -1 (hard left) .. +1 (hard right), starting from the centre.
   function dialNow() { return tri((performance.now() - dialT0) / 1000 / (DIAL_PERIOD * GK.equipMods(run).dial) + 0.5) * 2 - 1; }
   const STEP_TEXT = {
-    pos: ['1 · Drag to set your start', 'Set start'],
-    angle: ['2 · Drag to set the angle', 'Set angle'],
+    pos: ['1 · Tap to stop the start slider', 'Set start'],
+    angle: ['2 · Tap to stop the angle', 'Set angle'],
     power: ['3 · Tap to stop the power bar', 'Set power'],
     hook: ['4 · Tap to set your hook', 'Throw!']
   };
   function setStep(s2) {
     step = s2;
+    if (s2 === 'pos') posT0 = performance.now();
+    if (s2 === 'angle') angT0 = performance.now();
     if (s2 === 'power') powerT0 = performance.now();
     if (s2 === 'hook') dialT0 = performance.now();
     syncCtrl();
@@ -511,7 +516,9 @@
     $('setBtn').disabled = !on; $('backBtn').disabled = !on || step === 'pos';
     $('pbar').hidden = !(on && step === 'power');
     $('hbar').hidden = !(on && step === 'hook');
-    $('stepLbl').hidden = on && (step === 'power' || step === 'hook');
+    $('sbar').hidden = !(on && (step === 'pos' || step === 'angle'));
+    $('sbarLbl').textContent = step === 'angle' ? 'angle' : 'start';
+    $('stepLbl').hidden = on;
     const z = zone();
     $('pzone').style.left = z[0] * 100 + '%'; $('pzone').style.width = (z[1] - z[0]) * 100 + '%';
     const g = run && run.rs ? run.rs.groove || 0 : 0;
@@ -552,36 +559,20 @@
     throwBall({ aimX, aim, spin: GK.clamp(spin, -1.2, 1.2), speed, power: lp.p, perfect: lp.perfect });
   }
 
+  // Every step is a tap: anywhere on the lane stops the current slider, except a tap on a ball
+  // sitting in the ball return (before the power step), which picks that ball instead.
   cv.addEventListener('pointerdown', e => {
     sfx.init();
     if (phase === 'replay') { e.preventDefault(); endReplay(); return; }
     if (phase !== 'aim') return;
-    if (step === 'power' || step === 'hook') { e.preventDefault(); confirmStep(); return; }
-    {
+    e.preventDefault();
+    if (step === 'pos' || step === 'angle') {
       const rr = cv.getBoundingClientRect(), bx = (e.clientX - rr.left) / rr.width * C.W, by = (e.clientY - rr.top) / rr.height * C.H;
       const hit = R.returnHit(bx, by);
-      if (hit >= 0) { e.preventDefault(); pickBall(hit); return; }
+      if (hit >= 0) { pickBall(hit); return; }
     }
-    cv.setPointerCapture(e.pointerId);
-    const p = pt(e);
-    gesture = { moved: false, x0: p.x, y0: p.y, aim0: aimX, ang0: aimAng };
+    confirmStep();
   });
-  cv.addEventListener('pointermove', e => {
-    if (!gesture || phase !== 'aim') return;
-    const p = pt(e), dx = p.x - gesture.x0;
-    if (!gesture.moved && Math.abs(dx) < 4) return;
-    gesture.moved = true;
-    const { k, r } = rectInfo();
-    if (step === 'pos') {
-      const L = aimLim();
-      aimX = GK.clamp(gesture.aim0 + dx / (k * C.S0 * GK.sc(C.BALL_Z0)), -L, L);
-    } else if (step === 'angle') {
-      const lim = angLim();
-      aimAng = GK.clamp(gesture.ang0 + dx / r.width * 0.25 * GK.equipMods(run).aim, -lim, lim);
-    }
-  });
-  cv.addEventListener('pointerup', () => { if (gesture && !gesture.moved) confirmStep(); gesture = null; });
-  cv.addEventListener('pointercancel', () => { gesture = null; });
   $('setBtn').addEventListener('pointerdown', e => { e.preventDefault(); confirmStep(); });
   $('backBtn').addEventListener('click', backStep);
   window.addEventListener('keydown', e => {
@@ -590,14 +581,7 @@
     if (!run) return;
     if (phase === 'call' && ['1', '2', '3'].includes(e.key)) { document.querySelectorAll('#callbar [data-call]')[+e.key - 1].click(); return; }
     if (phase !== 'aim') return;
-    const L = aimLim(), lim = angLim();
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      const d = e.key === 'ArrowLeft' ? -1 : 1;
-      if (step === 'pos') aimX = GK.clamp(aimX + d * 0.6, -L, L);
-      else if (step === 'angle') aimAng = GK.clamp(aimAng + d * 0.004, -lim, lim);
-      e.preventDefault();
-    }
-    else if (/^[1-9]$/.test(e.key) && +e.key <= run.bag.length) pickBall(+e.key - 1);
+    if (/^[1-9]$/.test(e.key) && +e.key <= run.bag.length) pickBall(+e.key - 1);
     else if (e.key === 'r' || e.key === 'R') $('rerackBtn').click();
     else if (e.key === 'Escape' || e.key === 'Backspace') backStep();
     else if (e.key === ' ' || e.key === 'Enter') {
@@ -641,6 +625,8 @@
       }
       if (phase !== 'rolling') { sim.updatePosts(); for (const f of sim.fx) f.t += realDt; sim.fx = sim.fx.filter(f => f.t < 0.6); }
     }
+    if (phase === 'aim' && step === 'pos') { aimX = posNow(); $('sneedle').style.left = ((aimX / aimLim() + 1) * 50) + '%'; }
+    if (phase === 'aim' && step === 'angle') { aimAng = angNow(); $('sneedle').style.left = ((aimAng / angLim() + 1) * 50) + '%'; }
     if (phase === 'aim' && step === 'power') $('pneedle').style.left = (powerNow() * 100) + '%';
     if (phase === 'aim' && step === 'hook') $('hneedle').style.left = ((dialNow() + 1) * 50) + '%';
     crowd.t += realDt; if (crowd.mood !== 'idle' && crowd.t > 2.4) crowd = { mood: 'idle', t: 0 };

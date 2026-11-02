@@ -106,7 +106,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (r.late) parts.push(r.late + ' late');
       if (r.walls) parts.push(r.walls + ' wall');
       if (r.swallowed) parts.push(r.swallowed + ' swallowed');
-      if (rc) s.chips(rc, 'Roll ' + (ri + 1) + ': ' + parts.join(', ') + (bt === 'lead' || r.rebounded ? ' (×0.5)' : bt === 'giant' ? ' (×0.6)' : ''));
+      if (rc) s.chips(rc, (bt === 'pinsetter' ? 'Pinsetter' : 'Roll ' + (ri + 1)) + ': ' + parts.join(', ') + (bt === 'lead' || r.rebounded ? ' (×0.5)' : bt === 'giant' ? ' (×0.6)' : ''));
       // pin types
       const ps = mk('pin', ri);
       for (const d of r.down) {

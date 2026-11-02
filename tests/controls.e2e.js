@@ -1,5 +1,5 @@
-// Plays throws with real pointer input: drag to set the start, tap; drag the angle, tap;
-// tap to stop the power bar. Usage: node tests/controls.e2e.js [shotsDir]
+// Plays throws with real pointer input: four timed taps (start slider, angle slider, power bar,
+// hook dial), checking each step's slider shows and that the ball actually moves between taps. Usage: node tests/controls.e2e.js [shotsDir]
 const { open } = require('./serve');
 const path = require('path');
 const shots = process.argv[2];
@@ -17,12 +17,17 @@ const shots = process.argv[2];
   const results = [];
   for (let t = 0; t < 3; t++) {
     await page.waitForFunction(() => GK.debug.phase === 'aim', null, { timeout: 30000 });
-    if (!/Drag to set your start/.test(await label())) throw new Error('expected start step, got ' + await label());
-    await drag(t === 0 ? 30 : -10);
+    if (!/start slider/.test(await label())) throw new Error('expected start step, got ' + await label());
+    if (await page.$eval('#sbar', e => e.hidden)) throw new Error('start slider not shown');
+    const x1 = await page.evaluate(() => GK.debug.aimX); await page.waitForTimeout(120); const x2 = await page.evaluate(() => GK.debug.aimX);
+    if (x1 === x2) throw new Error('start slider is not moving');
+    await page.waitForTimeout(150 + t * 170);
     if (t === 0) await snap('c1-start');
     await tap();
+    const lockedX = await page.evaluate(() => GK.debug.aimX); await page.waitForTimeout(150);
+    if (lockedX !== await page.evaluate(() => GK.debug.aimX)) throw new Error('start did not lock');
     if (!/angle/.test(await label())) throw new Error('expected angle step');
-    await drag(-25);
+    await page.waitForTimeout(200 + t * 90);
     if (t === 0) await snap('c2-angle');
     await tap();
     const barShown = await page.$eval('#pbar', e => !e.hidden);
@@ -44,15 +49,15 @@ const shots = process.argv[2];
   }
   // keyboard path + back button
   await page.waitForFunction(() => GK.debug.phase === 'aim', null, { timeout: 30000 });
-  await page.keyboard.press('ArrowRight'); await page.keyboard.press('Space');
+  await page.keyboard.press('Space');
   await page.click('#backBtn');
   if (!/start/.test(await label())) throw new Error('back did not return to start step');
-  await page.keyboard.press('Space'); await page.keyboard.press('ArrowLeft'); await page.keyboard.press('Space');
+  await page.keyboard.press('Space'); await page.waitForTimeout(150); await page.keyboard.press('Space');
   await page.waitForTimeout(300); await page.keyboard.press('Space');
   await page.waitForTimeout(200); await page.keyboard.press('Space');
   if (await page.evaluate(() => GK.debug.phase) !== 'rolling') throw new Error('keyboard throw failed');
   console.log('throws', JSON.stringify(results));
   await close();
   if (errors.length) { console.error('PAGE ERRORS:\n' + errors.join('\n')); process.exit(1); }
-  console.log('OK: start/angle/power controls work with pointer and keyboard');
+  console.log('OK: start/angle/power/hook sliders work with pointer and keyboard');
 })().catch(e => { console.error(e); process.exit(1); });

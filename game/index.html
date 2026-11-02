@@ -51,7 +51,7 @@
 
   <div class="stage" id="stage">
     <div class="lanebox" id="lanebox">
-      <canvas id="lane" aria-label="Bowling lane. Drag to set the start point, tap to lock it. Drag to set the angle, tap to lock it. Tap to stop the moving power bar and throw."></canvas>
+      <canvas id="lane" aria-label="Bowling lane. Tap to stop each moving slider in turn: start spot, angle, power, then hook. The last tap throws."></canvas>
       <div class="banner" id="banner" hidden></div>
       <div class="toast" id="toast" hidden></div>
       <div class="callbar" id="callbar" hidden>
@@ -68,8 +68,9 @@
   <div class="ctrl" id="ctrl">
     <button class="cbtn alt" id="backBtn" type="button">Back</button>
     <div class="cmid">
-      <span class="stepLbl" id="stepLbl">1 · Drag to set your start</span>
+      <span class="stepLbl" id="stepLbl">1 · Tap to stop the start slider</span>
       <div class="pbar" id="pbar" hidden aria-hidden="true"><i id="pzone"></i><b id="pneedle"></b></div>
+      <div class="sbar" id="sbar" hidden aria-hidden="true"><i></i><span id="sbarLbl">start</span><b id="sneedle"></b></div>
       <div class="hbar" id="hbar" hidden aria-hidden="true"><i></i><span class="hl">← hook</span><span class="hr">hook →</span><b id="hneedle"></b></div>
     </div>
     <button class="cbtn" id="setBtn" type="button">Set start</button>

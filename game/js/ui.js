@@ -230,7 +230,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   UI.how = function (onBack) {
     UI.modal(`<div class="panel" style="text-align:left">
       <h2>How to play</h2>
-      <p><b>Throw in 4 steps:</b> 1) drag on the lane to slide your starting spot, then tap. 2) Drag to swing the aim arrow, then tap. 3) Tap to stop the fast power bar. The thin green zone is a PERFECT throw; past it, the ball wobbles off line. 4) Tap to stop the hook dial: left curves the ball left, right curves it right. Keyboard: ←/→ adjust, Space sets, Esc goes back.</p>
+      <p><b>Throw in 4 timed taps:</b> 1) the ball slides back and forth across the approach: tap to stop it on your starting spot. 2) The aim arrow swings side to side: tap to lock the angle. 3) Tap to stop the fast power bar. The thin green zone is a PERFECT throw; past it, the ball wobbles off line. 4) Tap to stop the hook dial: left curves the ball left, right curves it right. Tap anywhere on the lane or press Set. Keyboard: Space taps, Esc goes back.</p>
       <p><b>Your balls</b> sit on the ball return at the right of the approach. Tap one to pick it. Now and then a ball jams in the return and you have to throw a different one before it comes back.</p>
       <p><b>Oil:</b> the blue sheen on the lane is oil. The ball skids through oil and hooks on dry boards. Every alley has its own pattern, and it breaks down as you bowl: throw the same line again and again and it dries out (the boards turn brown) and your ball hooks earlier. The lane is re-oiled each round.</p>
       <p><b>The pinsetter</b> is old. Once in a while it fumbles after your first ball and drops a pin or two you left standing. Lucky you.</p>
