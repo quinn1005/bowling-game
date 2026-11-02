@@ -17,12 +17,44 @@ var GK = globalThis.GK = globalThis.GK || {};
   GK.C = C;
 
   // Standard pin spots relative to the headpin; x scaled for narrow lanes.
-  const SPOT_REL = [[0, 0], [-6, 1], [6, 1], [-12, 2], [0, 2], [12, 2], [-18, 3], [-6, 3], [6, 3], [18, 3]];
+  // Spots 1-10 are the standard rack; 11-13 are the optional back row bought as Back-Row Pins.
+  const SPOT_REL = [[0, 0], [-6, 1], [6, 1], [-12, 2], [0, 2], [12, 2], [-18, 3], [-6, 3], [6, 3], [18, 3], [-12, 4], [0, 4], [12, 4]];
+  GK.RACK_SIZE = SPOT_REL.length;
   GK.spots = function (lhw) {
     const k = Math.min(1, (lhw || C.LHW) / C.LHW);
     return SPOT_REL.map(([x, r]) => [x * k, C.ZH + r * C.ROW]);
   };
 
+  // Oil patterns: how oily the lane is at (x, z), 0 = dry (hook bites) .. 1 = full oil (ball skids).
+  // len = where the oil ends; shape changes the cross-lane profile like real house/sport/shark patterns.
+  GK.OIL = {
+    house: { name: 'House Shot', len: 200, desc: 'Oily down the middle, drier on the outside. The outside line hooks back.' },
+    short: { name: 'Short Oil', len: 140, desc: 'The oil ends early, so the ball hooks early and hard.' },
+    long: { name: 'Long Oil', len: 270, desc: 'Oil almost to the pins. The ball barely hooks.' },
+    sport: { name: 'Sport Flat', len: 215, desc: 'Even oil from edge to edge. No help from the lane.' },
+    shark: { name: 'Shark Stripes', len: 235, desc: 'Stripes of oil and dry boards. The hook changes board by board.' },
+    ice: { name: 'Black Ice', len: 400, desc: 'The whole lane is slick. Nothing hooks.' }
+  };
+  GK.oilAt = function (pat, x, z, lhw) {
+    const P = GK.OIL[pat] || GK.OIL.house;
+    if (pat === 'ice') return 1;
+    if (z < 0) return 1;
+    if (z > P.len) return 0;
+    const taper = z > P.len * 0.75 ? 1 - (z - P.len * 0.75) / (P.len * 0.25) : 1;
+    const u = Math.min(1, Math.abs(x) / (lhw || C.LHW));
+    let across = 1;
+    if (pat === 'house') across = 1 - 0.6 * u * u;
+    else if (pat === 'short') across = 1 - 0.3 * u * u;
+    else if (pat === 'shark') across = 0.45 + 0.55 * (0.5 + 0.5 * Math.cos(x * Math.PI / 4.2));
+    else if (pat === 'long') across = 1 - 0.2 * u;
+    return Math.max(0, Math.min(1, taper * across));
+  };
+  // Racks are always RACK_SIZE long: spots 1-10 default to standard pins, 11-13 to empty.
+  GK.padRack = function (rack) {
+    const r = (rack || []).slice(0, GK.RACK_SIZE);
+    while (r.length < GK.RACK_SIZE) r.push(r.length < 10 ? 'std' : 'none');
+    return r;
+  };
   GK.sc = z => 1 / (1 + z / C.K);
   GK.P = (x, z, h = 0) => { const s = GK.sc(z); return { x: W / 2 + x * C.S0 * s, y: C.Y0 - z * C.YK - h * C.S0 * s * 0.7, s }; };
   GK.clamp = (v, a, b) => Math.max(a, Math.min(b, v));

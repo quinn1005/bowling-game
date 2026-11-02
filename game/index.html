@@ -31,6 +31,7 @@
     <div class="meta">
       <span class="lbl" id="frameLbl">Frame 1 of 5 · Roll 1</span>
       <span class="grow"></span>
+      <span class="pill groove" id="grooveLbl" title="Groove: PERFECT throws in a row, +1 Mult each" hidden>♪ 0</span>
       <span class="pill rr" id="rrLbl" title="Re-racks left">↻ 2</span>
       <span class="pill money" id="money">$4</span>
       <button class="iconbtn" id="menuBtn" type="button" aria-label="Menu">Menu</button>
@@ -69,6 +70,7 @@
     <div class="cmid">
       <span class="stepLbl" id="stepLbl">1 · Drag to set your start</span>
       <div class="pbar" id="pbar" hidden aria-hidden="true"><i id="pzone"></i><b id="pneedle"></b></div>
+      <div class="hbar" id="hbar" hidden aria-hidden="true"><i></i><span class="hl">← hook</span><span class="hr">hook →</span><b id="hneedle"></b></div>
     </div>
     <button class="cbtn" id="setBtn" type="button">Set start</button>
   </div>
@@ -91,6 +93,7 @@
 <script src="js/data.js"></script>
 <script src="js/physics.js"></script>
 <script src="js/scoring.js"></script>
+<script src="js/meta.js"></script>
 <script src="js/run.js"></script>
 <script src="js/frame.js"></script>
 <script src="js/audio.js"></script>

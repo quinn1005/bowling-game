@@ -21,6 +21,7 @@ const shots = process.argv[2];
     const st = await page.evaluate(() => ({ phase: GK.debug.phase, layer: !document.getElementById('layer').hidden, modal: !document.getElementById('modal').hidden, over: GK.debug.run && (GK.debug.run.over || GK.debug.run.won) }));
     if (st.over) break;
     if (st.modal) { await page.click('#modal .btn.alt'); continue; }
+    if (st.phase === 'replay') { await page.evaluate(() => GK.debug.skipReplay()); continue; }
     if (st.phase === 'call') { await page.click('#callbar [data-call=open]'); continue; }
     if (st.phase === 'aim') {
       frames++;

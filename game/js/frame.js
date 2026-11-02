@@ -3,7 +3,7 @@
 'use strict';
 var GK = globalThis.GK = globalThis.GK || {};
 (function () {
-  GK.laneFor = run => GK.alleyDef(run).lane || {};
+  GK.laneFor = run => Object.assign({}, GK.alleyDef(run).lane || {}, GK.rules(run).dark ? { dark: true } : {});
 
   GK.beginFrame = function (run) {
     const rs = run.rs, fl = GK.flags(run, rs.stolen);
@@ -33,17 +33,29 @@ var GK = globalThis.GK = globalThis.GK || {};
     cur.snap = sim.snapshot();
     cur.ballIdx = ballIdx;
     cur.ball = { type: ball.type, ed: ball.ed };
+    cur.perfect = prm.perfect;
     const p = Object.assign({}, prm, { speed: GK.clamp(prm.speed * eq.speed, 120, 560) });
-    sim.launch(ball, p, { wide: fl.wide, hook: eq.hook, wild: fl.wild, bumpers: fl.bumpers });
+    sim.launch(ball, p, { wide: fl.wide, hook: eq.hook, wild: fl.wild, bumpers: fl.bumpers, rebound: fl.rebound });
     run.stats.throws++;
   };
 
   // After the sim settles. Returns { next: 'aim'|'score', kind?, notes: [] }.
   GK.afterRoll = function (run, sim) {
     const rs = run.rs, cur = rs.cur, fl = GK.flags(run, rs.stolen), notes = [];
+    if (fl.whisper) {
+      const n = sim.whisper();
+      if (n) notes.push({ t: 'whisper', text: 'Pin Whisperer tips over pin ' + n, pin: n });
+    }
     const rec = sim.summarize();
-    rec.ball = cur.ball.type; rec.edition = cur.ball.ed;
+    rec.ball = cur.ball.type; rec.edition = cur.ball.ed; rec.perfect = cur.perfect;
     run.stats.pins += rec.pins;
+    // Groove: consecutive PERFECT throws this round.
+    if (cur.perfect === true) {
+      rs.groove = (rs.groove || 0) + 1; run.stats.perfects++; run.stats.pstreak++;
+      run.stats.bestPStreak = Math.max(run.stats.bestPStreak || 0, run.stats.pstreak);
+      const pay = GK.rules(run).perfectPay;
+      if (pay) { run.money += pay; notes.push({ t: 'pay', text: 'Pro Tour: +$' + pay + ' for a PERFECT throw' }); }
+    } else if (cur.perfect === false) { rs.groove = 0; run.stats.pstreak = 0; }
 
     if (fl.retake && rec.gutterBall && !cur.retakeUsed) {
       cur.retakeUsed = true;
@@ -72,9 +84,10 @@ var GK = globalThis.GK = globalThis.GK || {};
       cur.leave710 = nums.length === 2 && nums[0] === 7 && nums[1] === 10;
       if (cur.splitLeave) notes.push({ t: 'split', text: cur.leave710 ? 'The 7-10! Convert it for ×5' : 'Split leave · convert it for ×5' });
       sim.sweep();
-      if (rs.boss === 'mechanic' && rec.down.length) {
+      const heatMech = run.round === 1 && !GK.isChamp(run) && GK.rules(run).heatMech;
+      if ((rs.boss === 'mechanic' || heatMech) && rec.down.length) {
         const rng = GK.stream(run.seed, 'mech:' + run.alley + ':' + rs.frameIdx + ':' + run.stats.throws);
-        const pick = rng.shuffle(rec.down.map(d => d.n)).slice(0, 2);
+        const pick = rng.shuffle(rec.down.map(d => d.n)).slice(0, rs.boss === 'mechanic' ? 2 : 1);
         sim.standUp(pick);
         cur.splitLeave = GK.isSplitLeave(sim.standing(), sim.lhw);
         notes.push({ t: 'mechanic', text: 'The Mechanic resets ' + pick.length + ' pin' + (pick.length > 1 ? 's' : ''), pins: pick });
@@ -116,7 +129,8 @@ var GK = globalThis.GK = globalThis.GK || {};
     const f = {
       kind, rolls: cur.rolls, frameIdx: rs.frameIdx, lastFrame: rs.frameIdx === rs.framesMax - 1,
       leftSplit: cur.splitLeave, leave710: cur.leave710, loaded: rs.loadedNext,
-      call: rs.boss === 'secretary' ? GK.callResult(cur.call, kind) : null
+      call: rs.boss === 'secretary' ? GK.callResult(cur.call, kind) : null,
+      groove: rs.groove || 0, leagueMult: GK.rules(run).mult, leagueName: GK.LEAGUES[run.league || 'open'].name
     };
     const rng = GK.stream(run.seed, 'score:' + run.alley + ':' + run.round + ':' + rs.frameIdx + ':' + run.stats.throws);
     return GK.scoreFrame(f, run, { rng, stolen: rs.stolen });
@@ -144,8 +158,13 @@ var GK = globalThis.GK = globalThis.GK || {};
     rs.frameIdx++;
     rs.loadedNext = false;
     rs.cur = null;
-    if (rs.total >= rs.target) return { status: 'won', notes };
-    if (rs.frameIdx >= rs.framesMax) return { status: 'lost', notes };
+    if (!run.best || res.score > run.best.score) run.best = { score: res.score, kind, alley: run.alley, round: run.round, frame: rs.frameIdx, champ: GK.isChamp(run) };
+    const done = rs.total >= rs.target ? 'won' : rs.frameIdx >= rs.framesMax ? 'lost' : null;
+    if (done) {
+      run.history = run.history || [];
+      run.history.push({ alley: run.alley, round: run.round, champ: GK.isChamp(run), target: rs.target, total: rs.total, won: done === 'won', frames: rs.frameIdx });
+      return { status: done, notes };
+    }
     return { status: 'next', notes };
   };
 })();

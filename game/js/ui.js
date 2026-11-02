@@ -162,6 +162,7 @@ var GK = globalThis.GK = globalThis.GK || {};
 
   UI.title = function (meta, save, h) {
     const daily = GK.dailySeed(), done = meta.daily && meta.daily[daily];
+    const nFeats = GK.FEATS.filter(f => meta.feats && meta.feats[f.id]).length;
     UI.layer(`<div class="panel">
       <div class="lbl">A bowling roguelike</div>
       <h1>GUTTER<br>KINGS</h1>
@@ -170,37 +171,72 @@ var GK = globalThis.GK = globalThis.GK || {};
         ${save ? '<button class="btn" data-a="continue" data-focus>Continue run</button><p class="dim" style="margin-top:-4px">' + esc(save) + '</p>' : ''}
         <button class="btn ${save ? 'alt' : ''}" data-a="new" ${save ? '' : 'data-focus'}>New run</button>
         <button class="btn alt" data-a="daily">Daily run${done ? ' · best ' + esc(done) : ''}</button>
+        <button class="btn alt small" data-a="collection">Feats &amp; unlocks · ${nFeats}/${GK.FEATS.length}</button>
         <div class="row2"><button class="btn alt small" data-a="how">How to play</button><button class="btn alt small" data-a="sound">${GK.sfx.muted ? 'Sound off' : 'Sound on'}</button></div>
       </div>
       <p class="dim">Runs ${meta.runs} · Wins ${meta.wins} · Best alley ${meta.bestAlley ? (meta.bestAlley > 8 ? 'Champion' : meta.bestAlley) : '–'} · Best frame ${fmt(meta.bestFrame)}${GK.VERSION ? ' · v' + GK.VERSION : ''}</p>
     </div>`, r => UI.on(r, '[data-a]', el => h[el.dataset.a](el)));
   };
 
-  UI.bagSelect = function (onGo, onBack) {
-    let sel = 'classic';
+  // New run setup: starting bag, league and ascension level.
+  UI.bagSelect = function (meta, onGo, onBack) {
+    let sel = 'classic', league = 'open', asc = 0;
+    const maxAsc = meta.maxAsc || 0;
+    const unlocked = GK.unlockedFor(meta);
+    const leagueOpen = id => !GK.LOCKED.has('league:' + id) || unlocked.has('league:' + id);
+    const featFor = key => GK.FEATS.find(f => f.unlocks.includes(key));
     const draw = () => UI.layer(`<div class="panel">
-      <h2>Pick your bag</h2>
+      <h2>New run</h2>
+      <h3>Starting bag</h3>
       <div class="choices">${GK.STARTER_BAGS.map(b => `<button class="choice" data-b="${b.id}" aria-pressed="${b.id === sel}"><b>${esc(b.name)}</b>
         <span class="balls">${b.balls.map(t => '<i class="sw" style="background:' + GK.BALLS[t].col + '"></i>').join('')}</span><span>${esc(b.desc)}</span></button>`).join('')}</div>
+      <h3>League</h3>
+      <div class="choices">${GK.LEAGUE_ORDER.map(id => {
+        const L = GK.LEAGUES[id], open = leagueOpen(id), f = featFor('league:' + id);
+        return `<button class="choice" data-l="${id}" aria-pressed="${id === league}" ${open ? '' : 'disabled'}><b>${esc(L.name)}</b><span>${open ? esc(L.desc) : 'Locked · feat: ' + esc(f ? f.name + ' (' + f.desc + ')' : '')}</span></button>`;
+      }).join('')}</div>
+      <h3>Ascension</h3>
+      ${maxAsc ? `<div class="stepper"><button class="btn alt small" data-a="ascdown" ${asc ? '' : 'disabled'}>−</button><div><b>Level ${asc}</b><p class="dim">${asc ? GK.ASCENSION.slice(1, asc + 1).map(a => esc(a.desc)).join('<br>') : 'Standard difficulty.'}</p></div><button class="btn alt small" data-a="ascup" ${asc < maxAsc ? '' : 'disabled'}>+</button></div>` : '<p class="dim">Beat the Gutter King to unlock Ascension levels: harder runs that stack a new rule each level.</p>'}
       <div class="seedrow"><input id="seedIn" placeholder="Seed (optional)" maxlength="8" aria-label="Seed"><button class="btn small alt" data-a="back">Back</button></div>
       <button class="btn" data-a="go" data-focus>Start run</button>
     </div>`, r => {
-      UI.on(r, '[data-b]', el => { sel = el.dataset.b; r.querySelectorAll('[data-b]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.b === sel))); });
-      UI.on(r, '[data-a=go]', () => { const s = $('seedIn').value.trim(); onGo(sel, s ? GK.parseSeed(s) : null); });
+      UI.on(r, '[data-b]', el => { sel = el.dataset.b; keep(draw); });
+      UI.on(r, '[data-l]', el => { if (!el.disabled) { league = el.dataset.l; keep(draw); } });
+      UI.on(r, '[data-a=ascdown]', () => { asc = Math.max(0, asc - 1); keep(draw); });
+      UI.on(r, '[data-a=ascup]', () => { asc = Math.min(maxAsc, asc + 1); keep(draw); });
+      UI.on(r, '[data-a=go]', () => { const s = $('seedIn').value.trim(); onGo({ bag: sel, seed: s ? GK.parseSeed(s) : null, league, asc }); });
       UI.on(r, '[data-a=back]', onBack);
     });
+    // Redraw without losing the seed text or scroll position.
+    const keep = fn => { const v = $('seedIn') ? $('seedIn').value : '', y = $('layer').scrollTop; fn(); $('seedIn').value = v; $('layer').scrollTop = y; };
     draw();
+  };
+
+  UI.collection = function (meta) {
+    const done = meta.feats || {};
+    const log = meta.dailyLog || [];
+    UI.modal(`<div class="panel" style="text-align:left">
+      <h2>Feats &amp; unlocks</h2>
+      <p class="dim">Feats unlock new balls, charms and leagues for future runs.</p>
+      <div>${GK.FEATS.map(f => `<div class="feat"><b class="${done[f.id] ? 'ok' : 'no'}">${done[f.id] ? 'DONE' : 'LOCKED'}</b><b>${esc(f.name)}</b><span>${esc(f.desc)} Unlocks ${esc(f.unlocks.map(GK.unlockName).join(', '))}.</span></div>`).join('')}</div>
+      <h3>Ascension</h3><p class="dim">${meta.maxAsc ? 'Unlocked up to level ' + meta.maxAsc + ' of ' + GK.MAX_ASC + '.' : 'Beat the Gutter King to unlock.'}</p>
+      <h3>Your daily runs</h3>
+      ${log.length ? '<div class="story">' + log.map(x => `<div><span>${esc(x.date)}</span><b>${esc(x.label)} · best frame ${fmt(x.best || 0)}</b></div>`).join('') + '</div>' : '<p class="dim">No daily runs yet.</p>'}
+      <button class="btn" data-a="ok">Close</button>
+    </div>`, r => UI.on(r, '[data-a=ok]', UI.hideModal));
   };
 
   UI.how = function (onBack) {
     UI.modal(`<div class="panel" style="text-align:left">
       <h2>How to play</h2>
-      <p><b>Throw in 3 steps:</b> 1) drag on the lane to slide your starting spot, then tap (or press Set). 2) Drag to swing the aim arrow, then tap. 3) The power bar sweeps back and forth: tap to stop it. Land in the green PERFECT zone for a hard, true throw. Push past it and the ball wobbles off line. Keyboard: ←/→ adjust, Space sets, Esc goes back.</p>
-      <p><b>Score:</b> every frame scores <span style="color:var(--chips)">Points</span> × <span style="color:var(--mult)">Mult</span>. The shot sets the base (Strike 40×4, Spare 20×3, Split conversion 50×5, Double, Turkey…). Each pin adds 5 Points. Pins knocking over pins, late wobblers and kickback bangs add bonus Points.</p>
+      <p><b>Throw in 4 steps:</b> 1) drag on the lane to slide your starting spot, then tap. 2) Drag to swing the aim arrow, then tap. 3) Tap to stop the fast power bar. The thin green zone is a PERFECT throw; past it, the ball wobbles off line. 4) Tap to stop the hook dial: left curves the ball left, right curves it right. Keyboard: ←/→ adjust, Space sets, Esc goes back.</p>
+      <p><b>Oil:</b> the blue sheen on the lane is oil. The ball skids through oil and hooks on dry boards. Every alley has its own pattern.</p>
+      <p><b>Groove:</b> PERFECT throws in a row build Groove. Each stack adds +1 Mult to every frame until you miss the zone.</p>
+      <p><b>Score:</b> every frame scores <span style="color:var(--chips)">Points</span> × <span style="color:var(--mult)">Mult</span>. The shot sets the base (Strike, Spare, Split conversion, Double, Turkey…). Each pin adds Points. Pins knocking over pins, late wobblers and kickback bangs add bonus Points.</p>
       <p><b>Rounds:</b> reach the target within your frames. Each alley has a Qualifier, a Heat and a Boss Match. Miss a target and the run ends.</p>
       <p><b>Re-racks:</b> after a bad first roll, spend a re-rack to reset all pins and take roll one again.</p>
       <p><b>Shop:</b> charms trigger left to right after every frame, so order matters. Balls change the physics. Scorecards level up shots, Lane Tricks change your pins and balls, and the Black Market is powerful but costs you.</p>
-      <p><b>Money:</b> clear a round to get paid, plus $1 per unused frame and $1 interest per $5 you hold (max $5).</p>
+      <p><b>Money:</b> clear a round to get paid, plus $1 per unused frame and $1 interest per $5 you hold (max $4).</p>
       <button class="btn" data-a="ok">Got it</button>
     </div>`, r => UI.on(r, '[data-a=ok]', () => { UI.hideModal(); if (onBack) onBack(); }));
   };
@@ -208,12 +244,16 @@ var GK = globalThis.GK = globalThis.GK || {};
   UI.intro = function (run, onGo) {
     const def = GK.alleyDef(run), rs = run.rs, boss = GK.isBoss(run);
     const first = run.round === 0;
+    const oil = GK.OIL[(def.lane && def.lane.oil) || 'house'];
+    const tags = [run.league && run.league !== 'open' ? GK.LEAGUES[run.league].name : '', run.asc ? 'Ascension ' + run.asc : ''].filter(Boolean).join(' · ');
     UI.layer(`<div class="panel">
-      <div class="lbl">${GK.isChamp(run) ? 'Final' : 'Alley ' + (run.alley + 1) + ' of 8'} · ${esc(def.name)}</div>
+      <div class="lbl">${GK.isChamp(run) ? 'Final' : 'Alley ' + (run.alley + 1) + ' of 8'} · ${esc(def.name)}${tags ? ' · ' + esc(tags) : ''}</div>
       <h2>${esc(GK.roundName(run))}</h2>
-      <p>Target <b style="color:var(--marquee)">${fmt(rs.target)}</b> in ${rs.framesMax} frames · ${rs.reracks} re-racks</p>
+      <p>Target <b style="color:var(--marquee)">${fmt(rs.target)}</b> in ${rs.framesMax} frames · ${rs.reracks} re-rack${rs.reracks === 1 ? '' : 's'}</p>
       ${first || GK.isChamp(run) ? '<p class="dim">' + esc(def.laneDesc) + '</p>' : ''}
+      <p class="dim"><b style="color:var(--chips)">Oil: ${esc(oil.name)}.</b> ${esc(oil.desc)}</p>
       ${boss ? `<div class="boss"><b>${esc(def.boss.name)}</b><p>${esc(def.boss.desc)}</p>${rs.stolen >= 0 && run.charms[rs.stolen] ? '<p class="dim">Stolen: ' + esc(GK.CHARMS[run.charms[rs.stolen].id].name) + '</p>' : ''}</div>` : ''}
+      ${!GK.isChamp(run) && run.round === 1 && GK.rules(run).heatMech ? '<div class="boss"><b>Ascension</b><p>The Mechanic stands 1 pin back up after your first roll.</p></div>' : ''}
       ${!GK.isChamp(run) ? '<p class="dim">Reward: $' + GK.ROUND_PAY[run.round] + ' + $1 per unused frame + interest</p>' : ''}
       <button class="btn" data-a="go" data-focus>${boss ? 'Face the boss' : 'Bowl'}</button>
     </div>`, r => UI.on(r, '[data-a=go]', onGo));
@@ -230,30 +270,52 @@ var GK = globalThis.GK = globalThis.GK || {};
     </div>`, r => UI.on(r, '[data-a=go]', onGo));
   };
 
-  UI.end = function (run, won, onAgain, onTitle) {
-    const s = run.stats, rs = run.rs;
+  const roundLabel = h => h.champ ? 'Championship' : 'A' + (h.alley + 1) + ' ' + GK.ROUND_NAMES[h.round];
+  // End of run: what happened round by round, the best frame (with a replay) and a share line.
+  UI.end = function (run, won, meta, h) {
+    const s = run.stats, rs = run.rs, hist = run.history || [], b = run.best;
+    const reached = GK.isChamp(run) ? 'Championship' : 'Alley ' + (run.alley + 1) + ', ' + GK.roundName(run);
+    const d = new Date(), date = d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+    const share = run.daily ? `Gutter Kings daily ${date}\n${won ? 'CHAMPION' : 'Reached ' + reached}\nBest frame ${fmt(s.bestFrame)} · ${s.strikes} strikes · ${s.perfects || 0} perfect throws\nSeed ${GK.seedCode(run.seed)}` : '';
     UI.layer(`<div class="panel">
       <h2>${won ? 'Gutter King dethroned!' : 'Run over'}</h2>
       <p>${won ? 'You beat the Championship. The crown is yours.' : 'You finished ' + esc(GK.roundName(run)) + ' at ' + esc(GK.alleyDef(run).name) + ' with ' + fmt(rs ? rs.total : 0) + ' of ' + fmt(rs ? rs.target : 0) + '.'}</p>
+      ${won && run.asc < GK.MAX_ASC ? '<p style="color:var(--good)">Ascension ' + (run.asc + 1) + ' unlocked.</p>' : ''}
+      <h3>Your run</h3>
+      <div class="story">${hist.map(x => `<div><span>${esc(roundLabel(x))}</span><b class="${x.won ? 'w' : 'l'}">${fmt(x.total)} / ${fmt(x.target)}</b></div>`).join('')}</div>
+      ${b ? `<p class="dim">Best frame: <b>${esc(GK.SHOTS[b.kind].name)}</b> for ${fmt(b.score)} in ${esc(roundLabel(b))}, frame ${b.frame + 1}.</p>` : ''}
       <div class="lines">
-        <div><span>Reached</span><b>${GK.isChamp(run) ? 'Championship' : 'Alley ' + (run.alley + 1) + ', ' + GK.roundName(run)}</b></div>
-        <div><span>Best frame</span><b>${fmt(s.bestFrame)}</b></div>
         <div><span>Strikes / Spares / Splits</span><b>${s.strikes} / ${s.spares} / ${s.splits}</b></div>
+        <div><span>PERFECT throws (best streak)</span><b>${s.perfects || 0} (${s.bestPStreak || 0})</b></div>
         <div><span>Pins knocked down</span><b>${fmt(s.pins)}</b></div>
+        <div><span>League · Ascension</span><b>${esc(GK.LEAGUES[run.league || 'open'].name)} · ${run.asc || 0}</b></div>
         <div><span>Seed</span><b>${GK.seedCode(run.seed)}${run.daily ? ' (daily)' : ''}</b></div>
       </div>
+      ${h.best ? '<button class="btn alt" data-a="best">Watch your best frame</button>' : ''}
+      ${share ? '<div class="share" id="shareTxt">' + esc(share) + '</div><button class="btn alt small" data-a="copy">Copy daily result</button>' : ''}
       <div class="row2"><button class="btn" data-a="again" data-focus>New run</button><button class="btn alt" data-a="title">Title</button></div>
-    </div>`, r => { UI.on(r, '[data-a=again]', onAgain); UI.on(r, '[data-a=title]', onTitle); });
+    </div>`, r => {
+      UI.on(r, '[data-a=again]', h.again); UI.on(r, '[data-a=title]', h.title);
+      if (h.best) UI.on(r, '[data-a=best]', h.best);
+      UI.on(r, '[data-a=copy]', el => {
+        const done = () => { el.textContent = 'Copied'; };
+        try { navigator.clipboard.writeText(share).then(done, () => selectShare()); } catch (e) { selectShare(); }
+      });
+    });
+    function selectShare() { const t = $('shareTxt'); if (!t) return; const rg = document.createRange(); rg.selectNodeContents(t); const sl = getSelection(); sl.removeAllRanges(); sl.addRange(rg); UI.toast('Selected. Copy it from the menu.'); }
   };
 
   UI.levelsHtml = function (run) {
     return '<div class="levels">' + GK.SHOT_ORDER.map(k => { const b = GK.shotBase(k, run.levels); return '<span>' + esc(GK.SHOTS[k].name) + (b.lv ? ' <i>Lv.' + (b.lv + 1) + '</i>' : '') + ' <i>' + b.chips + '×' + b.mult + '</i></span>'; }).join('') + '</div>';
   };
-  UI.rackHtml = function (rack, picks, selectable) {
-    const rows = [[7, 8, 9, 10], [4, 5, 6], [2, 3], [1]];
+  // Rack diagram (back row 11-13 on top). canPick(n) decides which spots are selectable.
+  UI.rackHtml = function (rack, picks, canPick) {
+    rack = GK.padRack(rack);
+    const rows = [[11, 12, 13], [7, 8, 9, 10], [4, 5, 6], [2, 3], [1]];
     return '<div class="rack">' + rows.map(r => '<div class="rr">' + r.map(n => {
       const t = rack[n - 1], d = GK.PINS[t];
-      return `<button class="pinb${t === 'none' ? ' none' : ''}" data-pin="${n}" style="--pc:${d.body || 'transparent'}" aria-pressed="${picks && picks.has(n) ? 'true' : 'false'}" title="${esc(d.name)}" ${selectable ? '' : 'disabled'}>${n}</button>`;
+      const ok = typeof canPick === 'function' ? canPick(n) : !!canPick;
+      return `<button class="pinb${t === 'none' ? ' none' : ''}" data-pin="${n}" style="--pc:${d.body || 'transparent'}" aria-pressed="${picks && picks.has(n) ? 'true' : 'false'}" title="${esc(d.name)}" ${ok ? '' : 'disabled'}>${n}</button>`;
     }).join('') + '</div>').join('') + '</div>';
   };
 
@@ -285,16 +347,17 @@ var GK = globalThis.GK = globalThis.GK || {};
   };
 
   UI.pinPicker = function (run, k, onDone, onCancel) {
-    const picks = new Set();
+    const picks = new Set(), rack = GK.padRack(run.rack);
+    const canPick = n => k.backRow ? n >= 11 && rack[n - 1] === 'none' : rack[n - 1] !== 'none';
     const draw = () => UI.modal(`<div class="panel">
       <div class="lbl" style="color:${GK.CONS_KIND[k.kind].col}">${esc(k.name)}</div>
       <h2>Pick ${k.picks > 1 ? 'up to ' + k.picks + ' pins' : 'a pin'}</h2>
       <p class="dim">${esc(k.desc)}</p>
-      ${UI.rackHtml(run.rack, picks, true)}
+      ${UI.rackHtml(run.rack, picks, canPick)}
       <div class="row2"><button class="btn" data-a="ok" ${picks.size ? '' : 'disabled'}>Apply</button><button class="btn alt" data-a="no">Cancel</button></div>
     </div>`, r => {
       UI.on(r, '[data-pin]', el => {
-        const n = +el.dataset.pin; if (k.pinType === 'none' && run.rack[n - 1] === 'none') return;
+        const n = +el.dataset.pin; if (!canPick(n)) return;
         if (picks.has(n)) picks.delete(n); else { if (picks.size >= k.picks) picks.delete(picks.values().next().value); picks.add(n); }
         draw();
       });
@@ -360,6 +423,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         <button class="btn alt" data-a="info">Run info</button>
         <button class="btn alt" data-a="how">How to play</button>
         <div class="row2"><button class="btn alt small" data-a="sound">${GK.sfx.muted ? 'Sound off' : 'Sound on'}</button><button class="btn alt small" data-a="speed">${h.fast() ? 'Scoring: fast' : 'Scoring: normal'}</button></div>
+        <button class="btn alt small" data-a="replays">${h.replaysOn() ? 'Replays: on' : 'Replays: off'}</button>
         <button class="btn alt" data-a="title">Save and quit</button>
         <button class="btn danger small" data-a="abandon">Abandon run</button>
       </div>

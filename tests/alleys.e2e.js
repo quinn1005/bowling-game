@@ -18,6 +18,7 @@ const shots = process.argv[2];
     while (Date.now() - t0 < ms) {
       const p = await page.evaluate(() => GK.debug.phase);
       if (want.includes(p)) return p;
+      if (p === 'replay') await page.evaluate(() => GK.debug.skipReplay());
       const modal = await page.evaluate(() => !document.getElementById('modal').hidden);
       if (modal) await page.click('#modal .btn.alt').catch(() => {});
       await page.waitForTimeout(150);

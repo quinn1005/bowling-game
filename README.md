@@ -14,7 +14,7 @@ npm run serve   # http://localhost:8080
 
 On Android Chrome, use "Add to Home screen" to install it as a full-screen app that also works offline.
 
-**Controls:** three steps per throw. Drag to set your starting spot and tap to lock it, drag to set the angle and tap to lock it, then tap to stop the moving power bar (the green zone is a PERFECT throw; past it the ball wobbles). On a keyboard: ←/→ adjust, Space/Enter sets, Esc goes back, 1–3 picks a ball, R re-racks.
+**Controls:** four steps per throw. Drag to set your starting spot and tap, drag to set the angle and tap, tap to stop the fast power bar (the thin green zone is a PERFECT throw; past it the ball wobbles), then tap to stop the hook dial. On a keyboard: ←/→ adjust, Space/Enter sets, Esc goes back, 1–3 picks a ball, R re-racks.
 
 ### Get the installable APK
 

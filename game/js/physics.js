@@ -35,6 +35,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       this.gut = L.magnet ? 12 : C.GUT;
       this.hookDry = L.ice ? 0 : L.lowg ? 130 : 200;
       this.hookOil = L.ice ? 0 : 22;
+      this.oil = o.oil || L.oil || 'house';
       this.ballFric = L.ice ? 0.01 : 0.12;
       this.pinDecel = L.ice ? 650 : L.lowg ? 900 : 1400;
       this.fallDecel = L.ice ? 110 : L.lowg ? 240 : 520;
@@ -53,7 +54,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       this.balls = []; this.blasts = []; this.fx = [];
       this.rolling = false;
       this.onEvent = null;
-      this.rack = (o.rack || new Array(10).fill('std')).slice();
+      this.rack = GK.padRack(o.rack);
       this.setupPins(o.layout || 'std');
       this.updatePosts();
     }
@@ -68,7 +69,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         const def = GK.PINS[type] || GK.PINS.std;
         const [x, z] = spots[i];
         this.pins.push({
-          n: i + 1, type, sx: x, sz: z, x, z, vx: 0, vz: 0, m: def.m || C.PIN_M,
+          n: i + 1, type, sx: x, sz: z, x, z, vx: 0, vz: 0, m: def.m || C.PIN_M, r: C.PIN_R * (def.r || 1), wobbled: false,
           toppleV: this.toppleV * (def.topple || 1), e: def.e || 0,
           standing: true, fallen: false, fallT: 0, fd: { x: 0, z: 1 }, wob: 0, wobDir: { x: 0, z: 1 }, fallAt: 0, byPin: false,
           gone: false, cleared: false, clearT: 0, counted: false, drop: 0, hp: this.winter ? 2 : 1,
@@ -78,7 +79,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     }
     randomSpots() {
       const out = [], xm = this.lhw - 4;
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < this.rack.length; i++) {
         let best = null;
         for (let t = 0; t < 300; t++) {
           const x = (this.rng() * 2 - 1) * xm, z = C.ZH - 4 + this.rng() * (3 * C.ROW + 8);
@@ -100,7 +101,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       let spin = prm.spin * (mods.hook || 1);
       if (mods.wild) spin = GK.clamp(spin + (this.rng() * 2 - 1) * 0.9, -1.2, 1.2);
       if (t === 'ice') spin = 0;
-      const base = { z: C.BALL_Z0, spin, r: C.BALL_R * wide, m: def.m, type: t, rot: 0, gutter: false, gone: false, contacts: 0, delay: 0, kind: 'main', touched: false, exploded: false };
+      this.rebound = !!mods.rebound;
+      const base = { z: C.BALL_Z0, spin, r: C.BALL_R * wide * (def.rs || 1), m: def.m, type: t, rot: 0, gutter: false, gone: false, contacts: 0, delay: 0, kind: 'main', touched: false, exploded: false };
       const mk = (x, aim, extra) => Object.assign({}, base, { x, vx: Math.sin(aim) * prm.speed, vz: Math.cos(aim) * prm.speed }, extra || {});
       this.balls = [];
       if (t === 'cluster') {
@@ -119,9 +121,19 @@ var GK = globalThis.GK = globalThis.GK || {};
       }
       this.roll = {
         events: [], ball: t, carry: 0, late: 0, walls: 0, pit: 0, ballBounces: 0, explosions: 0, blasted: 0,
-        swallowed: 0, firstPin: 0, firstT: -1, rubber: 0, gutterBall: false, contact: false, shattered: false
+        swallowed: 0, firstPin: 0, firstT: -1, rubber: 0, gutterBall: false, contact: false, shattered: false, rebounded: false, direct: 0
       };
+      for (const p of this.pins) { p.ballHit = false; p.wobbled = false; }
       this.rolling = true; this.throwT = 0; this.settleT = 0;
+    }
+
+    // Pin Whisperer: the first pin that wobbled this roll but stayed standing falls over.
+    whisper() {
+      const p = this.pins.find(q => q.standing && !q.cleared && !q.gone && q.wobbled);
+      if (!p) return null;
+      this.topple(p, p.wobDir, 'late');
+      p.fallT = 0.3;
+      return p.n;
     }
 
     // ---------- events ----------
@@ -152,7 +164,7 @@ var GK = globalThis.GK = globalThis.GK || {};
             this.emit({ t: 'crack', n: p.n, x: p.x, z: p.z });
           } else this.topple(p, { x: p.vx, z: p.vz }, byPin ? 'pin' : 'ball');
         } else if (v > 5) {
-          p.wob = Math.max(p.wob, Math.min(1, v / p.toppleV));
+          p.wob = Math.max(p.wob, Math.min(1, v / p.toppleV)); p.wobbled = true;
           p.wobDir = { x: p.vx / v, z: p.vz / v }; p.byPin = byPin;
           if (!p.fallAt && p.hp <= 1 && this.rng() < (v - 5) / (p.toppleV - 5) * 0.85) p.fallAt = this.time + 0.3 + this.rng() * 0.55;
         }
@@ -175,9 +187,9 @@ var GK = globalThis.GK = globalThis.GK || {};
     }
 
     pinCenter(p) {
-      if (!p.fallen) return [p.x, p.z, C.PIN_R];
-      const f = Math.min(1, p.fallT / 0.22);
-      return [p.x + p.fd.x * 6 * f, p.z + p.fd.z * 6 * f, 3.0];
+      if (!p.fallen) return [p.x, p.z, p.r];
+      const f = Math.min(1, p.fallT / 0.22), k = p.r / C.PIN_R;
+      return [p.x + p.fd.x * 6 * k * f, p.z + p.fd.z * 6 * k * f, 3.0 * k];
     }
 
     doSplit(b) {
@@ -214,8 +226,8 @@ var GK = globalThis.GK = globalThis.GK || {};
           const gx = Math.sign(b.x) * (lhw + this.gut / 2);
           b.x += (gx - b.x) * Math.min(1, dt * 12); b.vx = 0; b.z += b.vz * dt;
         } else {
-          const dry = b.z > C.ZOIL;
-          let ax = b.spin * (dry ? this.hookDry : this.hookOil);
+          const oil = GK.oilAt(this.oil, b.x, b.z, lhw), dry = oil < 0.5;
+          let ax = b.spin * (this.hookOil + (this.hookDry - this.hookOil) * (1 - oil));
           if (this.warp) ax += this.warp * Math.sin(b.z / 38 + this.warpPh);
           ax += this.tilt;
           if (this.magnet && Math.abs(b.x) > lhw - 7) ax += Math.sign(b.x) * 90;
@@ -224,7 +236,7 @@ var GK = globalThis.GK = globalThis.GK || {};
             if (tx != null) { b.vx = GK.clamp((tx - b.x) * b.vz / 24, -b.vz * 0.6, b.vz * 0.6); ax = 0; }
           }
           b.vx += ax * dt;
-          const f = Math.max(0, 1 - (dry ? this.ballFric : this.ballFric * 0.25) * dt);
+          const f = Math.max(0, 1 - this.ballFric * (0.25 + 0.75 * (1 - oil)) * dt);
           b.vx *= f; b.vz *= f;
           b.x += b.vx * dt; b.z += b.vz * dt;
           const bouncy = (b.type === 'bouncer' || this.bumpers) && !b.shard;
@@ -232,6 +244,11 @@ var GK = globalThis.GK = globalThis.GK || {};
             b.x = Math.sign(b.x) * (lhw - b.r * 0.4); b.vx = -b.vx * 0.85 - Math.sign(b.x) * 15;
             if (R) R.ballBounces++;
             this.emit({ t: 'ballBounce', x: b.x, z: b.z, type: b.type });
+          } else if (!bouncy && this.rebound && !b.rebounded && !b.shard && Math.abs(b.x) > lhw - b.r * 0.4 && b.z < C.ZBACK && Math.sign(b.vx) === Math.sign(b.x)) {
+            // Rebound charm: the first trip toward the gutter bounces back once.
+            b.rebounded = true; b.x = Math.sign(b.x) * (lhw - b.r * 0.4); b.vx = -b.vx * 0.7 - Math.sign(b.x) * 25;
+            if (R) R.rebounded = true;
+            this.emit({ t: 'rebound', x: b.x, z: b.z });
           } else if (!bouncy && Math.abs(b.x) > lhw + 0.8 && b.z < C.ZBACK) {
             b.gutter = true;
             if (R && b.kind === 'main' && !R.contact) R.gutterBall = true;
@@ -251,6 +268,13 @@ var GK = globalThis.GK = globalThis.GK || {};
         b.rot += sp * dt / b.r;
         if (b.z > C.ZBACK + 12 || sp < 6 || b.z < C.BALL_Z0 - 30) b.gone = true;
         if (b.gone || b.gutter) continue;
+        if (b.type === 'magnet' && !b.touched) {
+          for (const p of this.pins) {
+            if (p.gone || p.cleared || !p.standing) continue;
+            const dx = b.x - p.x, dz = b.z - p.z, d = Math.hypot(dx, dz);
+            if (d < 26 && d > 0.1 && dz < 0) { b.vx += -dx / d * 500 * (1 - d / 26) * dt; }
+          }
+        }
         if (b.type === 'blackhole') {
           for (const p of this.pins) {
             if (p.gone || p.cleared) continue;
@@ -286,6 +310,7 @@ var GK = globalThis.GK = globalThis.GK || {};
           const j = resolve(b.x, b.z, b.r, b.m, b, px, pz, pr, p.m, p, 0.55);
           if (j > 0) {
             b.contacts++;
+            if (R && !p.ballHit) { p.ballHit = true; R.direct++; }
             this.afterHit(p, false, j, b);
             if (b.type === 'split' && !b.didSplit) { this.doSplit(b); break; }
             if (b.type === 'ice' && !b.shattered && !b.shard) this.doShards(b);
@@ -386,6 +411,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         ballBounces: R ? R.ballBounces : 0, explosions: R ? R.explosions : 0, blasted: R ? R.blasted : 0,
         swallowed: R ? R.swallowed : 0, firstPin: R ? R.firstPin : 0, fast, rubber: R ? R.rubber : 0,
         gutterBall: R ? (R.gutterBall && newly.length === 0) : false,
+        rebounded: R ? R.rebounded : false, direct: R ? R.direct : 0,
         standing: this.standing().map(p => p.n)
       };
     }
@@ -403,7 +429,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       const spots = GK.spots(this.lhw);
       for (const p of this.pins) {
         if (!nums.includes(p.n)) continue;
-        const [x, z] = this.layoutSpot ? this.layoutSpot(p.n) : spots[p.n - 1];
+        const [x, z] = spots[p.n - 1];
         Object.assign(p, { x: p.origX != null ? p.origX : x, z: p.origZ != null ? p.origZ : z, vx: 0, vz: 0, standing: true, fallen: false, fallT: 0, gone: false, cleared: false, counted: false, drop: 0, wob: 0, fallAt: 0, swallowed: false, blasted: false, downBy: null, hp: this.winter ? 2 : 1 });
         p.sx = p.x; p.sz = p.z;
       }

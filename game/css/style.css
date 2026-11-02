@@ -119,6 +119,25 @@ canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; 
 .pbar i { position: absolute; top: 0; bottom: 0; background: var(--good); box-shadow: 0 0 6px var(--good); }
 .pbar b { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; background: var(--fg); border: 1px solid var(--ink); }
 
+.hbar { position: relative; height: 22px; background: linear-gradient(90deg, #ff5a6e, #3b2a39 35%, #3b2a39 65%, #39c6d6); border: 2px solid var(--ink); }
+.hbar i { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--fg); opacity: 0.6; }
+.hbar span { position: absolute; top: 3px; font-family: var(--label); font-size: 8px; text-transform: uppercase; color: var(--fg); opacity: 0.8; }
+.hbar .hl { left: 4px; } .hbar .hr { right: 4px; }
+.hbar b { position: absolute; top: -4px; bottom: -4px; width: 4px; margin-left: -2px; background: var(--marquee); border: 1px solid var(--ink); }
+.pill.groove { color: var(--good); }
+.row3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.stepper { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; }
+.stepper b { font-size: 18px; }
+.choice[disabled] { opacity: 0.45; cursor: default; }
+.feat { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; text-align: left; font-size: 13px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.feat .ok { color: var(--good); font-family: var(--label); font-size: 10px; }
+.feat .no { color: var(--muted); font-family: var(--label); font-size: 10px; }
+.feat span { color: var(--muted); font-size: 12px; grid-column: 2; }
+.story { display: grid; gap: 2px; text-align: left; font-size: 13px; max-height: 180px; overflow-y: auto; }
+.story div { display: flex; justify-content: space-between; gap: 8px; }
+.story .w { color: var(--good); } .story .l { color: var(--mult); }
+.share { font-family: var(--label); font-size: 10px; background: var(--bg); border: 1px solid var(--line); padding: 6px; text-align: left; white-space: pre-wrap; user-select: text; -webkit-user-select: text; }
+
 /* dock */
 .dock { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr) auto; gap: 6px; align-items: stretch; }
 .slots { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 5px; }

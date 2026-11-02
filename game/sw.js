@@ -1,7 +1,7 @@
 // Gutter Kings service worker: cache-first for the game's own files so it plays offline once installed.
-const CACHE = 'gk-v3';
+const CACHE = 'gk-v5';
 const FILES = ['./', 'index.html', 'css/style.css', 'icon.svg', 'manifest.webmanifest',
-  'js/version.js', 'js/core.js', 'js/data.js', 'js/physics.js', 'js/scoring.js', 'js/run.js', 'js/frame.js', 'js/audio.js', 'js/render.js', 'js/ui.js', 'js/main.js'];
+  'js/version.js', 'js/core.js', 'js/data.js', 'js/physics.js', 'js/scoring.js', 'js/meta.js', 'js/run.js', 'js/frame.js', 'js/audio.js', 'js/render.js', 'js/ui.js', 'js/main.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {

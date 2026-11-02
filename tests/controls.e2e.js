@@ -30,11 +30,17 @@ const shots = process.argv[2];
     await page.waitForTimeout(500 + t * 250);
     if (t === 0) await snap('c3-power');
     await tap();
+    if (!/Throw/.test(await page.$eval('#setBtn', e => e.textContent))) throw new Error('expected hook step after power');
+    if (await page.$eval('#hbar', e => e.hidden)) throw new Error('hook dial not shown');
+    await page.waitForTimeout(150 + t * 100);
+    if (t === 0) await snap('c3b-hook');
+    await tap();
     const st = await page.evaluate(() => ({ phase: GK.debug.phase, ball: GK.debug.sim.balls[0] && { x: +GK.debug.sim.balls[0].x.toFixed(1), vx: Math.round(GK.debug.sim.balls[0].vx), vz: Math.round(GK.debug.sim.balls[0].vz) } }));
     if (st.phase !== 'rolling') throw new Error('throw did not start: ' + JSON.stringify(st));
     results.push(st.ball);
     if (t === 0) { await page.waitForTimeout(900); await snap('c4-rolling'); }
     await page.waitForFunction(() => GK.debug.phase !== 'rolling', null, { timeout: 30000 });
+    if (await page.evaluate(() => GK.debug.phase) === 'replay') await page.evaluate(() => GK.debug.skipReplay());
   }
   // keyboard path + back button
   await page.waitForFunction(() => GK.debug.phase === 'aim', null, { timeout: 30000 });
@@ -43,6 +49,7 @@ const shots = process.argv[2];
   if (!/start/.test(await label())) throw new Error('back did not return to start step');
   await page.keyboard.press('Space'); await page.keyboard.press('ArrowLeft'); await page.keyboard.press('Space');
   await page.waitForTimeout(300); await page.keyboard.press('Space');
+  await page.waitForTimeout(200); await page.keyboard.press('Space');
   if (await page.evaluate(() => GK.debug.phase) !== 'rolling') throw new Error('keyboard throw failed');
   console.log('throws', JSON.stringify(results));
   await close();

@@ -6,16 +6,17 @@ var GK = globalThis.GK = globalThis.GK || {};
   const SAVE_KEY = 'gk-run-v1', META_KEY = 'gk-meta-v1';
   GK.ALLEY_COUNT = GK.ALLEYS.length;
 
-  GK.newRun = function ({ seed, bag = 'classic', daily = false } = {}) {
+  GK.newRun = function ({ seed, bag = 'classic', daily = false, league = 'open', asc = 0 } = {}) {
     seed = (seed == null ? (Date.now() ^ (Math.random() * 0xffffffff)) : seed) >>> 0;
     const sb = GK.STARTER_BAGS.find(b => b.id === bag) || GK.STARTER_BAGS[0];
     const run = {
-      v: 1, seed, daily, bagId: sb.id,
+      v: 1, seed, daily, bagId: sb.id, league: GK.LEAGUES && GK.LEAGUES[league] ? league : 'open', asc: Math.max(0, asc | 0),
       alley: 0, round: 0, money: 4 + (sb.money || 0),
       bag: sb.balls.map(type => ({ type, ed: null })), maxBag: 3,
       charms: [], maxCharms: 5, cons: [], maxCons: 2,
-      rack: new Array(10).fill('std'), levels: {}, members: [], equip: {},
-      stats: { pins: 0, strikes: 0, spares: 0, splits: 0, gutters: 0, frames: 0, bestFrame: 0, throws: 0, score: 0 },
+      rack: GK.padRack(), levels: {}, members: [], equip: {},
+      stats: { pins: 0, strikes: 0, spares: 0, splits: 0, gutters: 0, frames: 0, bestFrame: 0, throws: 0, score: 0, perfects: 0, pstreak: 0, bestPStreak: 0 },
+      history: [], best: null,
       nextTargetMul: 1, shopCount: 0, memberOffer: null, memberAlley: -1,
       phase: 'intro', rs: null, shop: null, over: false, won: false
     };
@@ -28,15 +29,16 @@ var GK = globalThis.GK = globalThis.GK || {};
   GK.isBoss = run => GK.isChamp(run) || run.round === 2;
   GK.bossId = run => GK.isBoss(run) ? GK.alleyDef(run).boss.id : null;
   GK.roundTarget = function (run) {
-    if (GK.isChamp(run)) return Math.round(GK.CHAMPIONSHIP.target * run.nextTargetMul);
+    const ru = GK.rules(run);
+    if (GK.isChamp(run)) return Math.round(GK.CHAMPIONSHIP.target * run.nextTargetMul * ru.target * ru.bossTarget / 50) * 50;
     const a = GK.ALLEYS[run.alley];
-    const t = a.base * GK.ROUND_MULT[run.round] * run.nextTargetMul;
+    const t = a.base * GK.ROUND_MULT[run.round] * run.nextTargetMul * ru.target * (run.round === 2 ? ru.bossTarget : 1);
     return Math.round(t / 50) * 50;
   };
 
   // Passive rule changes from charms and memberships.
   GK.flags = function (run, stolen) {
-    const f = { frames: 0, reracks: 0, bumpers: false, wide: 1, wild: false, retake: false, third: false, debt: 0, interestCap: 5, discount: 0, rerollOff: 0 };
+    const f = { frames: 0, reracks: 0, bumpers: false, wide: 1, wild: false, retake: false, third: false, debt: 0, interestCap: 4, discount: 0, rerollOff: 0 };
     (run.charms || []).forEach((c, i) => {
       if (stolen === i) return;
       let def = GK.CHARMS[c.id];
@@ -50,18 +52,27 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (fl.retake) f.retake = true;
       if (fl.third) f.third = true;
       if (fl.debt) f.debt = Math.max(f.debt, fl.debt);
+      if (fl.rebound) f.rebound = true;
+      if (fl.whisper) f.whisper = true;
     });
     const m = run.members || [];
     if (m.includes('reservation')) f.frames++;
     if (m.includes('oil_pass')) f.reracks++;
-    if (m.includes('rewards')) f.interestCap = 10;
+    if (m.includes('rewards')) f.interestCap = 8;
     if (m.includes('clearance')) f.discount = 0.25;
     if (m.includes('reroll_club')) f.rerollOff = 2;
+    const ru = GK.rules(run);
+    f.frames += ru.frames; f.reracks += ru.reracks;
+    f.interestCap = Math.min(f.interestCap, ru.interestCap);
+    if (ru.bumpers) f.bumpers = true;
+    f.priceDelta = ru.priceDelta;
     return f;
   };
   GK.equipMods = function (run) {
-    const m = { hook: 1, speed: 1, aim: 1, bar: 1, zone: 1, noWobble: false };
-    Object.values(run.equip || {}).forEach(id => { const e = GK.EQUIP[id]; if (!e) return; ['speed', 'aim', 'bar', 'zone'].forEach(k => { if (e[k]) m[k] *= e[k]; }); if (e.noWobble) m.noWobble = true; });
+    const m = { hook: 1, speed: 1, aim: 1, bar: 1, dial: 1, zone: 1, noWobble: false };
+    Object.values(run.equip || {}).forEach(id => { const e = GK.EQUIP[id]; if (!e) return; ['speed', 'aim', 'bar', 'dial', 'zone'].forEach(k => { if (e[k]) m[k] *= e[k]; }); if (e.noWobble) m.noWobble = true; });
+    const ru = GK.rules(run);
+    m.bar *= ru.bar; m.dial *= ru.bar; m.zone *= ru.zone; m.speed *= ru.speed;
     return m;
   };
   GK.canAfford = (run, price) => run.money - price >= -GK.flags(run).debt;
@@ -80,7 +91,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     const fl = GK.flags(run, stolen);
     const framesMax = GK.C.FRAMES + fl.frames;
     const rs = {
-      target: GK.roundTarget(run), total: 0, frames: [], frameIdx: 0, streak: 0,
+      target: GK.roundTarget(run), total: 0, frames: [], frameIdx: 0, streak: 0, groove: 0,
       framesMax, reracks: GK.C.RERACKS + fl.reracks, stolen, loadedNext: false,
       boss, tilts: [], king: null, kingTotal: 0
     };
@@ -105,6 +116,8 @@ var GK = globalThis.GK = globalThis.GK || {};
     const rs = run.rs, fl = GK.flags(run, rs ? rs.stolen : -1);
     const lines = [];
     if (!GK.isChamp(run)) lines.push({ label: GK.roundName(run) + ' cleared', v: GK.ROUND_PAY[run.round] });
+    const ru = GK.rules(run);
+    if (ru.pay) lines.push({ label: GK.LEAGUES[run.league].name, v: ru.pay });
     const unused = rs ? Math.max(0, rs.framesMax - rs.frameIdx) : 0;
     if (unused) lines.push({ label: unused + ' unused frame' + (unused > 1 ? 's' : ''), v: unused });
     run.charms.forEach((c, i) => {
@@ -155,22 +168,22 @@ var GK = globalThis.GK = globalThis.GK || {};
   }
   GK.price = function (run, base, ed) {
     const fl = GK.flags(run);
-    const p = base + (ed === 'foil' ? 2 : ed === 'holo' ? 3 : ed === 'neon' ? 5 : 0);
+    const p = base + (ed === 'foil' ? 2 : ed === 'holo' ? 3 : ed === 'neon' ? 5 : 0) + (fl.priceDelta || 0);
     return Math.max(1, Math.round(p * (1 - fl.discount)));
   };
   function pickCharm(run, rng, exclude) {
     const owned = new Set(run.charms.map(c => c.id).concat(exclude));
     for (let t = 0; t < 30; t++) {
       const rar = weightedRarity(rng);
-      const pool = GK.CHARM_LIST.filter(c => c.rarity === rar && !owned.has(c.id));
+      const pool = GK.CHARM_LIST.filter(c => c.rarity === rar && !owned.has(c.id) && GK.isUnlocked('charm', c.id));
       if (pool.length) return rng.pick(pool).id;
     }
-    const pool = GK.CHARM_LIST.filter(c => !owned.has(c.id));
+    const pool = GK.CHARM_LIST.filter(c => !owned.has(c.id) && GK.isUnlocked('charm', c.id));
     return pool.length ? rng.pick(pool).id : null;
   }
   function pickBall(run, rng, exclude) {
     const owned = new Set(run.bag.map(b => b.type).concat(exclude));
-    const pool = Object.keys(GK.BALLS).filter(k => k !== 'house' && !owned.has(k));
+    const pool = Object.keys(GK.BALLS).filter(k => k !== 'house' && !owned.has(k) && GK.isUnlocked('ball', k));
     return pool.length ? rng.pick(pool) : null;
   }
   function pickGood(run, rng, exclude) {
@@ -212,7 +225,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     run.phase = 'shop';
     return run.shop;
   };
-  GK.rerollCost = run => Math.max(1, 5 + (run.shop ? run.shop.rerolls : 0) - GK.flags(run).rerollOff);
+  GK.rerollCost = run => Math.max(1, 6 + (run.shop ? run.shop.rerolls : 0) * 2 - GK.flags(run).rerollOff);
   GK.reroll = function (run) {
     const cost = GK.rerollCost(run);
     if (!GK.canAfford(run, cost)) return { ok: false, msg: 'Not enough money' };
@@ -282,8 +295,12 @@ var GK = globalThis.GK = globalThis.GK || {};
     } else if (k.target === 'pin') {
       if (!Array.isArray(target) || !target.length) return { ok: false, msg: 'Pick pins first.' };
       if (k.pinType === 'none' && run.rack.filter(t => t !== 'none').length <= 1) return { ok: false, msg: 'You need at least one pin.' };
-      target.slice(0, k.picks).forEach(n => { run.rack[n - 1] = k.pinType; });
-      msg = k.pinType === 'none' ? 'Pin ' + target[0] + ' erased' : 'Pins ' + target.slice(0, k.picks).join(' & ') + ' are now ' + GK.PINS[k.pinType].name + 's';
+      run.rack = GK.padRack(run.rack);
+      const picks = target.slice(0, k.picks);
+      if (k.backRow ? picks.some(n => n < 11 || run.rack[n - 1] !== 'none') : picks.some(n => run.rack[n - 1] === 'none')) return { ok: false, msg: k.backRow ? 'Pick an empty back-row spot (11-13).' : 'Pick spots that have a pin.' };
+      picks.forEach(n => { run.rack[n - 1] = k.pinType; });
+      if (k.backRow) msg = 'Pin ' + picks[0] + ' added to your rack';
+      else msg = k.pinType === 'none' ? 'Pin ' + target[0] + ' erased' : 'Pins ' + target.slice(0, k.picks).join(' & ') + ' are now ' + GK.PINS[k.pinType].name + 's';
     } else if (k.target === 'ball') {
       const b = run.bag[target]; if (!b) return { ok: false, msg: 'Pick a ball first.' };
       b.ed = k.edition; msg = GK.BALLS[b.type].full + ' is now ' + GK.EDITIONS[k.edition].name;
@@ -291,12 +308,12 @@ var GK = globalThis.GK = globalThis.GK || {};
     else if (id === 't_rerack') { run.rs.reracks++; msg = '+1 Re-rack this round'; }
     else if (id === 'm_bribe') {
       if (run.rs.framesMax - run.rs.frameIdx <= 1) return { ok: false, msg: 'Not enough frames left to bribe.' };
-      run.rs.target = Math.round(run.rs.target * 0.7); run.rs.framesMax--; msg = 'Target cut to ' + GK.fmt(run.rs.target);
+      run.rs.target = Math.round(run.rs.target * 0.75); run.rs.framesMax--; msg = 'Target cut to ' + GK.fmt(run.rs.target);
     } else if (id === 'm_loaded') {
       if (inRound) run.rs.loadedNext = true; else run.loadedPending = true;
       if (run.charms.length) { const j = rng.int(run.charms.length); msg = GK.CHARMS[run.charms[j].id].name + ' was destroyed. '; run.charms.splice(j, 1); }
       msg += 'Next frame ×3 Mult';
-    } else if (id === 'm_counterfeit') { run.money += 15; run.nextTargetMul *= 1.25; msg = '+$15. Next target +25%'; }
+    } else if (id === 'm_counterfeit') { run.money += 12; run.nextTargetMul *= 1.35; msg = '+$12. Next target +35%'; }
     else if (id === 'm_dupe') {
       if (!run.charms.length) return { ok: false, msg: 'You have no charms to copy.' };
       if (run.charms.length >= run.maxCharms) return { ok: false, msg: 'No free charm slot.' };
@@ -312,7 +329,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     try { if (run && !run.over && !run.won) localStorage.setItem(SAVE_KEY, JSON.stringify(run)); else localStorage.removeItem(SAVE_KEY); } catch (e) {}
   };
   GK.load = function () {
-    try { const s = localStorage.getItem(SAVE_KEY); if (!s) return null; const r = JSON.parse(s); return r && r.v === 1 ? r : null; } catch (e) { return null; }
+    try { const s = localStorage.getItem(SAVE_KEY); if (!s) return null; const r = JSON.parse(s); if (!r || r.v !== 1) return null; r.rack = GK.padRack(r.rack); r.league = r.league || 'open'; r.asc = r.asc || 0; r.history = r.history || []; r.stats = Object.assign({ perfects: 0, pstreak: 0, bestPStreak: 0 }, r.stats); return r; } catch (e) { return null; }
   };
   GK.clearSave = function () { try { localStorage.removeItem(SAVE_KEY); } catch (e) {} };
   GK.meta = function () {

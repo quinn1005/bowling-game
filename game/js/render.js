@@ -26,8 +26,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = sp * (0.4 + Math.random()); this.parts.push({ x, z, h: 6, vx: Math.cos(a) * v, vz: Math.sin(a) * v, vh: 30 + Math.random() * 40, col, t: 0, life: 0.5 + Math.random() * 0.4 }); }
     }
 
-    setTheme(def, lhw, gut) {
-      this.theme = def.theme; this.lhw = lhw; this.gut = gut;
+    setTheme(def, lhw, gut, oil) {
+      this.theme = def.theme; this.lhw = lhw; this.gut = gut; this.oil = oil || (def.lane && def.lane.oil) || 'house';
       this.signText = def.name.toUpperCase(); this.subText = def.sub;
       this.buildStatic();
     }
@@ -60,11 +60,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       const rng = GK.makeRng(GK.hash(this.signText));
       for (let i = 0; i < 260; i++) { const x = (rng() * 2 - 1) * LHW, z = rng() * C.ZBACK, q = P(x, z); g.fillStyle = 'rgba(80,40,10,0.18)'; g.fillRect(Math.round(q.x), Math.round(q.y), 1, 1); }
       quad(g, P(-LHW, C.ZH - 12), P(LHW, C.ZH - 12), P(LHW, C.ZBACK), P(-LHW, C.ZBACK), 'rgba(255,236,200,0.18)');
-      const top = P(0, C.ZOIL).y, bot = P(0, 0).y;
-      const gr = g.createLinearGradient(0, bot, 0, top);
-      gr.addColorStop(0, 'rgba(255,255,255,0.16)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-      g.save(); g.beginPath(); const a = P(-LHW, 0), b = P(LHW, 0), c = P(LHW, C.ZOIL), d = P(-LHW, C.ZOIL);
-      g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.lineTo(c.x, c.y); g.lineTo(d.x, d.y); g.closePath(); g.fillStyle = gr; g.fill(); g.restore();
+      this.drawOil(g, LHW, nb);
       for (const s of [-1, 1]) quad(g, P(s * LHW - 0.3, 0), P(s * LHW + 0.3, 0), P(s * LHW + 0.3, C.ZBACK), P(s * LHW - 0.3, C.ZBACK), '#5a3a22');
       for (const bd of [3, 5, 8, 11, 14]) for (const s of [-1, 1]) { const q = P(s * (LHW - (bd - 0.5) * 1.064), 22); g.fillStyle = '#4a2c18'; g.fillRect(Math.round(q.x), Math.round(q.y), 1, 1); }
       [5, 10, 15, 20, 25, 30, 35].forEach((bd, i) => {
@@ -72,7 +68,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         const p1 = P(x - 0.8, zb), p2 = P(x + 0.8, zb), p3 = P(x, zb + 6);
         g.fillStyle = '#4a2c18'; g.beginPath(); g.moveTo(p1.x, p1.y); g.lineTo(p2.x, p2.y); g.lineTo(p3.x, p3.y); g.closePath(); g.fill();
       });
-      for (const [x, z] of GK.spots(LHW)) { const q = P(x, z); g.fillStyle = 'rgba(90,50,25,0.55)'; g.fillRect(Math.round(q.x - 1), Math.round(q.y), 2, 1); }
+      GK.spots(LHW).forEach(([x, z], i) => { const q = P(x, z); g.fillStyle = i < 10 ? 'rgba(90,50,25,0.55)' : 'rgba(90,50,25,0.25)'; g.fillRect(Math.round(q.x - 1), Math.round(q.y), 2, 1); });
       quad(g, P(-E, -0.6), P(E, -0.6), P(E, 0.6), P(-E, 0.6), '#2a1416');
       for (const s of [-1, 1]) {
         quad(g, P(s * E, C.ZH - 16), P(s * E, C.ZBACK + 18), P(s * E, C.ZBACK + 18, 24), P(s * E, C.ZH - 16, 24), '#3d2a2c');
@@ -93,6 +89,57 @@ var GK = globalThis.GK = globalThis.GK || {};
       g.fillStyle = T.subc; g.fillText(this.subText, W / 2, 37);
     }
 
+    // Visible oil: a blue sheen board by board, strongest where the pattern is oiliest, with
+    // lighter buffer streaks running down the lane like real conditioned lanes under the lights.
+    drawOil(g, LHW, nb) {
+      const pat = this.oil, len = Math.min(C.ZBACK, (GK.OIL[pat] || GK.OIL.house).len);
+      const tones = [[70, 140, 255], [100, 170, 255], [55, 115, 225], [130, 190, 255]];
+      const bw = 2 * LHW / nb, rng = GK.makeRng(GK.hash(pat + nb));
+      for (let i = 0; i < nb; i++) {
+        const x0 = -LHW + i * bw, x1 = x0 + bw, xm = (x0 + x1) / 2;
+        const tone = tones[(i * 3 + (i >> 2)) % tones.length];
+        for (let z = 0; z < len; z += 6) {
+          const o = GK.oilAt(pat, xm, z + 3, LHW);
+          if (o < 0.03) continue;
+          const a = (0.07 + 0.3 * o) * (0.85 + rng() * 0.3);
+          quad(g, P(x0, z), P(x1, z), P(x1, z + 6), P(x0, z + 6), 'rgba(' + tone[0] + ',' + tone[1] + ',' + tone[2] + ',' + a.toFixed(3) + ')');
+        }
+      }
+      // buffer streaks and glints
+      for (let k = 0; k < 9; k++) {
+        const x = -LHW + (k + 0.5) * 2 * LHW / 9 + (rng() - 0.5) * 2;
+        for (let z = 2; z < len - 4; z += 2) {
+          const o = GK.oilAt(pat, x, z, LHW); if (o < 0.25) continue;
+          const q = P(x, z); g.fillStyle = 'rgba(200,230,255,' + (0.08 + 0.18 * o).toFixed(3) + ')'; g.fillRect(Math.round(q.x), Math.round(q.y), 1, 1);
+        }
+      }
+      for (let k = 0; k < 120; k++) {
+        const x = (rng() * 2 - 1) * LHW, z = rng() * len, o = GK.oilAt(pat, x, z, LHW);
+        if (o < 0.4) continue;
+        const q = P(x, z); g.fillStyle = 'rgba(235,248,255,' + (0.3 + 0.4 * o).toFixed(2) + ')'; g.fillRect(Math.round(q.x), Math.round(q.y), 1, 1);
+      }
+    }
+
+    // A few spectators in the front corners: they jump on strikes, clap spares, slump on gutters.
+    drawCrowd(cr, time) {
+      const cx = this.cx, mood = cr ? cr.mood : 'idle', t = cr ? cr.t : 0;
+      const people = [[8, '#c84a5a', '#3a2a2a'], [21, '#4a7ac8', '#e8c39a'], [34, '#e0b028', '#6b4320'], [166, '#2fb36a', '#e8c39a'], [179, '#b06bff', '#3a2a2a'], [192, '#ff7a59', '#c8956a']];
+      people.forEach(([x, shirt, skin], i) => {
+        let dy = Math.round(Math.sin(time * 2 + i) * 0.6), arms = false, slump = false;
+        if (mood === 'cheer') { dy = -Math.round(Math.abs(Math.sin(t * 11 + i * 1.3)) * 5); arms = true; }
+        else if (mood === 'clap') { dy = -Math.round(Math.abs(Math.sin(t * 9 + i)) * 2); arms = Math.floor(t * 8 + i) % 2 === 0; }
+        else if (mood === 'groan') { dy = 2; slump = true; }
+        const by = H - 9 + dy;
+        cx.fillStyle = '#140e16'; cx.fillRect(x - 5, by - 1, 11, 12);
+        cx.fillStyle = slump ? GK.shade(shirt, -0.45) : shirt; cx.fillRect(x - 4, by, 9, 10);
+        cx.fillStyle = skin; cx.fillRect(x - 2, by - 6 + (slump ? 2 : 0), 5, 5);
+        cx.fillStyle = '#140e16'; cx.fillRect(x - 2, by - 7 + (slump ? 2 : 0), 5, 2);
+        if (arms) { cx.fillStyle = skin; cx.fillRect(x - 6, by - 6, 2, 6); cx.fillRect(x + 5, by - 6, 2, 6); }
+      });
+      if (mood === 'cheer' && t < 1.6) { cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'center'; cx.fillStyle = '#ffd27a'; cx.fillText('YEAH!', 21, H - 24 - Math.round(t * 6)); cx.fillText('WOO!', 179, H - 24 - Math.round(t * 6)); }
+      if (mood === 'groan' && t < 1.6) { cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'center'; cx.fillStyle = '#a8949f'; cx.fillText('ohh…', 21, H - 22); cx.fillText('ugh', 179, H - 22); }
+    }
+
     drawPin(p, sim, time, glowOnly) {
       if (p.gone && !p.swallowed) return;
       if (p.gone) return;
@@ -103,19 +150,19 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (p.fallen) { const f = Math.min(1, p.fallT / 0.22); th = (1 - (1 - f) * (1 - f)) * Math.PI / 2 * 0.96; dir = p.fd; }
       else { const lean = p.wob * 0.3 * Math.sin(time * 28 + p.n * 1.7); th = Math.abs(lean); dir = lean >= 0 ? p.wobDir : { x: -p.wobDir.x, z: -p.wobDir.z }; }
       const h0 = p.standing ? (1 - p.drop) * (1 - p.drop) * 30 : 0;
-      const L = 15, sn = Math.sin(th), cs = Math.cos(th);
+      const ps = (p.r || C.PIN_R) / C.PIN_R, L = 15 * (0.6 + 0.4 * ps), sn = Math.sin(th), cs = Math.cos(th), PW = 4.77 * ps;
       cx.globalAlpha = alpha;
       const sh = P(p.x, p.z);
-      if (!glowOnly) { cx.fillStyle = 'rgba(30,15,10,0.28)'; cx.beginPath(); cx.ellipse(sh.x, sh.y, 4.77 * S0 * sh.s * 0.6, 1.4 * sh.s * 2, 0, 0, Math.PI * 2); cx.fill(); }
+      if (!glowOnly) { cx.fillStyle = 'rgba(30,15,10,0.28)'; cx.beginPath(); cx.ellipse(sh.x, sh.y, PW * S0 * sh.s * 0.6, 1.4 * sh.s * 2, 0, 0, Math.PI * 2); cx.fill(); }
       const pts = [], N = 14;
-      for (let k = 0; k <= N; k++) { const t = k / N; const q = P(p.x + dir.x * L * sn * t, p.z + dir.z * L * sn * t, h0 + L * cs * t); pts.push([q.x, q.y, prof(t) * 4.77 * S0 * q.s, t]); }
+      for (let k = 0; k <= N; k++) { const t = k / N; const q = P(p.x + dir.x * L * sn * t, p.z + dir.z * L * sn * t, h0 + L * cs * t); pts.push([q.x, q.y, prof(t) * PW * S0 * q.s, t]); }
       const frozen = p.hp > 1 && p.standing;
       const outline = glowOnly ? '#ff4fd8' : '#2b1f24';
       for (const [x, y, r] of pts) this.circle(x, y, r + (glowOnly ? 1.2 : 0.7), outline);
       for (const [x, y, r] of pts) this.circle(x, y, r, frozen ? '#d8f4ff' : def.body);
       for (const [x, y, r, t] of pts) if (t > 0.1 && t < 0.45) this.circle(x + r * 0.35, y, r * 0.45, frozen ? '#9fd6ee' : def.shade);
       for (const [x, y, r, t] of pts) if (t > 0.12 && t < 0.4) this.circle(x - r * 0.4, y, r * 0.28, 'rgba(255,255,255,0.85)');
-      for (const tt of [0.58, 0.67]) { const q = P(p.x + dir.x * L * sn * tt, p.z + dir.z * L * sn * tt, h0 + L * cs * tt); this.circle(q.x, q.y, prof(tt) * 4.77 * S0 * q.s * 0.95, def.band); }
+      for (const tt of [0.58, 0.67]) { const q = P(p.x + dir.x * L * sn * tt, p.z + dir.z * L * sn * tt, h0 + L * cs * tt); this.circle(q.x, q.y, prof(tt) * PW * S0 * q.s * 0.95, def.band); }
       if (p.type === 'explosive' && p.standing) { const q = P(p.x, p.z, h0 + L + 1.5); cx.fillStyle = (Math.floor(time * 8) % 2) ? '#ffd447' : '#ff6a3d'; cx.fillRect(Math.round(q.x), Math.round(q.y - 1), 1, 2); }
       if (p.type === 'gold' && p.standing && Math.floor(time * 2 + p.n) % 5 === 0) { const q = P(p.x, p.z, h0 + 9); cx.fillStyle = '#fff'; cx.fillRect(Math.round(q.x - 1), Math.round(q.y), 1, 1); }
       if (frozen) { const q = P(p.x, p.z, h0 + 4); cx.fillStyle = '#ffffff'; cx.fillRect(Math.round(q.x + 1), Math.round(q.y), 1, 1); }
@@ -266,6 +313,8 @@ var GK = globalThis.GK = globalThis.GK || {};
         }
       }
       this.drawMonitor(sim, time);
+      this.drawCrowd(st.crowd, time);
+      if (st.replay) { cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'left'; cx.fillStyle = (Math.floor(time * 2) % 2) ? '#ff5a6e' : '#ffd27a'; cx.fillText('● REPLAY', 6, 50); }
 
       cx.font = '8px "Silkscreen", monospace'; cx.textAlign = 'center';
       for (const p of this.pops) {
