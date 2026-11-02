@@ -17,8 +17,9 @@ var GK = globalThis.GK = globalThis.GK || {};
   GK.C = C;
 
   // Standard pin spots relative to the headpin; x scaled for narrow lanes.
-  // Spots 1-10 are the standard rack; 11-13 are the optional back row bought as Back-Row Pins.
-  const SPOT_REL = [[0, 0], [-6, 1], [6, 1], [-12, 2], [0, 2], [12, 2], [-18, 3], [-6, 3], [6, 3], [18, 3], [-12, 4], [0, 4], [12, 4]];
+  // Spots 1-10 are the standard rack; 11-15 are the optional back row bought as Back-Row Pins.
+  // A real 5th row would be 48in wide, wider than the lane, so it's squeezed to fit (9.75in apart).
+  const SPOT_REL = [[0, 0], [-6, 1], [6, 1], [-12, 2], [0, 2], [12, 2], [-18, 3], [-6, 3], [6, 3], [18, 3], [-19.5, 4], [-9.75, 4], [0, 4], [9.75, 4], [19.5, 4]];
   GK.RACK_SIZE = SPOT_REL.length;
   GK.spots = function (lhw) {
     const k = Math.min(1, (lhw || C.LHW) / C.LHW);
@@ -66,7 +67,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     const i = GK.wearIdx(x, z, lhw);
     return i < 0 ? base : Math.max(0, Math.min(1, base - wear[i]));
   };
-  // Racks are always RACK_SIZE long: spots 1-10 default to standard pins, 11-13 to empty.
+  // Racks are always RACK_SIZE long: spots 1-10 default to standard pins, 11-15 to empty.
   GK.padRack = function (rack) {
     const r = (rack || []).slice(0, GK.RACK_SIZE);
     while (r.length < GK.RACK_SIZE) r.push(r.length < 10 ? 'std' : 'none');

@@ -531,13 +531,16 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (ed === 'neon') this.circle(c.x, c.y, R + 2.2, 'rgba(182,255,92,0.35)');
       if (type === 'blackhole') this.circle(c.x, c.y, R + 2.5 + Math.sin(time * 9) * 0.8, 'rgba(176,107,255,0.35)');
       this.circle(c.x, c.y, R + 0.8, ed === 'foil' ? '#9fe8ff' : ed === 'holo' ? `hsl(${(time * 300) % 360},90%,70%)` : '#0e0a10');
-      if (type === 'ghost' || type === 'glass') cx.globalAlpha = alpha * (type === 'ghost' ? 0.55 : 0.75);
+      if (type === 'neonball') this.circle(c.x, c.y, R + 1.8 + Math.sin(time * 7) * 0.5, 'rgba(57,255,138,0.35)');
+      if (type === 'spiked' && R > 2) for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + (b ? b.rot : 0); cx.fillStyle = '#d0b090'; cx.fillRect(Math.round(c.x + Math.cos(a) * (R + 1)), Math.round(c.y + Math.sin(a) * (R + 1)), 1, 1); }
+      if (type === 'ghost' || type === 'glass' || type === 'bubble' || type === 'jelly') cx.globalAlpha = alpha * (type === 'ghost' ? 0.55 : type === 'bubble' ? 0.6 : 0.8);
       // pixel shading: dark rim, base colour, a lit cap toward the top-left
       this.circle(c.x, c.y, R, GK.shade(t.col, -0.45));
       this.circle(c.x - R * 0.12, c.y - R * 0.12, R * 0.86, t.col);
       this.circle(c.x - R * 0.3, c.y - R * 0.32, R * 0.5, GK.shade(t.col, 0.22));
       if (type === 'mirror') { this.circle(c.x - R * 0.2, c.y - R * 0.2, R * 0.55, '#e8ecf2'); this.circle(c.x + R * 0.25, c.y + R * 0.25, R * 0.4, '#8a909a'); }
       if (type === 'snake') { cx.fillStyle = '#c8ff8a'; cx.fillRect(Math.round(c.x - R * 0.8), Math.round(c.y - 0.5), Math.round(R * 1.6), 1); }
+      this.ballMarks(type, c, R, time, b);
       this.circle(c.x - R * 0.38, c.y - R * 0.4, R * 0.22, 'rgba(255,255,255,0.75)');
       this.circle(c.x - R * 0.2, c.y - R * 0.5, R * 0.1, t.hi);
       cx.globalAlpha = alpha;
@@ -551,6 +554,27 @@ var GK = globalThis.GK = globalThis.GK || {};
         for (const [hx, hy] of [[-0.22, -0.1], [0.22, -0.1], [0, 0.28]]) { this.circle(c.x + hx * R, c.y + oy + hy * R, Math.max(0.6, R * 0.13), 'rgba(255,255,255,0.18)'); this.circle(c.x + hx * R + 0.15, c.y + oy + hy * R + 0.15, Math.max(0.5, R * 0.11), '#07050a'); }
       }
       cx.globalAlpha = 1;
+    }
+
+    // Small pixel details that tell the v0.7 balls apart.
+    ballMarks(type, c, R, time, b) {
+      const cx = this.cx, px = (x, y, col, w = 1, h = 1) => { cx.fillStyle = col; cx.fillRect(Math.round(c.x + x * R), Math.round(c.y + y * R), w, h); };
+      if (R < 2) return;
+      switch (type) {
+        case 'pinball': px(-0.7, -0.35, '#d8283a', Math.round(R * 1.4), 1); px(-0.7, -0.1, '#d8283a', Math.round(R * 1.4), 1); break;
+        case 'disco': for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) if ((i + j + Math.floor(time * 6)) % 3 === 0 && i * i + j * j < 6) px(i * 0.3, j * 0.3, (i + j) % 2 ? '#ffffff' : '#8a90a8'); break;
+        case 'boomerang': px(-0.5, -0.1, '#7a2a08', 2, 1); px(-0.25, 0.1, '#7a2a08', 2, 1); px(0.05, 0.1, '#7a2a08', 2, 1); px(0.3, -0.1, '#7a2a08', 2, 1); break;
+        case 'sticky': px(-0.4, 0.3, '#2a7a1a', 1, 2); px(0.2, 0.45, '#2a7a1a', 1, 2); px(0.5, 0.1, '#c8ff9a'); break;
+        case 'paint': px(-0.4, -0.2, '#ff4a5a', 2, 2); px(0.25, 0.15, '#3ad9ff', 2, 2); px(-0.1, 0.4, '#ffe066', 1, 1); break;
+        case 'pendulum': px(-0.05, -0.8, '#3a2a10', 1, Math.round(R * 1.6)); break;
+        case 'lightning': px(-0.2, -0.6, '#ffffff'); px(0, -0.3, '#ffffff'); px(-0.25, 0, '#ffffff', 2, 1); px(0.05, 0.25, '#ffffff'); px(-0.1, 0.5, '#ffffff'); break;
+        case 'wrecking': px(-0.1, -1.05, '#9a9aa8', 2, 2); break;
+        case 'duster': for (let i = 0; i < 5; i++) px(-0.8 + i * 0.4, -0.9 + Math.sin(time * 9 + i) * 0.08, '#ff9ad0', 1, 2); break;
+        case 'bubble': px(0.3, 0.3, '#ffffff'); break;
+        case 'chain': px(-0.5, -0.1, '#d0d0e0', 2, 1); px(0.1, -0.1, '#d0d0e0', 2, 1); break;
+        case 'moon': px(-0.3, 0.2, '#8a8a96', 2, 2); px(0.3, -0.2, '#8a8a96', 1, 1); px(0.2, 0.45, '#8a8a96', 1, 1); break;
+        case 'twin': px(-0.05, -0.7, '#0e3a5a', 1, Math.round(R * 1.4)); break;
+      }
     }
 
     drawPost(q, time) {
@@ -574,6 +598,12 @@ var GK = globalThis.GK = globalThis.GK || {};
           for (let i = 0; i < 4; i++) cx.fillRect(x0 + d * i, y0 - 3 + i, 1, 7 - i * 2);
         }
         for (let z = 14; z < 70; z += 9) { const p = P(st.aimX, z); cx.fillStyle = '#2a1416'; cx.fillRect(Math.round(p.x), Math.round(p.y) + 1, 2, 1); cx.fillStyle = 'rgba(255,210,122,0.8)'; cx.fillRect(Math.round(p.x) - 1, Math.round(p.y), 2, 1); }
+        if (st.boards) {
+          // Tape Measure: boards are counted from the right gutter like a right-hander's target.
+          const bd = GK.clamp(Math.round((this.lhw - st.aimX) / (2 * this.lhw) * 39 + 0.5), 1, 39);
+          const tq = P(st.aimX, 40);
+          ptext(cx, 'BOARD ' + bd, tq.x, tq.y - 4, FONT_S, '#ffe066', 'center', '#2a1416');
+        }
         return;
       }
       const lineX = z => st.aimX + Math.tan(ang) * (z - C.BALL_Z0);
@@ -587,6 +617,13 @@ var GK = globalThis.GK = globalThis.GK || {};
           const p = P(lineX(z), z), w = z < 140 ? 2 : 1, x = Math.round(p.x - w / 2), y = Math.round(p.y);
           cx.fillStyle = '#2a1416'; cx.fillRect(x + 1, y + 1, w, w);
           cx.fillStyle = '#ffd27a'; cx.fillRect(x, y, w, w);
+        }
+      }
+      if (st.hookPreview != null) {
+        // Wrist Computer: a dotted guess at the hook, breaking once the oil runs out.
+        for (let z = 20; z < 300; z += 7) {
+          const k = Math.max(0, (z - 120) / 180), p = P(GK.clamp(lineX(z) + st.hookPreview * 22 * k * k, -this.lhw, this.lhw), z);
+          const w = z < 160 ? 2 : 1; cx.fillStyle = '#0a2a3a'; cx.fillRect(Math.round(p.x) + 1, Math.round(p.y) + 1, w, w); cx.fillStyle = '#5ae0ff'; cx.fillRect(Math.round(p.x), Math.round(p.y), w, w);
         }
       }
       // arrowhead at the end of the line
@@ -631,6 +668,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       cx.imageSmoothingEnabled = true;
       cx.drawImage(this.bg, 0, 0, W, H);
       cx.drawImage(this.oilCv, 0, 0, W, H);
+      if (st.clearOil) cx.drawImage(this.oilCv, 0, 0, W, H); // Bowling Glasses
       if (!sim) { cx.drawImage(this.vig, 0, 0, W, H); return; }
       this.drawTilt(st.tilt, time);
       if (st.phase === 'aim') this.drawGuide(st);
@@ -640,7 +678,11 @@ var GK = globalThis.GK = globalThis.GK || {};
       const strobeOn = Math.floor(time * 2.2) % 3 === 0;
       for (const b of sim.balls) {
         if (b.gone || b.delay > 0) continue;
-        let a = b.kind === 'echo' ? 0.6 : 1;
+        let a = b.kind === 'echo' ? 0.6 : b.kind === 'shadow' ? 0.4 : 1;
+        if (b.kind === 'link' && sim.balls[b.chainTo] && !sim.balls[b.chainTo].gone) {
+          const m = sim.balls[b.chainTo];
+          items.push({ z: (b.z + m.z) / 2, f: () => { const p0 = P(b.x, b.z, b.r), p1 = P(m.x, m.z, m.r); pline(cx, p0.x, p0.y, p1.x, p1.y, '#9a9aa8', 1); } });
+        }
         if (st.strobe && b.z > 70) a = strobeOn ? 1 : 0;
         if (a > 0) items.push({ z: b.z, f: () => this.drawBall(b, b.x, b.z, b.r, b.shard ? 'ice' : b.type, b.kind === 'main' || b.kind === 'twin' ? st.preview.ed : null, time, a) });
       }
@@ -652,6 +694,14 @@ var GK = globalThis.GK = globalThis.GK || {};
       items.sort((a, b) => b.z - a.z).forEach(i => i.f());
 
       for (const f of sim.fx) {
+        if (f.k === 'sparkle') { const q = P(f.x, f.z, 6 + f.t * 20); cx.globalAlpha = 1 - f.t / 0.6; cx.fillStyle = '#ffffff'; cx.fillRect(Math.round(q.x), Math.round(q.y) - 1, 1, 3); cx.fillRect(Math.round(q.x) - 1, Math.round(q.y), 3, 1); cx.globalAlpha = 1; continue; }
+        if (f.k === 'zap') {
+          const a = P(f.x, f.z, 6), z2 = P(f.x2, f.z2, 6), n = 5;
+          cx.globalAlpha = 1 - f.t / 0.6;
+          let lx = a.x, ly = a.y;
+          for (let i = 1; i <= n; i++) { const k = i / n, jx = i < n ? (Math.random() - 0.5) * 6 : 0, nx = a.x + (z2.x - a.x) * k + jx, ny = a.y + (z2.y - a.y) * k; pline(cx, lx, ly, nx, ny, i % 2 ? '#fff6a0' : '#ffffff', 1); lx = nx; ly = ny; }
+          cx.globalAlpha = 1; continue;
+        }
         if (f.k !== 'boom') continue;
         const q = P(f.x, f.z, 4), k = f.t / 0.6, R = f.r * S0 * q.s * (0.4 + k);
         cx.globalAlpha = 1 - k;

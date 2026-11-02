@@ -551,11 +551,15 @@
       if (k.inRound && !inRound) { UI.hideModal(); sfx.nope(); return UI.toast('Use this during a round.'); }
       if (k.target === 'pin') return UI.pinPicker(run, k, picks => done(GK.useCons(run, i, picks, inRound)), UI.hideModal);
       if (k.target === 'ball') return UI.ballPicker(run, k.name, k.desc, bi => done(GK.useCons(run, i, bi, inRound)), UI.hideModal);
+      const pick = opts => UI.choicePicker(k.name, k.desc, opts, v => done(GK.useCons(run, i, v, inRound)), UI.hideModal);
+      if (k.target === 'oil') return pick(Object.entries(GK.OIL).map(([id, o]) => ({ id, name: o.name, desc: o.desc })));
+      if (k.target === 'boss') return pick(Object.entries(GK.BOSSES).filter(([id]) => id !== 'champion').map(([id, b]) => ({ id, name: b.name, desc: b.desc })));
+      if (k.target === 'shot') return pick(GK.SHOT_ORDER.concat(['fullrack']).map(id => ({ id, name: GK.SHOTS[id].name, desc: 'Level ' + (((run.levels || {})[id] || 0) + 1) })));
       done(GK.useCons(run, i, null, inRound));
     };
     UI.detail(UI.info('cons', id), [
       { label: 'Use', fn: use, disabled: k.inRound && !inRound },
-      { label: 'Sell for $' + Math.max(1, Math.floor(k.cost / 2)), fn: () => { GK.sellCons(run, i); sfx.coin(); UI.hideModal(); GK.save(run); if (inRound) refresh(); else showShop(); }, cls: 'danger' },
+      { label: 'Sell for $' + (GK._run = run, GK.consSell(id)), fn: () => { GK.sellCons(run, i); sfx.coin(); UI.hideModal(); GK.save(run); if (inRound) refresh(); else showShop(); }, cls: 'danger' },
       { label: 'Close', fn: UI.hideModal, cls: 'alt' }
     ]);
   }
@@ -609,18 +613,29 @@
     sel = i; sfx.tick(760); refresh();
   }
   const aimLim = () => C.LHW - C.BALL_R - 0.5 - (C.LHW - (laneOf().lhw || C.LHW));
-  const angLim = () => 0.085 * Math.max(1, GK.equipMods(run).aim);
+  const angLim = () => 0.085 * Math.max(1, GK.equipMods(run).aim) * GK.equipMods(run).angRange;
+  let zoneMid = null; // Lucky Socks: the PERFECT zone wanders to a new spot each throw
   function zone() {
-    const eq = GK.equipMods(run), mid = (PZONE[0] + PZONE[1]) / 2, half = (PZONE[1] - PZONE[0]) / 2 * eq.zone;
-    return [mid - half, Math.min(0.99, mid + half)];
+    const eq = GK.equipMods(run), half = (PZONE[1] - PZONE[0]) / 2 * eq.zone;
+    const mid = eq.wander && zoneMid != null ? zoneMid : (PZONE[0] + PZONE[1]) / 2;
+    return [Math.max(0.3, mid - half), Math.min(0.99, mid + half)];
   }
   const tri = u => { u %= 2; return u < 1 ? u : 2 - u; };
-  function powerNow() { return tri((performance.now() - powerT0) / 1000 / (POWER_PERIOD * GK.equipMods(run).bar)); }
+  // Slow Motion slows the bar while you have Groove; Fingerless Gloves make it jitter.
+  function barPeriod() {
+    const fl = GK.flags(run, run.rs ? run.rs.stolen : -1);
+    return POWER_PERIOD * GK.equipMods(run).bar * (fl.slowmo && run.rs && run.rs.groove > 0 ? 1.3 : 1);
+  }
+  function powerNow() {
+    const t = (performance.now() - powerT0) / 1000;
+    const p = tri(t / barPeriod());
+    return GK.equipMods(run).jitter ? GK.clamp(p + 0.025 * Math.sin(t * 41) * Math.sin(t * 13), 0, 1) : p;
+  }
   // Start slider: the ball glides across the approach; angle slider: the arrow swings side to side.
   // Both start from the centre. Anchor Shoes slow the angle swing; Slide Shoes widen its range.
-  function posNow() { return (tri((performance.now() - posT0) / 1000 / POS_PERIOD + 0.5) * 2 - 1) * aimLim(); }
+  function posNow() { return (tri((performance.now() - posT0) / 1000 / (POS_PERIOD * GK.equipMods(run).posSlow) + 0.5) * 2 - 1) * aimLim(); }
   function angNow() {
-    const a = GK.equipMods(run).aim, per = ANG_PERIOD * Math.max(1, a) / Math.min(1, a);
+    const eq = GK.equipMods(run), a = eq.aim, per = ANG_PERIOD * Math.max(1, a) / Math.min(1, a) * eq.angSpeed;
     return (tri((performance.now() - angT0) / 1000 / per + 0.5) * 2 - 1) * angLim();
   }
   // Hook dial: -1 (hard left) .. +1 (hard right), starting from the centre.
@@ -636,7 +651,7 @@
     hint('step_' + s2);
     if (s2 === 'pos') posT0 = performance.now();
     if (s2 === 'angle') angT0 = performance.now();
-    if (s2 === 'power') powerT0 = performance.now();
+    if (s2 === 'power') { powerT0 = performance.now(); zoneMid = 0.55 + Math.random() * 0.36; }
     if (s2 === 'hook') dialT0 = performance.now();
     syncCtrl();
   }
@@ -684,7 +699,9 @@
     }
     const speed = 170 + GK.clamp(lp.p, 0, 1) * 300;
     lockedPower = null;
-    throwBall({ aimX, aim, spin: GK.clamp(spin, -1.2, 1.2), speed, power: lp.p, perfect: lp.perfect });
+    // Pendulum Ball: where the swing is when you let go decides its path.
+    const phase0 = (performance.now() / 1000 * 2.4) % (Math.PI * 2);
+    throwBall({ aimX, aim, spin: GK.clamp(spin, -1.2, 1.2), speed, power: lp.p, perfect: lp.perfect, phase: phase0 });
   }
 
   // Every step is a tap: anywhere on the lane stops the current slider, except a tap on a ball
@@ -779,6 +796,9 @@
       sim: rp || sim, replay: !!rp, crowd, tv,
       ret: run && run.rs && !rp ? { balls: run.bag, sel, stuck: run.rs.stuck && run.bag.length > 1 ? run.rs.stuck.idx : -1, inPlay: phase === 'rolling' && run.rs.cur ? run.rs.cur.ballIdx : -1 } : null,
       phase: rp ? 'replay' : phase, aimX, aimAng, step, time: now / 1000,
+      boards: !rp && phase === 'aim' && step === 'pos' && run && GK.equipMods(run).boards,
+      hookPreview: !rp && phase === 'aim' && step === 'hook' && run && GK.equipMods(run).preview ? dialNow() : null,
+      clearOil: !!(run && GK.equipMods(run).clearOil),
       preview: rp && replay.rec.preview ? { type: replay.rec.preview.type, ed: replay.rec.preview.ed, r: C.BALL_R } : thrown ? { type: thrown.type, ed: thrown.ed, r: C.BALL_R * wide } : b ? { type: b.type, ed: b.ed, r: (b.type === 'cluster' ? 2.3 : C.BALL_R) * wide } : null,
       fog: !rp && run && laneOf().fog,
       dark: rp ? replay.rec.dark : run && laneOf().dark, strobe: !rp && rs && rs.boss === 'strobe', glow: rp ? replay.rec.glow : glow,

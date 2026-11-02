@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.7.0
+
+### Bigger rack
+- **A full back row.** Back-row pins now go on spots 11 to 15, so a rack can grow to 15 pins with a complete fifth row.
+
+### New charms (50)
+- **Points:** Back Row Boss, Pit Crew, Clean Deck, Spare Tire, Corner Pocket, Lane Hog, Scrap Metal, Echo Chamber.
+- **Mult:** Crowd Pleaser, Late Night Special, Perfect Form, Hook Artist, Straight Shooter, Underdog, Night Shift, Spare Change, Heckler's Jacket, Bowling Buddy.
+- **×Mult:** Odd Pins, Groove Master, TV Star, Double Down, Statue, Splitsville, Gold Rush, Last Pin Standing.
+- **Scaling:** Rookie Card, Lane Regular, Scrapbook, Trophy Case, Collector's Edition, Snowball, Ironman.
+- **Money:** Pinsetter's Cut, Ball Return Tips, Sponsorship, Coupon Book, Bake Sale, Raffle Ticket, League Dues, Resale Shop, Arcade Tokens.
+- **Rule-breakers:** Bumper Season, Second Ball Return, Oil Rig, Lucky Coin, Fourth Frame Ball (a bonus ball at a fresh rack after a strike or spare in the last frame), Shadow Bowler, Slow Motion, Pin Magnet.
+
+### New balls (18)
+- Pin Ball, Disco, Boomerang, Sticky, Rubber, Paint, Pendulum, Twin, Lightning, Snowball, Wrecking, Feather Duster, Bubble, Jelly, Chain, Spiked, Neon and Moon. Each has its own physics and its own pixel-art look.
+
+### New pins, equipment and memberships
+- **Pin types:** Bouncy Pins spring forward when they fall; Mirror Pins fall when their partner across the rack falls. Get them with the new Spring Loader and Looking Glass tricks.
+- **Full Rack Card:** levels up a new bonus for strikes with 13 or more pins in the rack.
+- **Equipment:** Lucky Socks, Spinning Shoes, Rosin Bag, Tape Measure (shows your board number), Fingerless Gloves, Wrist Computer (dotted hook preview), Lucky Wristband, Headband, Bowling Glasses (oil shows twice as clearly) and Knee Pad.
+- **Memberships:** Season Ticket, VIP Lounge and Mechanic on Call.
+
+### Black Market
+- Stolen Oil (pick your next oil pattern), Fake ID (pick your boss), Ball Swap, Bootleg Scorecard, Hot Charm, Insurance Fraud, Weighted Pins, Snake Oil, Debt Collector, Pin Thief, Fixed Match, Blood Money, Unlicensed Drill and Smuggled Ball.
+
 ## v0.6.2
 
 ### Changed

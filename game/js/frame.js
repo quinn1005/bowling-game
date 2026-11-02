@@ -7,6 +7,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     const L = Object.assign({}, GK.alleyDef(run).lane || {});
     const rs = run.rs;
     if (GK.rules(run).dark) L.dark = true;
+    if (rs && rs.oil) L.oil = rs.oil;
     if (rs && rs.boss === 'fog') { L.dark = true; L.fog = true; }
     if (rs && rs.cur && rs.cur.laneEvent === 'flicker') L.dark = true;
     return L;
@@ -38,9 +39,12 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (rs.boss === 'janitor' && fi > 0) rs.wear = rs.wear.map(w => w > 0.04 ? -0.2 : w);
       if (rs.boss === 'bookie') { const bet = Math.floor(Math.max(0, run.money) / 2); cur.bet = bet; run.money -= bet; }
       if (rs.boss === 'landlord') { if (run.money >= 2) { run.money -= 2; cur.rent = 2; } else cur.rentMiss = true; }
+      cur.rack = GK.frameRack(run, fi);
+      cur.maxHook = 0; cur.throws = 0; cur.jams = 0; cur.fumbles = 0;
     }
+    const rack = (keep && keep.rack) || GK.frameRack(run, fi);
     const sim = new GK.Sim({
-      lane: GK.laneFor(run), rng, rack: run.rack, wear: rs.wear || (rs.wear = GK.newWear()),
+      lane: GK.laneFor(run), rng, rack, lightLead: !!fl.lightLead, noWear: !!fl.noWear, wear: rs.wear || (rs.wear = GK.newWear()),
       layout: rs.boss === 'astronaut' ? 'random' : 'std',
       winter: rs.boss === 'winter', heavyStd: rs.boss === 'golem',
       posts3: rs.boss === 'strongman', magnetK: rs.boss === 'rats' ? 2 : 1,
@@ -50,6 +54,20 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (keep && keep.pinState) sim.applyPinState(keep.pinState);
     return sim;
   };
+  // This frame's rack: Paint Ball conversions, Weighted Pins and the Pin Thief applied on top of
+  // the run's rack (the run's own rack is never changed by these round-only effects).
+  GK.PAINT_TYPES = ['gold', 'glass', 'lucky', 'phantom', 'wobbly', 'rubber', 'explosive', 'bouncy', 'mirror'];
+  GK.frameRack = function (run, fi) {
+    const rs = run.rs;
+    let rack = GK.padRack(run.rack).slice();
+    if (rs.paint) rack = rack.map((t, i) => t === 'std' && rs.paint[i + 1] ? rs.paint[i + 1] : t);
+    if (rs.weighted) rack = rack.map(t => t === 'none' ? t : 'lead');
+    if (rs.thief) {
+      const have = rack.map((t, i) => t === 'none' ? -1 : i).filter(i => i >= 0);
+      if (have.length > 1) rack[GK.stream(run.seed, 'thief:' + run.alley + ':' + run.round + ':' + fi).pick(have)] = 'none';
+    }
+    return rack;
+  };
   // Standing pins after a roll, so a saved frame can be rebuilt exactly.
   GK.capturePins = sim => sim.pins.filter(p => p.standing && !p.cleared && !p.gone).map(p => ({ n: p.n, x: +p.x.toFixed(2), z: +p.z.toFixed(2) }));
 
@@ -58,7 +76,9 @@ var GK = globalThis.GK = globalThis.GK || {};
     stock: { name: 'Stock layout', desc: 'The factory drilling.' },
     strong: { name: 'Strong layout', desc: 'Hooks 40% harder everywhere.', hook: 1.4 },
     control: { name: 'Control layout', desc: 'Hooks 40% less. Easier to keep on your line.', hook: 0.6 },
-    flare: { name: 'Skid-flare layout', desc: 'Skids straight through the oil, then snaps hard on the dry boards.', flare: true }
+    flare: { name: 'Skid-flare layout', desc: 'Skids straight through the oil, then snaps hard on the dry boards.', flare: true },
+    // Only from the Black Market's Unlicensed Drill; never offered at the shop.
+    illegal: { name: 'Illegal layout', desc: 'Hooks twice as hard, but jams in the return twice as often.', hook: 2, jam: 2, hidden: true }
   };
 
   // Chances for the alley's machinery to act up.
@@ -76,18 +96,27 @@ var GK = globalThis.GK = globalThis.GK || {};
   // prm: { aimX, aim, spin, speed, path }
   GK.launch = function (run, sim, ballIdx, prm) {
     const rs = run.rs, cur = rs.cur, fl = GK.flags(run, rs.stolen), eq = GK.equipMods(run);
+    if (rs.smuggled != null && cur.rollIdx === 0 && run.bag[rs.smuggled] && !GK.isStuck(run, rs.smuggled)) ballIdx = rs.smuggled;
     ballIdx = GK.firstFreeBall(run, ballIdx);
     const ball = run.bag[ballIdx] || run.bag[0];
     cur.snap = sim.snapshot();
     cur.ballIdx = ballIdx;
     cur.ball = { type: ball.type, ed: ball.ed };
+    // Lucky Coin: the first throw of every round counts as PERFECT.
+    if (fl.luckyCoin && !rs.coinUsed) { rs.coinUsed = true; if (prm.perfect === false) cur.coin = true; prm = Object.assign({}, prm, { perfect: true }); }
     cur.perfect = prm.perfect;
+    // Lucky Wristband: once per round, a wild hook is pulled back to half.
+    if (eq.tame && !rs.tamed && Math.abs(prm.spin) > 0.7) { rs.tamed = true; cur.tamed = true; prm = Object.assign({}, prm, { spin: prm.spin * 0.5 }); }
+    cur.maxHook = Math.max(cur.maxHook || 0, Math.abs(prm.spin || 0));
+    cur.throws = (cur.throws || 0) + 1;
     let speed = GK.clamp(prm.speed * eq.speed, 120, 560);
     if (rs.boss === 'comet') speed = Math.min(speed, 380 * eq.speed);
     const p = Object.assign({}, prm, { speed });
     const dr = GK.DRILLS[ball.drill || 'stock'] || GK.DRILLS.stock;
     cur.pending = { ballIdx, prm: Object.assign({}, prm, { path: null }) };
-    sim.launch(ball, p, { wide: fl.wide, hook: eq.hook * (dr.hook || 1), flare: !!dr.flare, wild: fl.wild, bumpers: fl.bumpers, rebound: fl.rebound });
+    const shadowPrm = fl.shadow && rs.lastPrm ? rs.lastPrm : null;
+    sim.launch(ball, p, { wide: fl.wide, hook: eq.hook * (dr.hook || 1), flare: !!dr.flare, wild: fl.wild, bumpers: fl.bumpers || (fl.bumperFirst && rs.frameIdx === 0), rebound: fl.rebound, shadowPrm });
+    rs.lastPrm = { aimX: p.aimX, aim: p.aim, spin: p.spin * eq.hook * (dr.hook || 1), speed };
     run.stats.throws++;
   };
 
@@ -108,7 +137,17 @@ var GK = globalThis.GK = globalThis.GK || {};
       run.stats.bestPStreak = Math.max(run.stats.bestPStreak || 0, run.stats.pstreak);
       const pay = GK.rules(run).perfectPay;
       if (pay) { run.money += pay; notes.push({ t: 'pay', text: 'Pro Tour: +$' + pay + ' for a PERFECT throw' }); }
-    } else if (cur.perfect === false) { rs.groove = 0; run.stats.pstreak = 0; }
+    } else if (cur.perfect === false) {
+      rs.groove = GK.equipMods(run).kneePad ? Math.max(0, (rs.groove || 0) - 1) : 0; run.stats.pstreak = 0;
+      if (rs.snakeOil) { run.money -= 2; notes.push({ t: 'pay', text: 'Snake Oil: -$2 for missing the PERFECT zone' }); }
+    }
+    if (rs.bloodMoney && rec.pins) { run.money += rec.pins; notes.push({ t: 'pay', text: 'Blood Money: +$' + rec.pins }); }
+    if (rec.painted && rec.painted.length) {
+      rs.paint = rs.paint || {};
+      const pr = GK.stream(run.seed, 'paint:' + run.stats.throws);
+      rec.painted.forEach(n => { rs.paint[n] = pr.pick(GK.PAINT_TYPES); });
+      notes.push({ t: 'paint', text: 'Painted ' + rec.painted.length + ' pin' + (rec.painted.length > 1 ? 's' : '') + ' for the rest of the round' });
+    }
 
     if (fl.retake && rec.gutterBall && !cur.retakeUsed) {
       cur.retakeUsed = true;
@@ -130,9 +169,19 @@ var GK = globalThis.GK = globalThis.GK || {};
     // Ball return: the stuck ball comes back once another ball has been thrown;
     // otherwise there's a small chance this ball jams.
     if (rs.stuck && rs.stuck.idx !== cur.ballIdx) { notes.push({ t: 'unstuck', text: GK.BALLS[run.bag[rs.stuck.idx] ? run.bag[rs.stuck.idx].type : 'house'].full + ' is back in the ball return' }); rs.stuck = null; }
-    if (!rs.stuck && run.bag.length > 1 && !cur.shattered) {
+    if (!rs.stuck && run.bag.length > 1 && !cur.shattered && !fl.noJam) {
       const rr = GK.stream(run.seed, 'stuck:' + run.stats.throws);
-      if (rr() < GK.MISHAPS.stuck) { rs.stuck = { idx: cur.ballIdx }; notes.push({ t: 'stuck', text: GK.BALLS[cur.ball.type].full + ' is stuck in the ball return! Throw a different ball first.', idx: cur.ballIdx }); }
+      const thrown = run.bag[cur.ballIdx], jamK = thrown && GK.DRILLS[thrown.drill] && GK.DRILLS[thrown.drill].jam || 1;
+      if (rr() < GK.MISHAPS.stuck * jamK) {
+        cur.jams = (cur.jams || 0) + 1;
+        const bi = run.bag.findIndex(b => b.borrowed);
+        if (bi >= 0) {
+          // Ball Swap: the borrowed rare ball leaves with the first jam.
+          const gone = run.bag[bi]; run.bag.splice(bi, 1);
+          if (rs.smuggled != null) { if (rs.smuggled === bi) rs.smuggled = null; else if (rs.smuggled > bi) rs.smuggled--; }
+          notes.push({ t: 'stuck', text: 'The return jammed and the ' + GK.BALLS[gone.type].full + ' went back to its owner' });
+        } else { rs.stuck = { idx: cur.ballIdx }; notes.push({ t: 'stuck', text: GK.BALLS[cur.ball.type].full + ' is stuck in the ball return! Throw a different ball first.', idx: cur.ballIdx }); }
+      }
     }
     // Pinsetter fumble: after the first roll it sometimes drops pins it was meant to respot.
     if (cur.rollIdx === 0) {
@@ -143,6 +192,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         const drop = rr.shuffle(left.slice()).slice(0, n);
         drop.forEach(p => { sim.topple(p, { x: rr() - 0.5, z: 1 }, 'drop'); p.fallT = 0.3; p.counted = true; });
         const downs = drop.map(p => ({ n: p.n, type: p.type, by: 'drop' }));
+        cur.fumbles = (cur.fumbles || 0) + 1;
         run.stats.pins += drop.length;
         if (drop.length === left.length) {
           // It dropped everything that was left: no strike, it's a free spare. The dropped pins
@@ -157,14 +207,15 @@ var GK = globalThis.GK = globalThis.GK || {};
       }
     }
     cur.rolls.push(rec);
+    if (cur.bonusKind) return { next: 'score', kind: cur.bonusKind, notes, rec };
     if (cur.freeSpare) {
       cur.rolls.push(cur.freeSpare); cur.freeSpare = null;
-      return { next: 'score', kind: 'spare', notes, rec };
+      return GK.bonusBall(run, sim, { next: 'score', kind: 'spare', notes, rec });
     }
     const standing = sim.standing();
     if (standing.length === 0) {
       const kind = GK.classify(cur.rolls, true, cur.splitLeave, rs.streak);
-      return { next: 'score', kind, notes, rec };
+      return GK.bonusBall(run, sim, { next: 'score', kind, notes, rec });
     }
     if (cur.rollIdx === 0) {
       cur.splitLeave = GK.isSplitLeave(standing, sim.lhw);
@@ -180,6 +231,12 @@ var GK = globalThis.GK = globalThis.GK || {};
         cur.splitLeave = GK.isSplitLeave(sim.standing(), sim.lhw);
         notes.push({ t: 'mechanic', text: 'The Mechanic resets ' + pick.length + ' pin' + (pick.length > 1 ? 's' : ''), pins: pick });
       }
+      if (fl.pinMagnet) {
+        const head = sim.pins.find(q => q.n === 1), hx = head ? head.origX : 0, hz = head ? head.origZ : GK.C.ZH;
+        sim.standing().forEach(q => { q.x = q.sx = q.x + (hx - q.x) * 0.2; q.z = q.sz = q.z + (hz - q.z) * 0.2; });
+        cur.splitLeave = GK.isSplitLeave(sim.standing(), sim.lhw);
+      }
+      cur.leftOne = sim.standing().length === 1;
       cur.rollIdx = 1;
       cur.pinState = GK.capturePins(sim);
       return { next: 'aim', notes, rec };
@@ -194,14 +251,31 @@ var GK = globalThis.GK = globalThis.GK || {};
     return { next: 'score', kind, notes, rec };
   };
 
-  GK.canRerack = run => run.rs && run.rs.cur && run.rs.cur.rollIdx > 0 && run.rs.reracks > 0;
+  // Fourth Frame Ball: a strike or spare in a round's last frame earns one more ball at a fresh
+  // rack. The frame keeps its kind; the bonus pins just add to it.
+  GK.bonusBall = function (run, sim, res) {
+    const rs = run.rs, cur = rs.cur;
+    if (!GK.flags(run, rs.stolen).bonusBall || cur.bonusKind || rs.frameIdx !== rs.framesMax - 1) return res;
+    if (!GK.isStrikeKind(res.kind) && !GK.isSpareKind(res.kind)) return res;
+    cur.bonusKind = res.kind;
+    sim.rack = (cur.rack || run.rack).slice();
+    sim.setupPins(rs.boss === 'astronaut' ? 'random' : 'std');
+    sim.rememberLayout();
+    sim.balls = []; sim.blasts = [];
+    cur.rollIdx++; cur.maxRolls = Math.max(cur.maxRolls, cur.rollIdx + 1);
+    cur.pinState = GK.capturePins(sim);
+    res.notes.push({ t: 'third', text: 'Fourth Frame Ball: a bonus ball at a fresh rack!' });
+    return { next: 'aim', notes: res.notes, rec: res.rec };
+  };
+
+  GK.canRerack = run => run.rs && run.rs.cur && run.rs.cur.rollIdx > 0 && run.rs.reracks > 0 && !run.rs.cur.bonusKind;
   GK.rerack = function (run, sim) {
     if (!GK.canRerack(run)) return false;
     const rs = run.rs, cur = rs.cur;
     rs.reracks--;
     run.stats.pins -= cur.rolls.reduce((a, r) => a + r.pins, 0);
     cur.rolls = []; cur.rollIdx = 0; cur.splitLeave = false; cur.leave710 = false;
-    sim.rack = run.rack.slice();
+    sim.rack = (cur.rack || run.rack).slice();
     sim.setupPins(rs.boss === 'astronaut' ? 'random' : 'std');
     sim.rememberLayout();
     sim.balls = []; sim.blasts = [];
@@ -221,7 +295,12 @@ var GK = globalThis.GK = globalThis.GK || {};
       kind, rolls: cur.rolls, frameIdx: rs.frameIdx, lastFrame: rs.frameIdx === rs.framesMax - 1,
       leftSplit: cur.splitLeave, leave710: cur.leave710, loaded: rs.loadedNext,
       call: rs.boss === 'secretary' ? GK.callResult(cur.call, kind) : null,
-      groove: rs.groove || 0, leagueMult: GK.rules(run).mult, leagueName: GK.LEAGUES[run.league || 'open'].name
+      groove: rs.groove || 0, grooveX: !!GK.flags(run, rs.stolen).grooveX, weighted: !!rs.weighted,
+      framesLeft: rs.framesMax - rs.frameIdx, maxHook: cur.maxHook || 0, throws: cur.throws || cur.rolls.length,
+      dark: !!GK.laneFor(run).dark, boss: !!rs.boss, oil: GK.laneFor(run).oil || 'house',
+      fumbles: cur.fumbles || 0, jams: cur.jams || 0, leftOne: !!cur.leftOne,
+      rackSize: (cur.rack || run.rack).filter(t => t !== 'none').length,
+      leagueMult: GK.rules(run).mult, leagueName: GK.LEAGUES[run.league || 'open'].name
     };
     const rng = GK.stream(run.seed, 'score:' + run.alley + ':' + run.round + ':' + rs.frameIdx + ':' + run.stats.throws);
     return GK.scoreFrame(f, run, { rng, stolen: rs.stolen });

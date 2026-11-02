@@ -315,7 +315,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     UI.modal(`<div class="panel">
       <div class="lbl">Re-drill · ${esc(GK.BALLS[b.type].full)}</div>
       <h2>Pick a layout</h2>
-      <div class="choices">${Object.entries(GK.DRILLS).map(([id, d]) => `<button class="choice" data-d="${id}" aria-pressed="${id === cur}"><b>${esc(d.name)}${id === cur ? ' · current' : ''}</b><span>${esc(d.desc)}</span></button>`).join('')}</div>
+      <div class="choices">${Object.entries(GK.DRILLS).filter(([id, d]) => !d.hidden || id === cur).map(([id, d]) => `<button class="choice" data-d="${id}" aria-pressed="${id === cur}"><b>${esc(d.name)}${id === cur ? ' · current' : ''}</b><span>${esc(d.desc)}</span></button>`).join('')}</div>
       <button class="btn alt" data-a="no">Cancel</button>
     </div>`, r => { UI.on(r, '[data-d]', el => onPick(el.dataset.d)); UI.on(r, '[data-a=no]', onCancel); });
   };
@@ -387,12 +387,12 @@ var GK = globalThis.GK = globalThis.GK || {};
   };
 
   UI.levelsHtml = function (run) {
-    return '<div class="levels">' + GK.SHOT_ORDER.map(k => { const b = GK.shotBase(k, run.levels); return '<span>' + esc(GK.SHOTS[k].name) + (b.lv ? ' <i>Lv.' + (b.lv + 1) + '</i>' : '') + ' <i>' + b.chips + '×' + b.mult + '</i></span>'; }).join('') + '</div>';
+    return '<div class="levels">' + GK.SHOT_ORDER.concat((run.levels || {}).fullrack ? ['fullrack'] : []).map(k => { const b = GK.shotBase(k, run.levels); return '<span>' + esc(GK.SHOTS[k].name) + (b.lv ? ' <i>Lv.' + (b.lv + 1) + '</i>' : '') + ' <i>' + b.chips + '×' + b.mult + '</i></span>'; }).join('') + '</div>';
   };
-  // Rack diagram (back row 11-13 on top). canPick(n) decides which spots are selectable.
+  // Rack diagram (back row 11-15 on top). canPick(n) decides which spots are selectable.
   UI.rackHtml = function (rack, picks, canPick) {
     rack = GK.padRack(rack);
-    const rows = [[11, 12, 13], [7, 8, 9, 10], [4, 5, 6], [2, 3], [1]];
+    const rows = [[11, 12, 13, 14, 15], [7, 8, 9, 10], [4, 5, 6], [2, 3], [1]];
     return '<div class="rack">' + rows.map(r => '<div class="rr">' + r.map(n => {
       const t = rack[n - 1], d = GK.PINS[t];
       const ok = typeof canPick === 'function' ? canPick(n) : !!canPick;
@@ -447,6 +447,14 @@ var GK = globalThis.GK = globalThis.GK || {};
     });
     draw();
   };
+  // Generic list picker (Black Market items that target an oil pattern, a boss or a shot).
+  UI.choicePicker = function (title, desc, opts, onPick, onCancel) {
+    UI.modal(`<div class="panel">
+      <h2>${esc(title)}</h2><p class="dim">${esc(desc)}</p>
+      <div class="choices">${opts.map(o => `<button class="choice" data-o="${esc(o.id)}"><b>${esc(o.name)}</b><span>${esc(o.desc || '')}</span></button>`).join('')}</div>
+      <button class="btn alt" data-a="no">Cancel</button>
+    </div>`, r => { UI.on(r, '[data-o]', el => onPick(el.dataset.o)); UI.on(r, '[data-a=no]', onCancel); });
+  };
   UI.ballPicker = function (run, title, desc, onDone, onCancel) {
     UI.modal(`<div class="panel">
       <h2>${esc(title)}</h2><p class="dim">${esc(desc)}</p>
@@ -483,7 +491,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         <button class="btn small alt" data-a="drill" ${GK.canAfford(run, GK.drillCost(run)) ? '' : 'disabled'}>${GK.drillCost(run) ? 'Re-drill $' + GK.drillCost(run) : 'Re-drill (free)'}</button></div>
       <div class="row2"><button class="btn alt small" data-a="reroll" ${GK.canAfford(run, GK.rerollCost(run)) ? '' : 'disabled'}>Reroll $${GK.rerollCost(run)}</button><button class="btn alt small" data-a="info">Run info</button></div>
       <div class="sect">Charms ${run.charms.length}/${run.maxCharms} · tap to sell or reorder</div><div class="owned">${charms}</div>
-      <div class="sect">Bag ${run.bag.length}/${run.maxBag}</div><div class="owned">${balls}</div>
+      <div class="sect">Bag ${run.bag.length}/${GK.maxBag(run)}</div><div class="owned">${balls}</div>
       <div class="sect">Consumables ${run.cons.length}/${run.maxCons}</div><div class="owned">${cons}</div>
       ${eq ? '<div class="sect">Equipment</div><p class="dim" style="margin:0;font-size:13px;color:var(--muted)">' + esc(eq) + '</p>' : ''}
       <button class="btn" data-a="next" data-focus>Next round</button>

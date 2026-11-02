@@ -160,7 +160,7 @@ test('consumables: scorecards level shots, tricks change pins and balls', () => 
   assert.strictEqual(run.bag[1].ed, 'neon');
   assert.ok(GK.useCons(run, 0, [10], false).ok);
   assert.strictEqual(run.rack[9], 'none');
-  assert.strictEqual(GK.useCons(run, 0, [5], false).ok, false, 'back-row pins only go on spots 11-13');
+  assert.strictEqual(GK.useCons(run, 0, [5], false).ok, false, 'back-row pins only go on spots 11-15');
   assert.ok(GK.useCons(run, 0, [12], false).ok);
   assert.strictEqual(run.rack[11], 'std');
   assert.strictEqual(run.cons.length, 0);
@@ -407,4 +407,129 @@ test('resuming a saved frame keeps its rolls and standing pins', () => {
   assert.deepStrictEqual(standing, sim.standing().map(p => p.n).sort((a, b) => a - b));
   assert.strictEqual(saved.rs.cur.rollIdx, 1);
   assert.strictEqual(saved.rs.cur.rolls.length, 1);
+});
+
+test('back row: a 15-pin rack sets up a full back row of 5', () => {
+  assert.strictEqual(GK.RACK_SIZE, 15);
+  const rack = GK.padRack(); for (let i = 10; i < 15; i++) rack[i] = 'std';
+  const s = new GK.Sim({ rng: GK.makeRng(2), lane: {}, rack });
+  assert.strictEqual(s.pins.length, 15);
+  const back = s.pins.filter(p => p.n >= 11);
+  assert.strictEqual(new Set(back.map(p => Math.round(p.z))).size, 1, 'back row pins share one row');
+  assert.ok(s.pins.every(p => p.z < GK.C.ZBACK && Math.abs(p.x) < s.lhw));
+});
+
+test('v0.7 content: every new ball rolls on every lane, with new pin types in the rack', () => {
+  const rack = ['std', 'bouncy', 'mirror', 'lead', 'std', 'mirror', 'std', 'std', 'std', 'std', 'mirror', 'std', 'bouncy', 'std', 'mirror'];
+  for (const type of ['pinball', 'disco', 'boomerang', 'sticky', 'rubber', 'paint', 'pendulum', 'twin', 'lightning', 'snowball', 'wrecking', 'duster', 'bubble', 'jelly', 'chain', 'spiked', 'neonball', 'moon']) {
+    assert.ok(GK.BALLS[type], type);
+    for (const lane of [{}, { ice: true }, { lowg: true }, { posts: true }, { lhw: 16 }]) {
+      const s = new GK.Sim({ rng: GK.makeRng(9), lane, rack, lightLead: true });
+      s.launch({ type }, { aimX: 1, aim: 0, spin: 0.3, speed: 400, phase: 1 }, { shadowPrm: { aimX: -3, aim: 0, spin: 0, speed: 380 } });
+      s.simulate();
+      assert.strictEqual(s.rolling, false, type);
+      const r = s.summarize();
+      assert.ok(r.pins >= 0 && r.pins <= 15, type);
+      assert.ok(Number.isFinite(r.boards) && Number.isFinite(r.gutterPins), type);
+    }
+  }
+});
+
+test('v0.7 content: every new charm scores without errors', () => {
+  const run = GK.newRun({ seed: 3 });
+  const ids = GK.CHARM_LIST.map(c => c.id);
+  for (let i = 0; i < ids.length; i += 5) {
+    run.charms = ids.slice(i, i + 5).map(id => GK.charmInst(id));
+    for (const kind of ['strike', 'spare', 'split', 'open', 'gutter']) {
+      const f = { kind, leftSplit: kind === 'split', framesLeft: 2, maxHook: 0.45, throws: 2, dark: true, boss: true, oil: 'house', fumbles: 1, jams: 1, leftOne: true, rackSize: 15,
+        rolls: [roll({ down: pins(9), pins: 9, gutterPins: 2, boards: 6, wobbles: 0, leadDown: 1, deckLeft: 0, pocket: true, perfect: true }), roll({ down: [{ n: 12, type: 'std', by: 'ball' }], pins: 1, perfect: true })] };
+      const r = GK.scoreFrame(f, run);
+      assert.ok(Number.isFinite(r.score) && r.score >= 0, run.charms.map(c => c.id).join(',') + ' ' + kind);
+      GK.afterFrame(r.ctx, run);
+    }
+  }
+});
+
+test('v0.7 content: charm effects (Back Row Boss, Groove Master, Neon ball, Full Rack, Weighted pins)', () => {
+  const run = GK.newRun({ seed: 3 });
+  const f = { kind: 'strike', rolls: [roll({ down: pins(10).concat([{ n: 11, type: 'std', by: 'ball' }, { n: 15, type: 'std', by: 'ball' }]), pins: 12 })] };
+  const base = GK.scoreFrame(f, run);
+  run.charms = [GK.charmInst('back_row_boss')];
+  assert.strictEqual(GK.scoreFrame(f, run).chips, base.chips + 50);
+  run.charms = [];
+  // Groove Master turns Groove into ×Mult
+  assert.strictEqual(GK.scoreFrame(Object.assign({ groove: 5 }, f), run).mult, base.mult + 5);
+  assert.ok(Math.abs(GK.scoreFrame(Object.assign({ groove: 5, grooveX: true }, f), run).mult - base.mult * 1.5) < 1e-9);
+  // Neon ball: +1 Mult per pin
+  const nf = { kind: 'open', rolls: [roll({ ball: 'neonball', down: pins(4), pins: 4 })] };
+  assert.strictEqual(GK.scoreFrame(nf, run).mult, 1 + 4);
+  // Full Rack needs 13+ pins in the rack and a level
+  run.levels.fullrack = 1;
+  assert.strictEqual(GK.scoreFrame(Object.assign({ rackSize: 13 }, f), run).chips, base.chips + 30);
+  assert.strictEqual(GK.scoreFrame(Object.assign({ rackSize: 12 }, f), run).chips, base.chips);
+  // Weighted Pins: lead pins score double Points
+  const lf = { kind: 'open', rolls: [roll({ down: pins(3, 'lead'), pins: 3 })] };
+  assert.strictEqual(GK.scoreFrame(Object.assign({ weighted: true }, lf), run).chips, 2 * GK.scoreFrame(lf, run).chips);
+});
+
+test('v0.7 Black Market: every item can be used and does what it says', () => {
+  const run = GK.newRun({ seed: 12 });
+  run.bag.push({ type: 'feather', ed: null });
+  const use = (id, target, inRound) => { run.cons = [id]; return GK.useCons(run, 0, target, inRound); };
+  assert.ok(use('m_stolen_oil', 'shark').ok); assert.strictEqual(run.oilNext, 'shark');
+  GK.startRound(run); assert.strictEqual(run.rs.oil, 'shark'); assert.strictEqual(GK.laneFor(run).oil, 'shark');
+  const slots = run.maxCharms;
+  assert.ok(use('m_fake_id', 'janitor').ok); assert.strictEqual(run.maxCharms, slots - 1);
+  run.round = 2; assert.strictEqual(GK.bossFor(run), 'janitor'); run.round = 0;
+  assert.ok(use('m_ball_swap', 1).ok); assert.ok(run.bag[1].borrowed);
+  const lv = run.levels.spare || 0; assert.ok(use('m_bootleg', 'spare').ok); assert.strictEqual(run.levels.spare, lv + 3);
+  assert.ok(use('m_hot_charm').ok); const hot = run.charms[run.charms.length - 1]; assert.strictEqual(hot.ed, 'neon'); assert.strictEqual(hot.expires, 2);
+  const m = run.money, bags = run.bag.length; assert.ok(use('m_insurance').ok); assert.strictEqual(run.money, m + 20); assert.strictEqual(run.bag.length, bags - 1);
+  assert.ok(use('m_fixed').ok); assert.strictEqual(run.fixed, run.alley);
+  assert.ok(use('m_illegal_drill', 0).ok); assert.strictEqual(run.bag[0].drill, 'illegal');
+  GK.startRound(run);
+  assert.ok(use('m_weighted', null, true).ok); assert.ok(GK.frameRack(run, 0).filter(t => t !== 'none').every(t => t === 'lead'));
+  run.rs.weighted = false;
+  assert.ok(use('m_pin_thief', null, true).ok); assert.strictEqual(GK.frameRack(run, 0).filter(t => t !== 'none').length, 9);
+  const g = run.rs.groove || 0; assert.ok(use('m_snake_oil', null, true).ok); assert.strictEqual(run.rs.groove, g + 3);
+  assert.ok(use('m_blood_money', null, true).ok); assert.ok(run.shopSmall);
+  assert.ok(use('m_smuggled', null, true).ok); assert.ok(run.bag[run.rs.smuggled]);
+  assert.strictEqual(use('m_debt', null, true).ok, false, 'debt collector only works in a Boss Match');
+});
+
+test('v0.7 equipment and rules: flags and equipment mods combine', () => {
+  const run = GK.newRun({ seed: 4 });
+  run.equip = { shoes: 'spinning_shoes', gloves: 'rosin_bag', head: 'headband' };
+  const eq = GK.equipMods(run);
+  assert.strictEqual(eq.angRange, 1.4); assert.strictEqual(eq.posSlow, 1.25); assert.strictEqual(eq.groove, 1);
+  run.members = ['season_ticket', 'mechanic_call'];
+  run.charms = [GK.charmInst('second_return')];
+  assert.strictEqual(GK.maxBag(run), run.maxBag + 1);
+  assert.ok(GK.flags(run).noJam);
+  GK.startRound(run);
+  assert.strictEqual(run.rs.groove, 2, 'headband + season ticket');
+});
+
+test('Fourth Frame Ball: a strike in the last frame earns a bonus ball at a fresh rack', () => {
+  const run = GK.newRun({ seed: 8 });
+  run.charms = [GK.charmInst('fourth_ball')];
+  GK.startRound(run);
+  run.rs.frameIdx = run.rs.framesMax - 1;
+  const prev = [GK.MISHAPS.respot, GK.MISHAPS.stuck]; GK.MISHAPS.respot = 0; GK.MISHAPS.stuck = 0;
+  try {
+    const sim = GK.beginFrame(run);
+    sim.pins.forEach(p => { if (p.standing) { sim.topple(p, { x: 0, z: 1 }, 'ball'); p.counted = false; } });
+    GK.launch(run, sim, 0, { aimX: 0, aim: 0, spin: 0, speed: 380 });
+    sim.simulate();
+    const out = GK.afterRoll(run, sim);
+    assert.strictEqual(out.next, 'aim', 'bonus ball offered');
+    assert.ok(run.rs.cur.bonusKind && GK.isStrikeKind(run.rs.cur.bonusKind));
+    assert.strictEqual(sim.standing().length, 10, 'fresh rack');
+    assert.strictEqual(GK.canRerack(run), false);
+    GK.launch(run, sim, 0, { aimX: 2, aim: 0, spin: 0, speed: 380 });
+    sim.simulate();
+    const out2 = GK.afterRoll(run, sim);
+    assert.strictEqual(out2.next, 'score'); assert.strictEqual(out2.kind, run.rs.cur.bonusKind);
+    assert.strictEqual(run.rs.cur.rolls.length, 2);
+  } finally { [GK.MISHAPS.respot, GK.MISHAPS.stuck] = prev; }
 });

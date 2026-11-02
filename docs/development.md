@@ -17,7 +17,7 @@ What the game has:
 - Pro Shop between rounds: 2 charms, 1 ball, 2 goods, a per-alley membership, rerolls, selling, charm reordering.
 - Controls: four timed sliders, each stopped with a tap: start spot (period 1.0 s), angle (0.8 s), a fast power bar (narrow green PERFECT zone; overpowered throws wobble), then stop a sweeping hook dial. PERFECT throws in a row build Groove (+1 Mult per stack).
 - Oil patterns per alley (`GK.OIL` / `GK.oilAt` in `core.js`) drive the hook in physics and are drawn on the lane as a blue sheen.
-- Leagues, Ascension levels and feat unlocks (`meta.js`). Locked balls/charms never appear in the shop. Racks have 13 spots; 11-13 are optional back-row pins.
+- Leagues, Ascension levels and feat unlocks (`meta.js`). Locked balls/charms never appear in the shop. Racks have 15 spots; 11-15 (a full back row) are optional back-row pins.
 - Reactive oil: `rs.wear` (`GK.newWear`, `GK.oilEff` in `core.js`) is a boards × 6in grid kept per round; `Sim.wearLine` strips oil under the ball and adds carrydown past the pattern. The renderer redraws its oil layer after each roll (`setWear`).
 - Mishaps (`GK.MISHAPS` in `frame.js`): 5% pinsetter fumble after roll 1 (drops 1-2 standing pins, counted as down; if that clears the rack it's a free Spare scored as a second 'pinsetter' roll, never a Strike), 6% ball jams in the return (`rs.stuck`) until a different ball is thrown.
 - Ball return (right of the approach) replaces the bag buttons: tap a ball to select it (`Renderer.drawReturn` / `returnHit`). Lane TV with pixel cartoons for strikes, doubles, turkeys, spares, splits and the 7-10 (`TV_SCENES` in `render.js`).
@@ -40,6 +40,7 @@ Same setup as Neon Bastion (`quinn1005/Roguelike-App`): Capacitor wraps `game/` 
 
 - `core.js` constants, projection, seeded RNG (`GK.stream(seed, tag)` gives independent streams).
 - `data.js` all content as data: shots, balls, charms (score hooks), pins, consumables, equipment, memberships, alleys/bosses.
+- `content.js` the v0.7 expansion: more charms, balls, pin types (Bouncy, Mirror), equipment, memberships and Black Market items, appended to the tables in `data.js`.
 - `physics.js` `GK.Sim`: 2D lane sim, fixed 240 Hz step, emits events (`down`, `first`, `wall`, `pit`, `explode`, `ballBounce`…) and per-roll counters. No DOM.
 - `scoring.js` frame pipeline: shot base → rolls (pins, pin types, ball, ball edition) → charms (+edition, Copycat, Lucky Seven retrigger) → round modifiers. Returns animation steps.
 - `meta.js` leagues, ascension rules (`GK.rules(run)`), feats and unlocks.
@@ -53,7 +54,7 @@ The logic modules (core, data, physics, scoring, run, frame) load in Node, so wh
 
 - `npm test` unit tests for scoring, rules, physics determinism, shop and consumables.
 - `npm run bot` headless bot plays 30 runs with human-like timing error and prints where they ended (balance check). `node tests/bot.js 60 great` uses a sharper player. After the v0.4.0 rebalance a good player clears about 5 rounds on average and a great one about 7; wins are rare.
-- `npm run e2e` Playwright play-tests in Chromium: the throw sliders, a normal run with the shop, every alley's boss with every ball type, and the v0.6 features (skip, events, drilling, endless, TV, resume mid-throw, practice). Needs `playwright` resolvable (e.g. `NODE_PATH=$(npm root -g)`).
+- `npm run e2e` Playwright play-tests in Chromium: the throw sliders, a normal run with the shop, every alley's boss with every ball type, and the v0.6 features (skip, events, drilling, endless, TV, resume mid-throw, practice) and the v0.7 content (15-pin rack, equipment overlays, Black Market pickers, every new ball). Needs `playwright` resolvable (e.g. `NODE_PATH=$(npm root -g)`).
 
 ## Physics tuning constants (`game/js/core.js`, `physics.js`; same values as the prototype)
 

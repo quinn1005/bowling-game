@@ -155,7 +155,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   kadd('t_neon', 'Neon Paint', 'trick', 7, 'Give a ball the Neon edition: ×1.4 Mult on its rolls.', { target: 'ball', edition: 'neon' });
   kadd('t_frame', 'Extra Frame', 'trick', 6, '+1 Frame this round. Use during a round.', { target: 'round', inRound: true });
   kadd('t_rerack', 'Re-rack Token', 'trick', 4, '+1 Re-rack this round. Use during a round.', { target: 'round', inRound: true });
-  kadd('t_backrow', 'Back-Row Pin', 'trick', 5, 'Add a standard pin to an empty back-row spot (11, 12 or 13). Bigger racks score more Points but strikes need every pin.', { target: 'pin', picks: 1, pinType: 'std', backRow: true });
+  kadd('t_backrow', 'Back-Row Pin', 'trick', 5, 'Add a standard pin to an empty back-row spot (11 to 15). Bigger racks score more Points but strikes need every pin.', { target: 'pin', picks: 1, pinType: 'std', backRow: true });
   kadd('t_shrink', 'Shrink Ray', 'trick', 5, 'Turn up to 2 pins into Tiny Pins. ' + GK.PINS.tiny.desc, { target: 'pin', pinType: 'tiny', picks: 2 });
   kadd('t_loose', 'Loose Screws', 'trick', 5, 'Turn up to 2 pins into Wobbly Pins. ' + GK.PINS.wobbly.desc, { target: 'pin', pinType: 'wobbly', picks: 2 });
   kadd('m_eraser', 'Pin Eraser', 'market', 6, 'Black market. Remove a pin from your rack for good. Strikes get easier, frames earn fewer Points.', { target: 'pin', picks: 1, pinType: 'none' });

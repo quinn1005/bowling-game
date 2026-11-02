@@ -52,7 +52,17 @@ var GK = globalThis.GK = globalThis.GK || {};
       lastRollPins: rolls.length ? rolls[rolls.length - 1].pins : 0,
       leftSplit: !!f.leftSplit, leave710: !!f.leave710,
       frameIdx: f.frameIdx || 0, lastFrame: !!f.lastFrame,
-      perfects: rolls.filter(r => r.perfect === true).length, misses: rolls.filter(r => r.perfect === false).length
+      perfects: rolls.filter(r => r.perfect === true).length, misses: rolls.filter(r => r.perfect === false).length,
+      backRow: [...down].filter(n => n >= 11).length,
+      gutterPins: sum('gutterPins'), boards: sum('boards'), wobbles: sum('wobbles'), leadDown: sum('leadDown'),
+      deckLeft: rolls.length ? rolls[rolls.length - 1].deckLeft || 0 : 0,
+      pocket: !!(rolls[0] && rolls[0].pocket),
+      gutterBall: rolls.some(r => r.gutterBall),
+      cheer: GK.isStrikeKind(f.kind) || (!!f.leave710 && GK.isSpareKind(f.kind)),
+      framesLeft: f.framesLeft != null ? f.framesLeft : 99,
+      maxHook: f.maxHook || 0, throws: f.throws != null ? f.throws : rolls.length,
+      dark: !!f.dark, boss: !!f.boss, oil: f.oil || 'house',
+      fumbles: f.fumbles || 0, jams: f.jams || 0, leftOne: !!f.leftOne
     };
   };
 
@@ -83,6 +93,12 @@ var GK = globalThis.GK = globalThis.GK || {};
     const base = GK.shotBase(f.kind, run.levels);
     chips = base.chips; mult = base.mult;
     steps.push({ src: 'shot', op: 'set', chips, mult, label: GK.SHOTS[f.kind].name + (base.lv ? ' Lv.' + (base.lv + 1) : '') });
+    // Full Rack: strikes with 13+ pins in the rack, levelled by the Full Rack Card.
+    const frLv = (run.levels && run.levels.fullrack) || 0;
+    if (frLv && GK.isStrikeKind(f.kind) && (f.rackSize || 0) >= 13) {
+      const fs = mk('shot', 0), lv = GK.SHOTS.fullrack.lv;
+      fs.chips(lv[0] * frLv, 'Full Rack Lv.' + (frLv + 1)); fs.mult(lv[1] * frLv, 'Full Rack Lv.' + (frLv + 1));
+    }
 
     // 2. rolls
     let retrigger = false;
@@ -94,6 +110,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         const def = GK.PINS[d.type] || GK.PINS.std;
         let c = def.chips;
         if (d.swallowed) c *= 2;
+        if (f.weighted && d.type === 'lead') c *= 2;
         pinChips += c;
       }
       const bonus = r.carry * GK.BONUS.carry + r.late * GK.BONUS.late + r.walls * GK.BONUS.wall;
@@ -126,6 +143,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (bt === 'bouncer' && r.ballBounces) bs.chips(6 * r.ballBounces, bname + ': ' + r.ballBounces + ' bounce');
       if (bt === 'golden' && r.pins) bs.money(r.pins, bname);
       if (bt === 'glass') bs.xmult(2, bname);
+      if (bt === 'neonball' && r.pins) bs.mult(r.pins, bname + ': ' + r.pins + ' glowing pin' + (r.pins > 1 ? 's' : ''));
       if (bt === 'tiny' && r.direct) bs.mult(r.direct, bname + ': ' + r.direct + ' direct hit' + (r.direct > 1 ? 's' : ''));
       if (bt === 'lucky7' && r.pins === 7) { retrigger = true; push({ src: 'ball', idx: ri, op: 'note', v: 0, label: 'Lucky Seven! Charms trigger twice' }); }
       if (ed === 'foil') bs.chips(GK.EDITIONS.foil.chips, 'Foil ' + bname);
@@ -158,7 +176,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     const bs = mk('boss', 0);
     if (f.rentMiss) bs.mult(-2, 'Missed rent (The Landlord)');
     if (f.leagueMult) bs.mult(f.leagueMult, f.leagueName || 'League');
-    if (f.groove) bs.mult(f.groove, 'Groove ×' + f.groove);
+    if (f.groove) { if (f.grooveX) bs.xmult(1 + 0.1 * f.groove, 'Groove Master ×' + f.groove); else bs.mult(f.groove, 'Groove ×' + f.groove); }
     if (f.loaded) bs.xmult(3, 'Loaded Ball');
     if (f.call === 'hit') bs.xmult(2, 'Called it!');
     if (f.call === 'miss') bs.xmult(0.5, 'Wrong call');
