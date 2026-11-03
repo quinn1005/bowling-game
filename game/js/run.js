@@ -13,7 +13,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       v: 1, seed, daily, bagId: sb.id, league: GK.LEAGUES && GK.LEAGUES[league] ? league : 'open', asc: Math.max(0, asc | 0),
       alley: 0, round: 0, money: 4 + (sb.money || 0),
       bag: sb.balls.map(type => ({ type, ed: null })), maxBag: 3,
-      charms: [], maxCharms: 5, cons: [], maxCons: 2,
+      charms: [], maxCharms: 5, cons: [], maxCons: 2, trophies: [],
       rack: GK.padRack(), levels: {}, members: [], equip: {},
       stats: { pins: 0, strikes: 0, spares: 0, splits: 0, gutters: 0, frames: 0, bestFrame: 0, throws: 0, score: 0, perfects: 0, pstreak: 0, bestPStreak: 0 },
       history: [], best: null, bosses: GK.pickBosses(seed), tags: [], practice: false, endless: false,
@@ -44,12 +44,16 @@ var GK = globalThis.GK = globalThis.GK || {};
   GK.bossFor = run => GK.isChamp(run) ? 'champion' : (run.bossOverride && run.bossOverride.alley === run.alley) ? run.bossOverride.id : (run.bosses || GK.pickBosses(run.seed))[GK.baseAlley(run)];
   GK.bossId = run => GK.isBoss(run) ? GK.bossFor(run) : null;
   GK.bossDef = run => GK.BOSSES[GK.bossFor(run)];
+  // v1.0 rebalance: trophies, bonus balls and evolutions make later alleys stronger, so targets
+  // climb a little faster alley by alley. Tuned with tests/bot.js.
+  GK.ALLEY_SCALE = [1.1, 1.3, 1.5, 1.7, 1.9, 2.1, 2.3, 2.5];
+  GK.CHAMP_SCALE = 2.5;
   GK.roundTarget = function (run) {
     const ru = GK.rules(run);
-    if (GK.isChamp(run)) return Math.round(GK.CHAMPIONSHIP.target * run.nextTargetMul * ru.target * ru.bossTarget / 50) * 50;
+    if (GK.isChamp(run)) return Math.round(GK.CHAMPIONSHIP.target * GK.CHAMP_SCALE * run.nextTargetMul * ru.target * ru.bossTarget / 50) * 50;
     let t;
     if (GK.isEndless(run)) t = GK.CHAMPIONSHIP.target * 0.6 * Math.pow(1.7, run.alley - GK.ALLEY_COUNT - 1) * GK.ROUND_MULT[run.round];
-    else t = GK.ALLEYS[run.alley].base * GK.ROUND_MULT[run.round];
+    else t = GK.ALLEYS[run.alley].base * GK.ROUND_MULT[run.round] * GK.ALLEY_SCALE[run.alley];
     t *= run.nextTargetMul * ru.target * (run.round === 2 ? ru.bossTarget : 1);
     return Math.round(t / 50) * 50;
   };
@@ -57,10 +61,13 @@ var GK = globalThis.GK = globalThis.GK || {};
   // Passive rule changes from charms and memberships.
   GK.flags = function (run, stolen) {
     const f = { frames: 0, reracks: 0, bumpers: false, wide: 1, wild: false, retake: false, third: false, debt: 0, interestCap: 4, discount: 0, rerollOff: 0 };
-    (run.charms || []).forEach((c, i) => {
-      if (stolen === i) return;
+    const sources = (run.charms || []).map((c, i) => {
+      if (stolen === i) return null;
       let def = GK.CHARMS[c.id];
       if (def.copy) { const nb = run.charms[i + 1]; def = nb && stolen !== i + 1 && !GK.CHARMS[nb.id].copy ? GK.CHARMS[nb.id] : null; }
+      return def;
+    }).concat((run.trophies || []).map(t => GK.TROPHIES[t.id]));
+    sources.forEach(def => {
       const fl = def && def.flags; if (!fl) return;
       if (fl.frames) f.frames += fl.frames;
       if (fl.reracks) f.reracks += fl.reracks;
@@ -95,8 +102,8 @@ var GK = globalThis.GK = globalThis.GK || {};
   GK.equipMods = function (run) {
     const m = { hook: 1, speed: 1, aim: 1, bar: 1, dial: 1, zone: 1, angRange: 1, angSpeed: 1, posSlow: 1, groove: 0, noWobble: false };
     const MUL = ['speed', 'aim', 'bar', 'dial', 'zone', 'angRange', 'angSpeed', 'posSlow'];
-    Object.values(run.equip || {}).forEach(id => {
-      const e = GK.EQUIP[id]; if (!e) return;
+    Object.values(run.equip || {}).map(id => GK.EQUIP[id]).concat((run.trophies || []).map(t => (GK.TROPHIES[t.id] || {}).eq)).forEach(e => {
+      if (!e) return;
       for (const [k, v] of Object.entries(e)) {
         if (MUL.includes(k)) m[k] *= v; else if (k === 'groove') m.groove += v; else if (v === true) m[k] = true;
       }
@@ -127,7 +134,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       boss, tilts: [], king: null, kingTotal: 0
     };
     const eq = GK.equipMods(run);
-    rs.groove = (eq.groove || 0) + (fl.grooveStart || 0);
+    rs.groove = (eq.groove || 0) + (fl.grooveStart || 0) + (run.grooveNext || 0);
+    run.grooveNext = 0;
     if (run.oilNext) { rs.oil = run.oilNext; run.oilNext = null; }
     if (boss && run.fixed === run.alley) { rs.target = Math.round(rs.target * 0.6 / 50) * 50; rs.fixed = true; }
     run.nextTargetMul = 1;
@@ -147,6 +155,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   };
 
   // End-of-round payout breakdown (applied by applyPayout).
+  const fmtX = r => '×' + (Math.floor(r * 10) / 10);
   GK.payout = function (run) {
     const rs = run.rs, fl = GK.flags(run, rs ? rs.stolen : -1);
     const lines = [];
@@ -154,7 +163,11 @@ var GK = globalThis.GK = globalThis.GK || {};
     const ru = GK.rules(run);
     if (ru.pay) lines.push({ label: GK.LEAGUES[run.league].name, v: ru.pay });
     const unused = rs ? Math.max(0, rs.framesMax - rs.frameIdx) : 0;
-    if (unused) lines.push({ label: unused + ' unused frame' + (unused > 1 ? 's' : ''), v: unused });
+    if (rs && rs.bonusThrown) lines.push({ label: 'Bonus balls: ' + rs.bonusPins + ' gold pins', v: rs.bonusPay || 0 });
+    else if (unused) lines.push({ label: unused + ' unused frame' + (unused > 1 ? 's' : ''), v: unused });
+    const ok = GK.overkill(rs);
+    if (ok && !run.practice) lines.push({ label: ok.label + ' (' + fmtX(rs.total / rs.target) + ' the target)', v: ok.v });
+    (run.trophies || []).forEach(t => { const d = GK.TROPHIES[t.id]; if (d && d.round) { const v = d.round(run, t); if (v) lines.push({ label: d.name + ' (trophy)', v }); } });
     run.charms.forEach((c, i) => {
       if (rs && rs.stolen === i) return;
       const d = GK.CHARMS[c.id]; if (d.round) { const v = d.round(run, c); if (v) lines.push({ label: d.name, v }); }
@@ -191,10 +204,13 @@ var GK = globalThis.GK = globalThis.GK || {};
   GK.consSell = id => resale() ? GK.CONS[id].cost : Math.max(1, Math.floor(GK.CONS[id].cost / 2));
 
   GK.charmDesc = function (c) {
-    const d = GK.CHARMS[c.id];
+    const d = GK.charmDef ? GK.charmDef(c) : GK.CHARMS[c.id];
     let s = d.desc.replace('{v}', GK.fmt(c.v || 0)).replace('{s}', GK.charmSell(c));
     if (c.expires) s += ' Burns out in ' + c.expires + ' round' + (c.expires > 1 ? 's' : '') + '.';
     if (s.includes('{x}')) s = s.replace('{x}', d.show ? d.show(c) : '1');
+    const E = GK.EVOLVE && GK.EVOLVE[c.id];
+    if (E && c.evolved) s = 'EVOLVED from ' + GK.CHARMS[c.id].name + '. ' + s;
+    else if (E) s += ' Evolves into ' + E.name + ': ' + E.need + ' (' + Math.min(E.n, c.evo || 0) + '/' + E.n + ').';
     return s;
   };
 
@@ -511,6 +527,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       ev.charm = rng.pick(pool).id;
     }
     if (id === 'vending') ev.item = rng.pick(GK.CONS_LIST.filter(c => GK.isUnlocked('cons', c.id))).id;
+    if (id === 'regular') Object.assign(ev, GK.regularVisit(run, rng));
     return ev;
   };
   // Accept an event's offer. arg: bag slot to replace (lost_found) or { ball, drill } (lane_mech).
@@ -533,6 +550,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       return { ok: true, msg: 'You pocket ' + GK.CHARMS[ev.charm].name + '. Next target +20%.' };
     }
     if (ev.id === 'lane_mech') return GK.redrill(run, arg.ball, arg.drill, true);
+    if (ev.id === 'regular') return GK.takeRegular(run, ev);
     return { ok: false };
   };
 

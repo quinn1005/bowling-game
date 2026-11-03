@@ -53,7 +53,22 @@ GK.sfx = (() => {
     tick(f) { tone(f, 0, 0.05, 'square', 0.035); },
     chip(i) { tone(330 * Math.pow(1.06, Math.min(i, 24)), 0, 0.06, 'square', 0.04); },
     mult(i) { tone(440 * Math.pow(1.06, Math.min(i, 24)), 0, 0.08, 'sawtooth', 0.035); },
-    xmult() { tone(220, 0, 0.18, 'sawtooth', 0.06, 880); },
+    xmult() { tone(220, 0, 0.18, 'sawtooth', 0.06, 880); tone(65, 0, 0.32, 'sine', 0.35, 40); noise(0, 0.12, 180, 1, 0.35, 'lowpass'); },
+    // a deep impact for pocket hits
+    thump() { tone(55, 0, 0.3, 'sine', 0.5, 30); noise(0, 0.1, 400, 1, 0.5, 'lowpass'); },
+    // the tension heartbeat while the last pin wobbles
+    heart() { tone(60, 0, 0.12, 'sine', 0.35, 45); tone(58, 0.16, 0.12, 'sine', 0.25, 42); },
+    // streak fanfares climb higher and longer with every strike in a row
+    streak(n) {
+      const k = Math.min(n, 9), base = 523 * Math.pow(1.06, k);
+      for (let i = 0; i < 3 + Math.min(k, 6); i++) tone(base * Math.pow(1.122, i), i * 0.06, 0.14, 'square', 0.045);
+      if (n >= 4) tone(base / 2, 0, 0.5, 'sawtooth', 0.05, base);
+      if (n >= 6) noise(0.05, 0.4, 3000, 2, 0.12);
+    },
+    roar() { noise(0, 0.9, 900, 0.6, 0.35); noise(0.1, 0.7, 1800, 0.8, 0.2); },
+    taunt() { tone(392, 0, 0.12, 'square', 0.05); tone(311, 0.14, 0.2, 'square', 0.05); },
+    levelUp() { [523, 659, 784, 1047, 1319, 1568].forEach((f, i) => tone(f, i * 0.07, 0.2, 'square', 0.05)); },
+    slot() { tone(880 + Math.random() * 400, 0, 0.04, 'square', 0.035); },
     coin() { tone(988, 0, 0.06, 'square', 0.05); tone(1319, 0.06, 0.12, 'square', 0.05); },
     boom() { noise(0, 0.5, 120, 0.7, 0.9, 'lowpass'); tone(80, 0, 0.4, 'sine', 0.3, 30); },
     shatter() { for (let i = 0; i < 5; i++) noise(i * 0.03, 0.12, 4000 + Math.random() * 3000, 6, 0.25); },
@@ -86,7 +101,13 @@ GK.music = (() => {
     [84, 46, [0, 2, 7, 9], [0, 2, 3, 2]],          // Lunar: floaty
     [96, 41, [0, 1, 5, 7, 8], [0, 1, 0, 4]]        // The Gutter: sinister
   ];
-  let timer = null, next = 0, beat = 0, cfg = null, on = true, vol = 0.5, gain = null;
+  let timer = null, next = 0, beat = 0, cfg = null, on = true, vol = 0.5, gain = null, layers = 0;
+  function kick(ac, t, v) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.12);
+    g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+    o.connect(g).connect(gain); o.start(t); o.stop(t + 0.2);
+  }
   const hz = m => 440 * Math.pow(2, (m - 69) / 12);
   function note(ac, f, t, dur, type, v) {
     const o = ac.createOscillator(), g = ac.createGain();
@@ -112,11 +133,17 @@ GK.music = (() => {
       const arp = [0, 2, 4, 2, 1, 3, 4, 3][step], m = root + 12 + scale[(deg + arp) % scale.length] + 12 * Math.floor((deg + arp) / scale.length);
       if (cfg.boss || step % 2 === 0) note(ac, hz(m), next, spb * 0.9, 'square', 0.035);
       if (step % 2 === 1 || cfg.boss) hat(ac, next, cfg.boss ? 0.05 : 0.03);
+      // Groove layers: the hotter your PERFECT streak, the fuller the band
+      if (layers >= 1 && step % 4 === 0) kick(ac, next, 0.32);
+      if (layers >= 2 && step % 2 === 1) note(ac, hz(base - 12 + [0, 7, 12, 7][(step >> 1) % 4]), next, spb * 0.8, 'triangle', 0.1);
+      if (layers >= 3) { const lead = [4, 2, 0, 2, 4, 4, 4, 2][step], ml = root + 24 + scale[(deg + lead) % scale.length]; if (step % 2 === 0 || step === 7) note(ac, hz(ml), next, spb * 1.6, 'square', 0.03); }
       next += spb; beat++;
     }
   }
   return {
     get on() { return on; },
+    // Groove 3+ adds drums, 5+ a walking bass, 8+ a lead melody.
+    setGroove(g) { layers = g >= 8 ? 3 : g >= 5 ? 2 : g >= 3 ? 1 : 0; },
     setOn(v) { on = v; if (!v) this.stop(); },
     play(alleyIdx, boss) {
       const ac = GK.sfx.ctx(); if (!ac || !on || GK.sfx.muted) { this.stop(); return; }

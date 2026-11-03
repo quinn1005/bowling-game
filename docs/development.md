@@ -41,6 +41,9 @@ Same setup as Neon Bastion (`quinn1005/Roguelike-App`): Capacitor wraps `game/` 
 - `core.js` constants, projection, seeded RNG (`GK.stream(seed, tag)` gives independent streams).
 - `data.js` all content as data: shots, balls, charms (score hooks), pins, consumables, equipment, memberships, alleys/bosses.
 - `fame.js` pixel portraits for the Wall of Fame (shown after beating the Gutter King).
+- `payoffs.js` (v1.0) boss trophies (3 themed per boss, their own shelf), charm evolutions, overkill and bonus balls.
+- `surprises.js` (v1.0) the jackpot pin and its slot machine, the Regulars dropping by (gifts, dares, tips) and the party/blackout/runaway lane events.
+- `progress.js` (v1.0) bowler XP and levels, level-unlocked cosmetics (trails, pin skins, lane finishes, crowd hats), the collection book and the Regulars' scoreboard.
 - `content.js` the v0.7 expansion: more charms, balls, pin types (Bouncy, Mirror), equipment, memberships and Black Market items, appended to the tables in `data.js`.
 - `physics.js` `GK.Sim`: 2D lane sim, fixed 240 Hz step, emits events (`down`, `first`, `wall`, `pit`, `explode`, `ballBounce`…) and per-roll counters. No DOM.
 - `scoring.js` frame pipeline: shot base → rolls (pins, pin types, ball, ball edition) → charms (+edition, Copycat, Lucky Seven retrigger) → round modifiers. Returns animation steps.
@@ -54,8 +57,8 @@ The logic modules (core, data, physics, scoring, run, frame) load in Node, so wh
 ## Tests
 
 - `npm test` unit tests for scoring, rules, physics determinism, shop and consumables.
-- `npm run bot` headless bot plays 30 runs with human-like timing error and prints where they ended (balance check). `node tests/bot.js 60 great` uses a sharper player. After the v0.4.0 rebalance a good player clears about 5 rounds on average and a great one about 7; wins are rare.
-- `npm run e2e` Playwright play-tests in Chromium: the throw sliders, a normal run with the shop, every alley's boss with every ball type, and the v0.6 features (skip, events, drilling, endless, TV, resume mid-throw, practice) and the v0.7 content (15-pin rack, equipment overlays, Black Market pickers, every new ball). Needs `playwright` resolvable (e.g. `NODE_PATH=$(npm root -g)`).
+- `npm run bot` headless bot plays 30 runs with human-like timing error and prints where they ended (balance check). `node tests/bot.js 60 great` uses a sharper player. After the v1.0 rebalance (targets climb by `GK.ALLEY_SCALE` per alley to offset trophies, bonus balls and evolutions) a good player clears about 4 rounds on average and a great one about 6; wins are rare.
+- `npm run e2e` Playwright play-tests in Chromium: the throw sliders, a normal run with the shop, every alley's boss with every ball type, and the v0.6 features (skip, events, drilling, endless, TV, resume mid-throw, practice) the v0.7 content (15-pin rack, equipment overlays, Black Market pickers, every new ball) and the v1.0 features (bonus balls, overkill, trophies, evolutions, jackpot, regulars, party lane, locker, collection, end screen XP). Needs `playwright` resolvable (e.g. `NODE_PATH=$(npm root -g)`).
 
 ## Physics tuning constants (`game/js/core.js`, `physics.js`; same values as the prototype)
 

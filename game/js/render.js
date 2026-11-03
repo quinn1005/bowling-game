@@ -188,6 +188,18 @@ var GK = globalThis.GK = globalThis.GK || {};
     });
   }
   const TV_SCENES = {
+    jackpot(cx, sx, sy, sw, sh, t, v, R) {
+      px(cx, sx, sy, sw, sh, '#2a0a2a');
+      const reels = (R && R.tvReels) || ['7', '7', '7'], syms = ['7', '$', '?', '♣', '★'];
+      for (let i = 0; i < 3; i++) {
+        const x = sx + 4 + i * 11, stop = 0.5 + i * 0.3, spinning = t < stop;
+        px(cx, x, sy + 5, 9, 12, '#fff6e0'); px(cx, x, sy + 5, 9, 1, '#c8932a'); px(cx, x, sy + 16, 9, 1, '#c8932a');
+        const s = spinning ? syms[Math.floor(t * 30 + i * 2) % syms.length] : reels[i];
+        ptext(cx, s, x + 4.5, sy + 14, FONT_S, spinning ? '#8a6a8a' : (s === '7' ? '#ff3a5a' : '#2a8a3a'), 'center');
+      }
+      if (t > 1.1 && Math.floor(t * 6) % 2) for (let k = 0; k < 6; k++) px(cx, sx + (k * 7 + 3) % sw, sy + 2 + (k % 2) * 17, 1, 1, '#ffd447');
+      caption(cx, sx, sy, sw, sh, t > 1.1 ? 'WINNER!' : 'SPIN!', '#ffd447', t);
+    },
     // Quinn: two hands, outside line up the gutter, the ball hooks itself into the pocket.
     quinn(cx, sx, sy, sw, sh, t) {
       px(cx, sx, sy, sw, sh, '#2a0e18');
@@ -326,6 +338,79 @@ var GK = globalThis.GK = globalThis.GK || {};
     }
     circle(x, y, r, fill) { pdisc(this.cx, x, y, Math.max(0.3, r), fill); }
     pop(x, z, h, text, col) { this.pops.push({ x, z, h, text, col, t: 0 }); if (this.pops.length > 40) this.pops.shift(); }
+    // Cosmetics from the Locker: trail, pin skin, lane finish, crowd hats.
+    setCosmetics(c) {
+      this.cosm = c || {};
+      const sk = GK.cosmetic && GK.cosmetic('pins', this.cosm.pins);
+      this.pinSkin = sk && sk.id !== 'classic' ? Object.assign({}, GK.PINS.std, { body: sk.body, shade: sk.shade, band: sk.band }) : null;
+      this.laneFin = GK.cosmetic && GK.cosmetic('lane', this.cosm.lane);
+      this.trail = [];
+    }
+    // Lane finish: a colour wash over the lane and deck.
+    drawLaneFinish() {
+      const f = this.laneFin; if (!f || !f.tint) return;
+      const cx = this.cx, L = this.lhw;
+      const pts = [P(-L, -12), P(L, -12), P(L, C.ZH + 34), P(-L, C.ZH + 34)];
+      cx.save(); cx.globalCompositeOperation = f.mode || 'color';
+      ppoly(cx, pts, f.tint);
+      cx.restore();
+      if (f.grid) { cx.globalAlpha = 0.22; for (let z = 0; z < C.ZH + 30; z += 24) { const a = P(-L, z), b = P(L, z); pline(cx, a.x, a.y, b.x, b.y, f.grid, 1); } for (let x = -L; x <= L; x += L / 4) { const a = P(x, -12), b = P(x, C.ZH + 30); pline(cx, a.x, a.y, b.x, b.y, f.grid, 1); } cx.globalAlpha = 1; }
+    }
+    // Ball trails: remember where the main ball has been and draw a style behind it.
+    drawTrail(st) {
+      const style = this.cosm && this.cosm.trail, sim = st.sim;
+      if (!style || style === 'none' || !sim) { this.trail = []; return; }
+      const b = sim.balls.find(q => q.kind === 'main' && !q.gone && !(q.delay > 0));
+      const now = st.time;
+      if (b && (st.phase === 'rolling' || st.phase === 'replay')) {
+        const last = this.trail[this.trail.length - 1];
+        if (!last || Math.hypot(b.x - last.x, b.z - last.z) > 2.2) this.trail.push({ x: b.x, z: b.z, h: (b.r || 4) + (b.lift || 0), t: now, r: b.r || 4 });
+      }
+      const life = style === 'comet' ? 0.9 : 0.6;
+      this.trail = this.trail.filter(p => now - p.t < life && now >= p.t);
+      const cx = this.cx, n = this.trail.length;
+      this.trail.forEach((p, i) => {
+        const k = 1 - (now - p.t) / life, q = P(p.x, p.z, p.h * 0.7), s = q.s * S0, R0 = p.r * s;
+        if (k <= 0) return;
+        cx.globalAlpha = Math.min(1, k * 1.2);
+        switch (style) {
+          case 'sparkle': if ((i + Math.floor(now * 20)) % 3 === 0) { cx.fillStyle = i % 2 ? '#ffffff' : '#ffe066'; const ox = Math.round(q.x + (Math.sin(i * 7) * R0)), oy = Math.round(q.y + Math.cos(i * 5) * R0 * 0.6); cx.fillRect(ox, oy - 1, 1, 3); cx.fillRect(ox - 1, oy, 3, 1); } break;
+          case 'fire': this.circle(q.x, q.y, R0 * 0.75 * k, k > 0.6 ? '#ffd447' : k > 0.3 ? '#ff8a2a' : '#c83a1a'); break;
+          case 'bubbles': if (i % 2 === 0) { pdisc(cx, q.x + Math.sin(i) * R0 * 0.5, q.y - (1 - k) * 6, R0 * 0.35 + 0.8, '#bff4ff'); pdisc(cx, q.x + Math.sin(i) * R0 * 0.5, q.y - (1 - k) * 6, R0 * 0.35, 'rgba(60,140,180,0.5)'); } break;
+          case 'smoke': this.circle(q.x, q.y - (1 - k) * 5, R0 * (1.1 - k * 0.5), 'rgba(150,150,165,' + (0.35 * k) + ')'); break;
+          case 'rainbow': this.circle(q.x, q.y, R0 * 0.6, 'hsl(' + ((i * 25 + now * 200) % 360) + ',90%,62%)'); break;
+          case 'stars': if (i % 2 === 0) { cx.fillStyle = '#ffe066'; const ox = Math.round(q.x), oy = Math.round(q.y - (1 - k) * 4); cx.fillRect(ox, oy - 2, 1, 5); cx.fillRect(ox - 2, oy, 5, 1); } break;
+          case 'hearts': if (i % 3 === 0) { cx.fillStyle = '#ff5a8a'; const ox = Math.round(q.x), oy = Math.round(q.y - (1 - k) * 6); cx.fillRect(ox - 2, oy, 2, 2); cx.fillRect(ox + 1, oy, 2, 2); cx.fillRect(ox - 1, oy + 2, 3, 1); cx.fillRect(ox, oy + 3, 1, 1); } break;
+          case 'pixels': { cx.fillStyle = ['#39c6d6', '#ff5a6e', '#ffd447', '#7be38a'][i % 4]; const z = Math.max(1, Math.round(R0 * 0.6 * k)); cx.fillRect(Math.round(q.x - z / 2), Math.round(q.y - z / 2), z, z); break; }
+          case 'lightning': if (i > 0) { const a = this.trail[i - 1], qa = P(a.x + Math.sin(i * 3.3) * 1.5, a.z, a.h * 0.7); pline(cx, qa.x, qa.y, q.x, q.y, i % 2 ? '#fff6a0' : '#ffffff', 1); } break;
+          case 'ducks': if (i % 4 === 0) { const ox = Math.round(q.x), oy = Math.round(q.y); cx.fillStyle = '#ffd23a'; cx.fillRect(ox - 2, oy, 4, 2); cx.fillRect(ox, oy - 2, 2, 2); cx.fillStyle = '#ff8a1a'; cx.fillRect(ox + 2, oy - 1, 1, 1); } break;
+          case 'comet': if (i > 0) { const a = this.trail[i - 1], qa = P(a.x, a.z, a.h * 0.7); pline(cx, qa.x, qa.y, q.x, q.y, k > 0.5 ? '#ffffff' : '#9fd8ff', Math.max(1, Math.round(R0 * k))); } break;
+        }
+      });
+      cx.globalAlpha = 1;
+    }
+    // Crowd hats for Kaleb, Quinn and Levi. (x, hy) is the centre of the head.
+    drawHat(style, x, hy, i, time) {
+      const cx = this.cx, r = (a, b, w, h, c) => { cx.fillStyle = c; cx.fillRect(sp(a), sp(b), w, h); };
+      const top = hy - 3.6 - (i === 0 ? 2.2 : 0);
+      switch (style) {
+        case 'party': ppoly(cx, [{ x: x - 2.6, y: top + 1 }, { x: x + 2.6, y: top + 1 }, { x: x, y: top - 7 }], ['#ff5a6e', '#39c6d6', '#7be38a'][i]); cx.fillStyle = '#ffffff'; cx.fillRect(sp(x - 1.6), sp(top - 2), 3, 1); this.circle(x, top - 7.5, 1, '#ffd447'); break;
+        case 'beanie': pell(cx, x, top + 1, 3.6, 3.4, ['#c84a5a', '#3a6ad9', '#e0b028'][i], 'top'); cx.fillStyle = '#f2ebe0'; cx.fillRect(sp(x - 3.6), sp(top), 7, 1); this.circle(x, top - 3, 1.2, '#f2ebe0'); break;
+        case 'cowboy': pell(cx, x, top + 1, 6, 1.4, '#6a4224'); r(x - 2.6, top - 3, 5.2, 4, '#7a4e2a'); cx.fillStyle = '#3a2414'; cx.fillRect(sp(x - 2.6), sp(top), 5, 1); break;
+        case 'tophat': pell(cx, x, top + 1, 4.6, 1.2, '#141018'); r(x - 2.6, top - 6, 5.2, 7, '#141018'); cx.fillStyle = '#c4243a'; cx.fillRect(sp(x - 2.6), sp(top - 1), 5, 1); break;
+        case 'propeller': { pell(cx, x, top + 1, 3.6, 3, '#3a6ad9', 'top'); cx.fillStyle = '#ffd447'; cx.fillRect(sp(x - 0.5), sp(top - 3), 1, 2); const a = Math.sin(time * 30) * 4; pline(cx, x - a, top - 3.5, x + a, top - 3.5, '#ff5a6e', 1); break; }
+        case 'chef': for (const [dx, dy] of [[-2, -3], [0, -4.5], [2, -3]]) this.circle(x + dx, top + dy, 2.2, '#ffffff'); r(x - 3, top - 1, 6, 2, '#ece8e0'); break;
+        case 'viking': pell(cx, x, top + 1.5, 3.8, 3.4, '#8a8a96', 'top'); pline(cx, x - 3.4, top, x - 5.5, top - 4, '#f2ebe0', 2); pline(cx, x + 3.4, top, x + 5.5, top - 4, '#f2ebe0', 2); cx.fillStyle = '#c8932a'; cx.fillRect(sp(x - 3.6), sp(top + 1), 7, 1); break;
+        case 'bunny': for (const d of [-1.6, 1.6]) { pell(cx, x + d, top - 4, 1.2, 4, '#f4f0f4'); pell(cx, x + d, top - 4, 0.6, 3, '#ffb0c8'); } break;
+        case 'halo': pell(cx, x, top - 3 + Math.sin(time * 3 + i) * 0.6, 3.4, 1.1, '#ffe066'); pell(cx, x, top - 3 + Math.sin(time * 3 + i) * 0.6, 2.2, 0.5, 'rgba(0,0,0,0)'); break;
+        case 'crown': ppoly(cx, [{ x: x - 3, y: top + 1 }, { x: x + 3, y: top + 1 }, { x: x + 3, y: top - 3 }, { x: x + 1.5, y: top - 1 }, { x: x, y: top - 4 }, { x: x - 1.5, y: top - 1 }, { x: x - 3, y: top - 3 }], '#f2c94c'); cx.fillStyle = '#ff5a6e'; cx.fillRect(sp(x - 0.5), sp(top - 0.5), 1, 1); break;
+      }
+    }
+    // confetti raining down over the pin deck
+    confetti(n = 40) {
+      const cols = ['#ffd447', '#ff5a6e', '#39c6d6', '#7be38a', '#b58cff', '#ffffff'];
+      for (let i = 0; i < n; i++) this.parts.push({ x: (Math.random() * 2 - 1) * 26, z: C.ZH - 30 + Math.random() * 60, h: 30 + Math.random() * 30, vx: (Math.random() - 0.5) * 30, vz: (Math.random() - 0.5) * 20, vh: 10 + Math.random() * 40, col: cols[i % cols.length], t: 0, life: 1.1 + Math.random() * 0.8, conf: true });
+    }
     burst(x, z, col, n = 8, sp = 40) {
       for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, v = sp * (0.4 + Math.random()); this.parts.push({ x, z, h: 6, vx: Math.cos(a) * v, vz: Math.sin(a) * v, vh: 30 + Math.random() * 40, col, t: 0, life: 0.5 + Math.random() * 0.4 }); }
     }
@@ -590,6 +675,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         ptext(cx, 'LANE', sx + sw / 2, sy + 11, FONT_S, tc, 'center'); ptext(cx, 'TV', sx + sw / 2, sy + 20, FONT_S, tc, 'center');
         if (Math.floor(time * 1.3) % 6 === 0) for (let k = 0; k < 60; k++) { cx.fillStyle = Math.random() < 0.5 ? '#fff' : '#555'; cx.fillRect(sx + Math.floor(Math.random() * sw), sy + Math.floor(Math.random() * sh), 1, 1); }
       } else {
+        this.tvReels = tv.reels || this.tvReels;
         TV_SCENES[kind](cx, sx, sy, sw, sh, t, tv.v || 0, this);
       }
       // scanlines + glass glare
@@ -656,6 +742,7 @@ var GK = globalThis.GK = globalThis.GK || {};
           if (dark) { cx.fillStyle = '#111014'; cx.fillRect(sp(x - 2), sp(hy - 0.6), 2, 1); cx.fillRect(sp(x + 0.5), sp(hy - 0.6), 2, 1); }
         }
         if (who !== 'kaleb') { cx.fillStyle = GK.shade(skin, -0.25); cx.fillRect(sp(x + 1.5), sp(hy - 0.5), 1, 2); }
+        if (this.cosm && this.cosm.hats && this.cosm.hats !== 'none') this.drawHat(this.cosm.hats, x, hy, i, time);
       });
       if (mood === 'cheer' && t < 1.8) ptext(cx, 'YEAH!', 24, H - 26 - Math.round(t * 6), '800 7px Rubik, system-ui, sans-serif', '#ffd27a', 'center', '#140e16');
       if (mood === 'groan' && t < 1.8) ptext(cx, 'ohh…', 24, H - 24, '800 7px Rubik, system-ui, sans-serif', '#c9b7d3', 'center', '#140e16');
@@ -664,7 +751,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     drawPin(p, sim, time, glowOnly) {
       if (p.gone && !p.swallowed) return;
       if (p.gone) return;
-      const cx = this.cx, def = GK.PINS[p.type] || GK.PINS.std;
+      const cx = this.cx, def = p.type === 'std' && this.pinSkin ? this.pinSkin : (GK.PINS[p.type] || GK.PINS.std);
       let alpha = def.alpha || 1;
       if (p.cleared) { alpha *= 1 - p.clearT / 0.35; if (alpha <= 0) return; }
       let th, dir;
@@ -698,6 +785,13 @@ var GK = globalThis.GK = globalThis.GK || {};
         pline(cx, q.x - ay * r, q.y + ax * r, q.x + ay * r, q.y - ax * r, def.band, w);
       }
       if (p.type === 'explosive' && p.standing) { const q = P(p.x, p.z, h0 + L + 1.5); cx.fillStyle = (Math.floor(time * 8) % 2) ? '#ffd447' : '#ff6a3d'; cx.fillRect(Math.round(q.x), Math.round(q.y - 1), 1, 2); }
+      if (this.party && p.standing && !p.cleared) {
+        const top = P(p.x, p.z, h0 + L + 1), sway = Math.sin(time * 2 + p.n) * 1.5, b = P(p.x + sway, p.z, h0 + L + 12), cols = ['#ff5a6e', '#39c6d6', '#ffd447', '#7be38a', '#b58cff'];
+        pline(cx, top.x, top.y, b.x, b.y + 2, '#e8e0f0', 1);
+        pell(cx, b.x, b.y, 2.4 * b.s * 1.6, 3 * b.s * 1.6, cols[p.n % cols.length]);
+        cx.fillStyle = '#ffffff'; cx.fillRect(Math.round(b.x - 1), Math.round(b.y - 2), 1, 1);
+      }
+      if ((p.type === 'jackpot') && p.standing && Math.floor(time * 6 + p.n) % 3 === 0) { const q = P(p.x + (Math.random() - 0.5) * 3, p.z, h0 + 4 + Math.random() * 10); cx.fillStyle = Math.random() < 0.5 ? '#fff' : '#ffd447'; cx.fillRect(Math.round(q.x), Math.round(q.y), 1, 1); }
       if (p.type === 'gold' && p.standing && Math.floor(time * 2 + p.n) % 5 === 0) { const q = P(p.x, p.z, h0 + 9); cx.fillStyle = '#fff'; cx.fillRect(Math.round(q.x - 1), Math.round(q.y), 1, 1); }
       if (frozen) { const q = P(p.x, p.z, h0 + 4); cx.fillStyle = '#ffffff'; cx.fillRect(Math.round(q.x + 1), Math.round(q.y), 1, 1); }
       cx.globalAlpha = 1;
@@ -859,15 +953,18 @@ var GK = globalThis.GK = globalThis.GK || {};
     // st: { sim, phase, aimX, guide, preview:{type,ed,r}, time, dark, strobe, tilt, glow:Set, pick:Set(pins chosen) }
     draw(st) {
       const cx = this.cx, sim = st.sim, time = st.time;
+      this.party = !!st.party;
       const sx = this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0, sy = this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0;
       cx.setTransform(RS, 0, 0, RS, sx * RS, sy * RS);
       cx.imageSmoothingEnabled = true;
       cx.drawImage(this.bg, 0, 0, W, H);
+      this.drawLaneFinish(); // under the oil, so the oil keeps its true colours
       cx.drawImage(this.oilCv, 0, 0, W, H);
       if (st.clearOil) cx.drawImage(this.oilCv, 0, 0, W, H); // Bowling Glasses
       if (!sim) { cx.drawImage(this.vig, 0, 0, W, H); return; }
       this.drawTilt(st.tilt, time);
       if (st.phase === 'aim') this.drawGuide(st);
+      this.drawTrail(st);
       const items = [];
       for (const p of sim.pins) items.push({ z: p.z, f: () => this.drawPin(p, sim, time) });
       for (const q of sim.posts) items.push({ z: q.z, f: () => this.drawPost(q, time) });
@@ -931,6 +1028,12 @@ var GK = globalThis.GK = globalThis.GK || {};
         ptext(cx, p.text, q.x, q.y, '800 7.5px Rubik, system-ui, sans-serif', p.col, 'center', '#140e12');
       }
       if (this.flash > 0) { cx.fillStyle = 'rgba(255,255,255,' + (this.flash * 0.6) + ')'; cx.fillRect(0, 0, W, H); }
+      // "will it fall?": the edges close in and pulse with the heartbeat
+      if (this.tension) {
+        const k = 0.35 + 0.15 * Math.sin(st.time * 11);
+        for (let i = 0; i < 14; i++) { cx.fillStyle = 'rgba(40,0,10,' + (k * (1 - i / 14) * 0.5) + ')'; cx.fillRect(i * 2, 0, 2, H); cx.fillRect(W - (i + 1) * 2, 0, 2, H); cx.fillRect(0, i * 2, W, 2); cx.fillRect(0, H - (i + 1) * 2, W, 2); }
+        if (Math.floor(st.time * 3) % 2) ptext(cx, 'WILL IT FALL?', W / 2, 40, '800 9px Rubik, system-ui, sans-serif', '#ffd447', 'center', '#140e12');
+      }
     }
 
     drawDark(st, time) {
@@ -954,7 +1057,7 @@ var GK = globalThis.GK = globalThis.GK || {};
 
     tick(dt) {
       this.pops.forEach(p => { p.t += dt; }); this.pops = this.pops.filter(p => p.t < 1.8);
-      for (const pt of this.parts) { pt.t += dt; pt.x += pt.vx * dt; pt.z += pt.vz * dt; pt.vh -= 160 * dt; pt.h = Math.max(0, pt.h + pt.vh * dt); }
+      for (const pt of this.parts) { pt.t += dt; pt.x += pt.vx * dt; pt.z += pt.vz * dt; pt.vh -= (pt.conf ? 40 : 160) * dt; if (pt.conf) pt.vh = Math.max(pt.vh, -18); pt.h = Math.max(0, pt.h + pt.vh * dt); }
       this.parts = this.parts.filter(p => p.t < p.life);
       if (this.shake > 0) this.shake = Math.max(0, this.shake - dt * 18);
       if (this.flash > 0) this.flash = Math.max(0, this.flash - dt * 3);

@@ -263,7 +263,17 @@ var GK = globalThis.GK = globalThis.GK || {};
       this.emit({ t: 'shards', x: b.x, z: b.z });
     }
 
-    updatePosts() { for (const q of this.posts) q.x = q.amp * Math.sin(this.time * q.w + q.ph); }
+    updatePosts() {
+      for (const q of this.posts) q.x = q.amp * Math.sin(this.time * q.w + q.ph);
+      // the runaway pin slides until something touches it
+      if (this.runaway > 0) {
+        const p = this.pins.find(q => q.n === this.runaway);
+        if (p && p.standing && !p.gone && !p.ballHit && !p.fallAt && p.wob < 0.05 && !p.escaped) {
+          const L = this.lhw - 3, x = GK.clamp((p.origX || 0) + 8 * Math.sin(this.time * 1.7), -L, L);
+          p.x = p.sx = x;
+        } else if (p) p.escaped = true;
+      }
+    }
 
     // ---------- step ----------
     step(dt = DT) {
@@ -555,7 +565,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     markContact(b, p) {
       b.touched = true;
       const R = this.roll;
-      if (R && !R.contact) { R.contact = true; R.firstPin = p.n; R.firstT = this.time; R.firstOff = b.x - p.x; this.emit({ t: 'first', n: p.n, x: p.x, z: p.z }); }
+      if (R && !R.contact) { R.contact = true; R.firstPin = p.n; R.firstT = this.time; R.firstOff = b.x - p.x; this.emit({ t: 'first', n: p.n, x: p.x, z: p.z, off: R.firstOff, v: Math.hypot(b.vx, b.vz) }); }
     }
 
     // Run a whole roll headless (tests, bots). Call summarize() (or GK.afterRoll) afterwards.

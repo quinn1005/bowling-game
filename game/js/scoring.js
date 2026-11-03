@@ -158,10 +158,10 @@ var GK = globalThis.GK = globalThis.GK || {};
     const charms = run.charms || [];
     charms.forEach((inst, i) => {
       if (opts.stolen === i) { push({ src: 'charm', idx: i, op: 'note', v: 0, label: 'Stolen by the Gutter King' }); return; }
-      let def = GK.CHARMS[inst.id], data = inst;
+      let def = GK.charmDef(inst), data = inst;
       if (def && def.copy) {
         const nb = charms[i + 1];
-        if (nb && opts.stolen !== i + 1 && !GK.CHARMS[nb.id].copy) { def = GK.CHARMS[nb.id]; data = nb; } else def = null;
+        if (nb && opts.stolen !== i + 1 && !GK.CHARMS[nb.id].copy) { def = GK.charmDef(nb); data = nb; } else def = null;
       }
       const s = mk('charm', i);
       if (def && def.score) {
@@ -175,10 +175,19 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (ed === 'neon') s.xmult(GK.EDITIONS.neon.xmult, 'Neon');
     });
 
+    // 3b. boss trophies: their own shelf, never stolen
+    (run.trophies || []).forEach((inst, i) => {
+      const d = GK.TROPHIES[inst.id]; if (!d || !d.score) return;
+      d.score(Object.assign({}, ctx, { run: Object.assign({}, run, { money: run.money + money }) }), mk('trophy', i), inst);
+    });
+
     // 4. round modifiers
     const bs = mk('boss', 0);
     if (f.rentMiss) bs.mult(-2, 'Missed rent (The Landlord)');
     if (f.leagueMult) bs.mult(f.leagueMult, f.leagueName || 'League');
+    if (f.party && ctx.pins) bs.chips(4 * ctx.pins, 'Birthday party: ' + ctx.pins + ' balloons popped');
+    if (f.blackout) bs.xmult(1.5, 'Blackout bowling');
+    if (f.runaway != null && ctx.down.has(f.runaway)) bs.money(2, 'Caught the runaway pin');
     if (f.groove) { if (f.grooveX) bs.xmult(1 + 0.1 * f.groove, 'Groove Master ×' + f.groove); else bs.mult(f.groove, 'Groove ×' + f.groove); }
     if (f.loaded) bs.xmult(3, 'Loaded Ball');
     if (f.call === 'hit') bs.xmult(2, 'Called it!');
@@ -193,7 +202,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   GK.afterFrame = function (ctx, run, stolen) {
     (run.charms || []).forEach((inst, i) => {
       if (stolen === i) return;
-      const def = GK.CHARMS[inst.id];
+      const def = GK.charmDef(inst);
       if (def && def.after) def.after(ctx, inst);
     });
   };

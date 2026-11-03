@@ -17,12 +17,16 @@ var GK = globalThis.GK = globalThis.GK || {};
   };
   // Banners slam in, then fade out. Pop-ups stay up long enough to read (scaled by length).
   let bannerT = 0, bannerOut = 0;
-  UI.banner = (t, sub, ms) => {
+  // lvl 1-5: streak banners grow bigger and hotter
+  UI.banner = (t, sub, ms, lvl) => {
     const el = $('banner'); el.innerHTML = esc(t) + (sub ? '<small>' + esc(sub) + '</small>' : '');
     clearTimeout(bannerT); clearTimeout(bannerOut);
+    el.className = 'banner' + (lvl ? ' lvl' + lvl : '');
     el.hidden = false; el.classList.remove('show', 'out'); void el.offsetWidth; el.classList.add('show');
     if (ms) bannerT = setTimeout(UI.hideBanner, ms * 1.4);
   };
+  // ×Mult hits jolt the whole score panel
+  UI.jolt = () => { const el = document.querySelector('.tally'); if (!el) return; el.classList.remove('jolt'); void el.offsetWidth; el.classList.add('jolt'); };
   UI.hideBanner = () => {
     const el = $('banner'); if (el.hidden) return;
     el.classList.remove('show'); el.classList.add('out');
@@ -48,7 +52,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   // ---------- item descriptions ----------
   UI.info = function (kind, id, ed, inst) {
     if (kind === 'charm') {
-      const d = GK.CHARMS[id];
+      const d = inst ? GK.charmDef(inst) : GK.CHARMS[id];
       return { name: d.name, k: GK.RARITY[d.rarity].name + ' charm', desc: inst ? GK.charmDesc(inst) : GK.charmDesc(GK.charmInst(id)), col: GK.RARITY[d.rarity].col, glyph: GK.TAG_GLYPH[d.tag], ed };
     }
     if (kind === 'ball') { const b = GK.BALLS[id], dr = inst && inst.drill && inst.drill !== 'stock' ? GK.DRILLS[inst.drill] : null; return { name: b.full, k: 'Ball', desc: b.desc + (dr ? ' Drilled: ' + dr.name + ' (' + dr.desc + ')' : ''), col: b.col, ed }; }
@@ -66,6 +70,8 @@ var GK = globalThis.GK = globalThis.GK || {};
     const boss = GK.isBoss(run) && !run.practice ? ' <span>· ' + esc(GK.bossDef(run).name) + '</span>' : '';
     $('round').innerHTML = run.practice ? 'Practice' : esc(GK.roundName(run)) + boss;
     $('money').textContent = GK.money(run.money);
+    const nt = (run.trophies || []).length, tb = $('trophyBtn');
+    tb.hidden = !nt; tb.innerHTML = cup + ' ' + nt;
     if (rs) {
       const champ = rs.boss === 'champion';
       $('target').textContent = run.practice ? 'Free bowl' : champ ? 'Beat the King · ' + fmt(rs.kingTotal) : 'Target ' + fmt(rs.target);
@@ -89,9 +95,10 @@ var GK = globalThis.GK = globalThis.GK || {};
       b.type = 'button'; b.className = 'charm'; b.setAttribute('role', 'listitem');
       if (!c) { b.classList.add('empty'); b.innerHTML = '<span class="nm">empty</span>'; b.disabled = true; }
       else {
-        const d = GK.CHARMS[c.id];
+        const d = GK.charmDef(c);
         b.style.setProperty('--rc', GK.RARITY[d.rarity].col);
         if (c.ed) b.classList.add('ed-' + c.ed);
+        if (c.evolved) b.classList.add('evolved');
         if (stolen === i) b.classList.add('stolen');
         b.innerHTML = '<span class="g">' + esc(GK.TAG_GLYPH[d.tag]) + '</span><span class="nm">' + esc(d.name) + '</span>';
         b.setAttribute('aria-label', d.name + ': ' + GK.charmDesc(c));
@@ -155,6 +162,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     // Long rounds (practice) show a sliding window of the last few frames.
     const show = Math.min(rs.framesMax, 7), from = rs.framesMax > 7 ? Math.max(0, rs.frameIdx - show + 1) : 0;
     card.innerHTML = ''; card.style.setProperty('--n', show);
+    card.classList.toggle('onfire', !run.practice && isFinite(rs.target) && rs.total >= rs.target * 2);
     let tot = 0, ktot = 0;
     for (let i = 0; i < from; i++) { if (rs.frames[i]) { tot += rs.frames[i].score; if (rs.frames[i].king != null) ktot += rs.frames[i].king; } }
     for (let i = from; i < from + show; i++) {
@@ -197,10 +205,60 @@ var GK = globalThis.GK = globalThis.GK || {};
         <button class="btn ${save ? 'alt' : ''}" data-a="new" ${save ? '' : 'data-focus'}>New run</button>
         <button class="btn alt" data-a="daily">Daily run${done ? ' · best ' + esc(done) : ''}</button>
         <div class="row2"><button class="btn alt small" data-a="practice">Practice lane</button><button class="btn alt small" data-a="collection">Feats · ${nFeats}/${GK.FEATS.length}</button></div>
+        <div class="row2"><button class="btn alt small" data-a="locker">Locker · Lv ${GK.levelOf(meta.xp || 0).level}</button><button class="btn alt small" data-a="book">Collection · ${Math.floor(GK.collectionProgress(meta).have / Math.max(1, GK.collectionProgress(meta).total) * 100)}%</button></div>
         <div class="row2"><button class="btn alt small" data-a="how">How to play</button><button class="btn alt small" data-a="sound">${GK.sfx.muted ? 'Sound off' : 'Sound on'}</button></div>
       </div>
+      ${UI.levelBar(meta)}
       <p class="dim">Runs ${meta.runs} · Wins ${meta.wins} · Best alley ${meta.bestAlley ? (meta.bestAlley > 8 ? 'Champion' : meta.bestAlley) : '–'} · Best frame ${fmt(meta.bestFrame)}${meta.bestEndless ? ' · Endless ' + meta.bestEndless : ''}${GK.VERSION ? ' · v' + GK.VERSION : ''}</p>
     </div>`, r => UI.on(r, '[data-a]', el => h[el.dataset.a](el)));
+  };
+
+  // Bowler level: a bar toward the next level.
+  UI.levelBar = function (meta) {
+    const L = GK.levelOf(meta.xp || 0), pct = L.need ? Math.round(L.into / L.need * 100) : 100;
+    return `<div class="lvl-row"><b>Bowler level ${L.level}</b><div class="bar xpbar"><i style="width:${pct}%"></i></div><small>${L.need ? fmt(L.into) + ' / ' + fmt(L.need) + ' XP' : 'MAX'}</small></div>`;
+  };
+
+  // The Locker: cosmetics unlocked by bowler level. Looks only, no gameplay effect.
+  UI.locker = function (meta, onChange) {
+    const on = GK.cosmeticsOn(meta), lvl = GK.levelOf(meta.xp || 0).level;
+    const swatch = c => c.kind === 'pins' ? `<i class="pinsw" style="--b:${c.body};--s:${c.shade};--r:${c.band}"></i>`
+      : c.kind === 'lane' ? `<i class="lanesw" style="--t:${c.tint || 'transparent'}"></i>`
+      : c.kind === 'trail' ? `<i class="trailsw t-${c.id}"></i>` : `<i class="hatsw">${GK.HAT_GLYPH[c.id] || ''}</i>`;
+    UI.modal(`<div class="panel locker">
+      <h2>Locker</h2>
+      ${UI.levelBar(meta)}
+      <p class="dim">Looks only. New ones unlock as your bowler level goes up.</p>
+      ${Object.entries(GK.COSMETIC_KINDS).map(([k, label]) => `<h3>${esc(label)}</h3><div class="cosm">${GK.COSMETICS.filter(c => c.kind === k).map(c => {
+        const ok = lvl >= c.level, sel = on[k] === c.id;
+        return `<button class="cos${sel ? ' on' : ''}" data-k="${k}" data-id="${c.id}" ${ok ? '' : 'disabled'}>${swatch(c)}<span>${esc(c.name)}</span><small>${ok ? (sel ? 'Wearing' : '') : 'Level ' + c.level}</small></button>`;
+      }).join('')}</div>`).join('')}
+      <button class="btn" data-a="ok">Done</button>
+    </div>`, r => {
+      UI.on(r, '[data-k]', el => { meta.cosm = Object.assign(GK.cosmeticsOn(meta), { [el.dataset.k]: el.dataset.id }); onChange(); UI.locker(meta, onChange); });
+      UI.on(r, '[data-a=ok]', UI.hideModal);
+    });
+  };
+
+  // The collection book: everything you've come across, silhouettes for the rest.
+  UI.book = function (meta) {
+    const all = GK.COLLECTION(), seen = meta.seen || {}, prog = GK.collectionProgress(meta);
+    const names = { ball: 'Balls', charm: 'Charms', pin: 'Pins', trophy: 'Trophies' };
+    const cell = (k, id) => {
+      const got = seen[k] && seen[k][id];
+      if (!got) return '<span class="bk no">???</span>';
+      if (k === 'ball') return `<span class="bk"><i class="sw" style="background:${GK.BALLS[id].col}"></i>${esc(GK.BALLS[id].name)}</span>`;
+      if (k === 'charm') { const d = GK.CHARMS[id]; return `<span class="bk" style="--rc:${GK.RARITY[d.rarity].col}">${esc(d.name)}</span>`; }
+      if (k === 'pin') { const d = GK.PINS[id]; return `<span class="bk"><i class="sw" style="background:${d.body || '#f2ebe0'}"></i>${esc(d.name)}</span>`; }
+      return `<span class="bk">${esc(GK.TROPHIES[id].name)}</span>`;
+    };
+    UI.modal(`<div class="panel book">
+      <h2>Collection</h2>
+      <div class="bar xpbar"><i style="width:${Math.round(prog.have / Math.max(1, prog.total) * 100)}%"></i></div>
+      <p class="dim">${prog.have} of ${prog.total} found. Things you own, see in a shop or win go in the book.</p>
+      ${Object.keys(all).map(k => { const got = all[k].filter(id => seen[k] && seen[k][id]).length; return `<h3>${names[k]} <small class="dim">${got}/${all[k].length}</small></h3><div class="bkgrid">${all[k].map(id => cell(k, id)).join('')}</div>`; }).join('')}
+      <button class="btn" data-a="ok">Close</button>
+    </div>`, r => UI.on(r, '[data-a=ok]', UI.hideModal));
   };
 
   // New run setup: starting bag, league and ascension level.
@@ -220,6 +278,9 @@ var GK = globalThis.GK = globalThis.GK || {};
         const L = GK.LEAGUES[id], open = leagueOpen(id), f = featFor('league:' + id);
         return `<button class="choice" data-l="${id}" aria-pressed="${id === league}" ${open ? '' : 'disabled'}><b>${esc(L.name)}</b><span>${open ? esc(L.desc) : 'Locked · feat: ' + esc(f ? f.name + ' (' + f.desc + ')' : '')}</span></button>`;
       }).join('')}</div>
+      <h3>The Regulars' board</h3>
+      <p class="dim">Their best single frames. Beat them.</p>
+      <div class="lines">${GK.REGULARS_BOARD.map(r => `<div><span>${esc(r.name)}</span><b class="${meta.beatRegs && meta.beatRegs[r.who] ? 'w' : ''}">${fmt(r.frame)}${meta.beatRegs && meta.beatRegs[r.who] ? ' · beaten' : ''}</b></div>`).join('')}<div class="tot"><span>You</span><b>${fmt(meta.bestFrame || 0)}</b></div></div>
       ${meta.wins ? '<button class="btn alt small" data-a="wall">Visit the Wall of Fame</button>' : ''}
       <h3>Ascension</h3>
       ${maxAsc ? `<div class="stepper"><button class="btn alt small" data-a="ascdown" ${asc ? '' : 'disabled'}>−</button><div><b>Level ${asc}</b><p class="dim">${asc ? GK.ASCENSION.slice(1, asc + 1).map(a => esc(a.desc)).join('<br>') : 'Standard difficulty.'}</p></div><button class="btn alt small" data-a="ascup" ${asc < maxAsc ? '' : 'disabled'}>+</button></div>` : '<p class="dim">Beat the Gutter King to unlock Ascension levels: harder runs that stack a new rule each level.</p>'}
@@ -293,7 +354,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       <p>Target <b style="color:var(--marquee)">${fmt(rs.target)}</b> in ${rs.framesMax} frames · ${rs.reracks} re-rack${rs.reracks === 1 ? '' : 's'}</p>
       ${first || GK.isChamp(run) ? '<p class="dim">' + esc(def.laneDesc) + '</p>' : ''}
       <p class="dim"><b style="color:var(--chips)">Oil: ${esc(oil.name)}.</b> ${esc(oil.desc)}</p>
-      ${boss ? `<div class="boss"><b>${esc(GK.bossDef(run).name)}</b><p>${esc(GK.bossDef(run).desc)}</p>${rs.stolen >= 0 && run.charms[rs.stolen] ? '<p class="dim">Stolen: ' + esc(GK.CHARMS[run.charms[rs.stolen].id].name) + '</p>' : ''}</div>` : ''}
+      ${boss ? `<div class="boss"><b>${esc(GK.bossDef(run).name)}</b><p>${esc(GK.bossDef(run).desc)}</p>${rs.stolen >= 0 && run.charms[rs.stolen] ? '<p class="dim">Stolen: ' + esc(GK.charmName(run.charms[rs.stolen])) + '</p>' : ''}</div>` : ''}
       ${!GK.isChamp(run) && run.round === 1 && GK.rules(run).heatMech ? '<div class="boss"><b>Ascension</b><p>The Mechanic stands 1 pin back up after your first roll.</p></div>' : ''}
       ${!GK.isChamp(run) ? '<p class="dim">Reward: $' + GK.ROUND_PAY[run.round] + ' + $1 per unused frame + interest</p>' : ''}
       <button class="btn" data-a="go" data-focus>${boss ? 'Face the boss' : 'Bowl'}</button>
@@ -309,11 +370,15 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (ev.id === 'vending') { offer = '<p class="dim">You never know what\'s in there until it drops.</p>'; take = 'Pay $3'; }
     if (ev.id === 'shady') { const c = GK.CHARMS[ev.charm]; offer = '<div class="boss"><b>' + esc(c.name) + '</b><p>' + esc(GK.charmDesc(GK.charmInst(ev.charm))) + '</p></div>'; take = 'Take the charm'; }
     if (ev.id === 'lane_mech') { take = 'Re-drill a ball'; }
+    if (ev.id === 'regular') {
+      offer = `<div class="visit"><canvas width="${GK.PORTRAIT.W}" height="${GK.PORTRAIT.H}" data-who="${ev.who}"></canvas><div><p class="say">${esc(ev.say)}</p><p class="dim">${esc(ev.offer)}</p></div></div>`;
+      take = ev.take;
+    }
     // Offered a charm or a ball? Your own are listed underneath so you can sell one to make room.
     let owned = '';
     if (ev.id === 'shady') {
       const full = run.charms.length >= run.maxCharms;
-      owned = `<div class="sect">Your charms ${run.charms.length}/${run.maxCharms}${full ? ' · full, sell one to make room' : ' · tap to sell'}</div><div class="owned">${run.charms.map((c, i) => { const d = GK.CHARMS[c.id]; return `<button class="chip" data-charm="${i}" style="--rc:${GK.RARITY[d.rarity].col}">${esc(d.name)}${c.ed ? ' <small>' + GK.EDITIONS[c.ed].name + '</small>' : ''} <small>$${GK.charmSell(c)}</small></button>`; }).join('') || '<span class="lbl">No charms yet</span>'}</div>`;
+      owned = `<div class="sect">Your charms ${run.charms.length}/${run.maxCharms}${full ? ' · full, sell one to make room' : ' · tap to sell'}</div><div class="owned">${run.charms.map((c, i) => { const d = GK.charmDef(c); return `<button class="chip" data-charm="${i}" style="--rc:${GK.RARITY[d.rarity].col}">${esc(d.name)}${c.ed ? ' <small>' + GK.EDITIONS[c.ed].name + '</small>' : ''} <small>$${GK.charmSell(c)}</small></button>`; }).join('') || '<span class="lbl">No charms yet</span>'}</div>`;
     }
     if (ev.id === 'lost_found') {
       const full = run.bag.length >= GK.maxBag(run);
@@ -322,13 +387,14 @@ var GK = globalThis.GK = globalThis.GK || {};
     GK._run = run;
     UI.layer(`<div class="panel solid">
       <div class="lbl">Between rounds · ${GK.money(run.money)}</div>
-      <h2>${esc(E.name)}</h2>
-      <p>${esc(E.desc)}</p>
+      <h2>${esc(ev.title || E.name)}</h2>
+      ${E.desc ? '<p>' + esc(E.desc) + '</p>' : ''}
       ${offer}
       ${owned}
       <div class="row2"><button class="btn" data-a="take" data-focus>${esc(take)}</button><button class="btn alt" data-a="leave">Walk away</button></div>
     </div>`, r => {
       UI.on(r, '[data-a=take]', h.take); UI.on(r, '[data-a=leave]', h.leave);
+      r.querySelectorAll('canvas[data-who]').forEach(c => GK.drawPortrait(c.getContext('2d'), c.dataset.who));
       if (h.charm) UI.on(r, '[data-charm]', el => h.charm(+el.dataset.charm));
       if (h.ball) UI.on(r, '[data-ball]', el => h.ball(+el.dataset.ball));
     });
@@ -362,15 +428,35 @@ var GK = globalThis.GK = globalThis.GK || {};
     </div>`, r => UI.on(r, '[data-a=ok]', () => { UI.hideModal(); if (onClose) onClose(); }));
   };
 
-  UI.payout = function (run, lines, score, onGo) {
+  UI.payout = function (run, lines, score, onGo, goLabel) {
     const tot = lines.reduce((a, l) => a + l.v, 0);
     UI.layer(`<div class="panel">
       <h2>Round cleared</h2>
       <p>${fmt(score)} of ${fmt(run.rs.target)}</p>
       <div class="lines">${lines.map(l => '<div><span>' + esc(l.label) + '</span><b>' + (l.v < 0 ? '-$' + (-l.v) : '+$' + l.v) + '</b></div>').join('')}
         <div class="tot"><span>Total</span><b>${tot < 0 ? '-$' + (-tot) : '+$' + tot}</b></div></div>
-      <button class="btn" data-a="go" data-focus>To the Pro Shop</button>
+      <button class="btn" data-a="go" data-focus>${esc(goLabel || 'To the Pro Shop')}</button>
     </div>`, r => UI.on(r, '[data-a=go]', onGo));
+  };
+
+  // Boss trophies: pick 1 of 3 after beating a boss. They live on their own shelf.
+  const cup = '<svg class="cup" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h8v3a4 4 0 0 1-8 0z" fill="#ffd447"/><path d="M3 3H1.5v1.2A2.6 2.6 0 0 0 4 6.8M13 3h1.5v1.2A2.6 2.6 0 0 1 12 6.8" stroke="#ffd447" fill="none"/><path d="M7 9h2v3H7z" fill="#c8932a"/><path d="M5 12h6v2H5z" fill="#ffd447"/><path d="M5 2.6h2v1.4H5z" fill="#fff6c8"/></svg>';
+  UI.trophyPick = function (boss, ids, onPick) {
+    const B = GK.BOSSES[boss];
+    UI.layer(`<div class="panel trophies">
+      <div class="lbl">You beat ${esc(B.name)}</div>
+      <h2>Pick a trophy</h2>
+      <p class="dim">Trophies go on their own shelf: no charm slot, and nobody can steal them.</p>
+      <div class="choices">${ids.map(id => { const t = GK.TROPHIES[id]; return `<button class="choice trophy" data-t="${id}">${cup}<b>${esc(t.name)}</b><span>${esc(t.desc)}</span></button>`; }).join('')}</div>
+    </div>`, r => UI.on(r, '[data-t]', el => onPick(el.dataset.t)));
+  };
+  UI.trophyShelf = function (run) {
+    const list = run.trophies || [];
+    UI.modal(`<div class="panel trophies">
+      <h2>Trophy shelf</h2>
+      ${list.length ? '<div class="choices">' + list.map(t => { const d = GK.TROPHIES[t.id]; return `<div class="choice trophy">${cup}<b>${esc(d.name)}</b><span>${esc(d.desc)} <i class="dim">From ${esc(GK.BOSSES[d.boss].name)}.</i></span></div>`; }).join('') + '</div>' : '<p class="dim">Beat a boss to win your first trophy. You pick 1 of 3, themed on the boss you beat.</p>'}
+      <button class="btn" data-a="ok">Close</button>
+    </div>`, r => UI.on(r, '[data-a=ok]', UI.hideModal));
   };
 
   const roundLabel = h => h.champ ? 'Championship' : (h.alley > GK.ALLEY_COUNT ? 'E' + (h.alley - GK.ALLEY_COUNT) : 'A' + (h.alley + 1)) + ' ' + GK.ROUND_NAMES[h.round];
@@ -415,6 +501,9 @@ var GK = globalThis.GK = globalThis.GK || {};
         <div><span>League · Ascension</span><b>${esc(GK.LEAGUES[run.league || 'open'].name)} · ${run.asc || 0}</b></div>
         <div><span>Seed</span><b>${GK.seedCode(run.seed)}${run.daily ? ' (daily)' : ''}</b></div>
       </div>
+      ${h.xp ? `<h3>Bowler XP <small class="dim">+${fmt(h.xp.gained)}</small></h3><div class="lines">${h.xp.parts.map(p => '<div><span>' + esc(p[0]) + '</span><b>+' + fmt(p[1]) + '</b></div>').join('')}</div>${UI.levelBar(meta)}${h.xp.to > h.xp.from ? '<p class="lvlup">LEVEL UP! Level ' + h.xp.to + (h.xp.unlocked.length ? ' · Unlocked ' + esc(h.xp.unlocked.map(c => c.name + ' (' + GK.COSMETIC_KINDS[c.kind].replace(/s$/, '').toLowerCase() + ')').join(', ')) + '. Equip in the Locker.' : '') + '</p>' : ''}` : ''}
+      ${h.highlights ? '<button class="btn alt" data-a="hl">Watch your highlight reel</button>' : ''}
+      <button class="btn alt small" data-a="challenge">Challenge a friend (copy link)</button>
       ${h.endless ? '<button class="btn good" data-a="endless">Keep bowling: Endless mode</button><p class="dim">The alleys come around again with targets that keep climbing. See how far your build goes.</p>' : ''}
       ${h.best ? '<button class="btn alt" data-a="best">Watch your best frame</button>' : ''}
       ${share ? '<div class="share" id="shareTxt">' + esc(share) + '</div><button class="btn alt small" data-a="copy">Copy daily result</button>' : ''}
@@ -422,6 +511,12 @@ var GK = globalThis.GK = globalThis.GK || {};
     </div>`, r => {
       UI.on(r, '[data-a=again]', h.again); UI.on(r, '[data-a=title]', h.title);
       if (h.best) UI.on(r, '[data-a=best]', h.best);
+      if (h.highlights) UI.on(r, '[data-a=hl]', h.highlights);
+      UI.on(r, '[data-a=challenge]', el => {
+        const txt = h.challenge();
+        const done = () => { el.textContent = 'Copied! Send it to a friend'; };
+        try { if (navigator.share) navigator.share({ text: txt }).then(done, () => {}); else navigator.clipboard.writeText(txt).then(done, () => { el.textContent = txt; }); } catch (e) { el.textContent = txt; }
+      });
       if (h.endless) UI.on(r, '[data-a=endless]', h.endless);
       UI.on(r, '[data-a=copy]', el => {
         const done = () => { el.textContent = 'Copied'; };
@@ -524,7 +619,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       return `<div class="item wide" style="--rc:#f2c94c"><span class="k">Alley Membership · permanent</span><span class="n">${esc(m.name)}</span><span class="d">${esc(m.desc)}</span>
         <button class="btn small" data-a="member" ${GK.canAfford(run, price) ? '' : 'disabled'}>Buy $${price}</button></div>`;
     })() : '';
-    const charms = run.charms.map((c, i) => { const d = GK.CHARMS[c.id]; return `<button class="chip" data-charm="${i}" style="--rc:${GK.RARITY[d.rarity].col}">${esc(d.name)}${c.ed ? ' <small>' + GK.EDITIONS[c.ed].name + '</small>' : ''}</button>`; }).join('') || '<span class="lbl">No charms yet</span>';
+    const charms = run.charms.map((c, i) => { const d = GK.charmDef(c); return `<button class="chip" data-charm="${i}" style="--rc:${GK.RARITY[d.rarity].col}">${esc(d.name)}${c.ed ? ' <small>' + GK.EDITIONS[c.ed].name + '</small>' : ''}</button>`; }).join('') || '<span class="lbl">No charms yet</span>';
     const balls = run.bag.map((b, i) => `<button class="chip" data-ball="${i}" style="--rc:${GK.BALLS[b.type].col}"><i class="sw" style="background:${GK.BALLS[b.type].col}"></i>${esc(GK.BALLS[b.type].name)}${b.ed ? ' <small>' + GK.EDITIONS[b.ed].name + '</small>' : ''}${b.drill && b.drill !== 'stock' ? ' <small>' + esc(GK.DRILLS[b.drill].name.split(' ')[0]) + '</small>' : ''}</button>`).join('');
     const cons = run.cons.map((id, i) => `<button class="chip" data-cons="${i}" style="--rc:${GK.CONS_KIND[GK.CONS[id].kind].col}">${esc(GK.CONS[id].name)}</button>`).join('') || '<span class="lbl">Empty</span>';
     const eq = Object.values(run.equip).filter(id => GK.EQUIP[id]).map(id => GK.EQUIP[id].name).join(', ');

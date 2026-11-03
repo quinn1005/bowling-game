@@ -88,8 +88,16 @@ function playRun(seed, verbose, skill = 'good', opts = {}) {
     const where = GK.isChamp(run) ? 'CHAMP' : 'A' + (run.alley + 1) + 'R' + (run.round + 1);
     if (verbose) console.log(where, 'target', run.rs.target, 'got', run.rs.total, status, '$' + run.money, run.charms.map(c => c.id).join(','));
     if (status === 'lost') { run.over = true; return { reached: where, alley: run.alley, round: run.round, avgFrame: scoreSum / frames, perfectRate: perfects / throws }; }
+    // bonus balls at a gold rack for every unused frame (up to 3)
+    for (let i = 0, n = GK.bonusCount(run); i < n; i++) {
+      const bs = GK.bonusSim(run, i), aimX = GK.clamp(3 * 0.3 + gauss(rng) * sk.aim, -14, 14);
+      GK.bonusLaunch(run, bs, 0, timedThrow(run, rng, sk, aimX, GK.clamp((3 - aimX) / 310 + gauss(rng) * sk.ang, -0.085, 0.085), 0.18));
+      bs.simulate(); GK.bonusResult(run, bs);
+    }
     GK.applyPayout(run, GK.payout(run));
+    const beat = run.rs.boss && run.rs.boss !== 'champion' ? GK.bossFor(run) : null;
     if (GK.advance(run) === 'won') return { reached: 'WON', alley: 8, round: 3, avgFrame: scoreSum / frames, perfectRate: perfects / throws };
+    if (beat) { const ch = GK.trophyChoices(run, beat); if (ch.length) GK.takeTrophy(run, ch[Math.floor(rng() * ch.length)]); }
     GK.openShop(run); shopPolicy(run);
   }
 }

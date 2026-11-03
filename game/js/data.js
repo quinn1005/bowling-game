@@ -15,6 +15,8 @@ var GK = globalThis.GK = globalThis.GK || {};
     gutter: { name: 'Gutter', c: 0, m: 0, lv: [15, 1] }
   };
   GK.SHOT_ORDER = ['strike', 'double', 'turkey', 'spare', 'split', 'open', 'gutter'];
+  GK.STREAK_NAMES = { 1: 'STRIKE!', 2: 'DOUBLE!', 3: 'TURKEY!', 4: 'HAMBONE!', 5: 'FIVE-BAGGER!', 6: 'WILD TURKEY!', 7: 'SEVEN-BAGGER!', 8: 'EIGHT-BAGGER!', 9: 'GOLDEN TURKEY!' };
+  GK.streakName = n => GK.STREAK_NAMES[n] || (n + '-BAGGER!!');
   GK.isStrikeKind = k => k === 'strike' || k === 'double' || k === 'turkey';
   GK.isSpareKind = k => k === 'spare' || k === 'split';
 

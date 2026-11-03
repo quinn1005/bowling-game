@@ -1,5 +1,38 @@
 # Changelog
 
+## v1.0.0
+
+### Every throw feels bigger
+- **"Will it fall?"** When the last pin or two teeter after the ball has gone by, time slows, the screen closes in and a heartbeat plays. If it drops: a roar, a flash and "DOWN!". If it holds: the pin taunts you with "NOPE".
+- **Pocket hits freeze the frame** for a split second with a deep thump before the pins explode out.
+- **Streak names, like at a real alley:** Double, Turkey, Hambone, Five-Bagger, Wild Turkey, Seven- and Eight-Bagger, Golden Turkey. Each one is bigger and louder, with confetti from a Turkey up.
+- **Scoring hits harder:** ×Mult steps land with a bass hit and jolt the score panel. Tap the lane to skip the count-up.
+- **Groove music:** the band builds as your PERFECT streak grows (drums at 3, bass at 5, a lead melody at 8).
+
+### Winning a round pays off
+- **Overkill:** beat the target by 1.5×, 2× or 3× for bonus cash. Past 2× the scorecard catches fire.
+- **Bonus balls:** every unused frame (up to 3) becomes a bonus throw at a rack of gold pins. Every 4 pins pay $1, and a strike pays $1 more.
+- **Boss trophies:** beat a boss and pick 1 of 3 trophies themed on that boss: 48 in all, like the Janitor's Mop Bucket, the Bookie's Loaded Dice or the Gutter King's Stolen Crown. They sit on their own shelf (the cup in the header), never take a charm slot and can't be stolen.
+- **Charm evolutions:** 14 charms evolve once you've done their thing enough, e.g. Hot Streak becomes Inferno after 3 Turkeys and League Jacket becomes Varsity Jacket after 12 frames. The charm's description shows its progress.
+
+### Surprises
+- **Jackpot pin:** about 1 rack in 150, a sparkling pin appears. Knock it down and the lane TV spins a slot machine.
+- **The Regulars drop by** between rounds: Quinn, Kaleb or Levi with a gift, a dare ($10 for a first-frame strike) or a tip.
+- **New lane events:** a birthday party (balloons on the pins, +4 Points per pin), blackout bowling (only the pins glow, ×1.5 Mult) and a runaway pin that slides around until you hit it ($2).
+
+### Progress between runs
+- **Bowler level:** every run earns XP, shown on the end screen, up to level 50.
+- **The Locker:** 43 cosmetics unlocked by bowler level: 12 ball trails, 11 pin skins, 9 lane finishes and 11 hats for the crowd. Looks only, no gameplay effect.
+- **Collection book:** every ball, charm, pin type and trophy you've found, with silhouettes for the rest.
+- **Highlight reel:** watch your run's 3 best frames from the end screen.
+
+### Play with friends
+- **Beat the Regulars:** Kaleb, Levi and Quinn have best frames on the Feats screen. Beat one and they react on the lane TV.
+- **Challenge a friend:** the end screen copies a link with your run's seed, so a friend plays the same lanes and shops.
+
+### Balance
+- Targets now climb faster from alley to alley, to make up for trophies, bonus balls and evolutions. The balance bot plays with all of them, and good and great players clear about as many rounds as before (about 4 and 6).
+
 ## v0.9.2
 
 ### Changed

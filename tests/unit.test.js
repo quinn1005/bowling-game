@@ -169,7 +169,7 @@ test('consumables: scorecards level shots, tricks change pins and balls', () => 
 test('round flow: targets scale, payout includes unused frames and interest', () => {
   const run = GK.newRun({ seed: 5 });
   GK.startRound(run);
-  assert.strictEqual(run.rs.target, 500);
+  assert.strictEqual(run.rs.target, Math.round(GK.ALLEYS[0].base * GK.ALLEY_SCALE[0] / 50) * 50);
   run.money = 12; run.rs.frameIdx = 3;
   const lines = GK.payout(run);
   const tot = lines.reduce((a, l) => a + l.v, 0);
@@ -177,7 +177,7 @@ test('round flow: targets scale, payout includes unused frames and interest', ()
   GK.applyPayout(run, lines);
   assert.strictEqual(GK.advance(run), 'shop');
   assert.strictEqual(run.round, 1);
-  assert.strictEqual(GK.roundTarget(run), 750);
+  assert.strictEqual(GK.roundTarget(run), Math.round(GK.ALLEYS[0].base * GK.ALLEY_SCALE[0] * 1.5 / 50) * 50);
   run.alley = 8; run.round = 0;
   assert.ok(GK.isChamp(run));
   GK.startRound(run);
@@ -229,8 +229,8 @@ test('Groove builds on PERFECT throws and adds Mult; misses reset it', () => {
 
 test('leagues and ascension change targets, re-racks and prices', () => {
   const base = GK.newRun({ seed: 1 }), hard = GK.newRun({ seed: 1, league: 'pro', asc: 3 });
-  assert.strictEqual(GK.roundTarget(base), 500);
-  assert.strictEqual(GK.roundTarget(hard), Math.round(500 * 1.3 * 1.2 / 50) * 50);
+  const t0 = GK.ALLEYS[0].base * GK.ALLEY_SCALE[0]; assert.strictEqual(GK.roundTarget(base), Math.round(t0 / 50) * 50);
+  assert.strictEqual(GK.roundTarget(hard), Math.round(t0 * 1.3 * 1.2 / 50) * 50);
   assert.strictEqual(GK.flags(hard).reracks, -1);
   assert.strictEqual(GK.price(hard, 5), 6);
 });
@@ -592,4 +592,97 @@ test('The Regulars: signature balls play like their owners and their feats are s
   const last = fire({ boards: 22 }).map(x => x.id);
   assert.ok(last.includes('kaleb') && last.includes('regulars'), 'all three earn The Regulars: ' + last);
   for (const id of ['quinn', 'levi', 'kaleb', 'regulars']) assert.ok(GK.FEATS.find(x => x.id === id).secret);
+});
+
+test('v1.0 boss trophies: 3 per boss, their own shelf, flags and scoring', () => {
+  const bosses = Object.keys(GK.BOSSES).filter(b => b !== 'champion');
+  for (const b of bosses) assert.strictEqual(Object.values(GK.TROPHIES).filter(t => t.boss === b).length, 3, b);
+  const run = GK.newRun({ seed: 6 });
+  const slots = run.maxCharms;
+  assert.deepStrictEqual(GK.trophyChoices(run, 'king').sort(), ['scepter', 'stolen_crown', 'throne']);
+  GK.takeTrophy(run, 'stolen_crown');
+  assert.strictEqual(run.maxCharms, slots + 1, 'the Stolen Crown adds a charm slot');
+  assert.ok(!GK.trophyChoices(run, 'king').includes('stolen_crown'));
+  GK.takeTrophy(run, 'master_key'); GK.takeTrophy(run, 'frost_boots');
+  assert.strictEqual(run.charms.length, 0, 'trophies never use charm slots');
+  assert.strictEqual(GK.flags(run).reracks, GK.flags(GK.newRun({ seed: 6 })).reracks + 1);
+  assert.ok(Math.abs(GK.equipMods(run).zone - GK.equipMods(GK.newRun({ seed: 6 })).zone * 1.2) < 1e-9);
+  run.trophies.push({ id: 'snowman_head' });
+  const f = { kind: 'strike', rolls: [roll({ down: pins(10), pins: 10 })] };
+  const base = GK.scoreFrame(f, GK.newRun({ seed: 6 }));
+  assert.strictEqual(GK.scoreFrame(f, run).mult, base.mult + 6);
+});
+
+test('v1.0 charm evolution: progress, evolved form, description', () => {
+  const run = GK.newRun({ seed: 7 });
+  run.charms = [GK.charmInst('strike_out')];
+  const ctx = { kind: 'strike', pins: 10, carry: 0, perfects: 0, misses: 0, firstPin: 1, lastFrame: false };
+  for (let i = 0; i < 4; i++) assert.strictEqual(GK.evolveCharms(ctx, run).length, 0);
+  assert.ok(/Strike Force: Roll 5 Strikes \(4\/5\)/.test(GK.charmDesc(run.charms[0])));
+  const ev = GK.evolveCharms(ctx, run);
+  assert.strictEqual(ev.length, 1); assert.ok(run.charms[0].evolved);
+  assert.strictEqual(GK.charmName(run.charms[0]), 'Strike Force');
+  const f = { kind: 'strike', rolls: [roll({ down: pins(10), pins: 10 })] };
+  assert.strictEqual(GK.scoreFrame(f, run).mult, GK.scoreFrame(f, GK.newRun({ seed: 7 })).mult + 10);
+});
+
+test('v1.0 overkill, bonus balls and jackpot', () => {
+  assert.strictEqual(GK.overkill({ total: 100, target: 100 }), null);
+  assert.strictEqual(GK.overkill({ total: 160, target: 100 }).tier, 1);
+  assert.strictEqual(GK.overkill({ total: 350, target: 100 }).tier, 3);
+  assert.strictEqual(GK.bonusPay(3), 0); assert.strictEqual(GK.bonusPay(8), 2); assert.strictEqual(GK.bonusPay(10), 3);
+  const run = GK.newRun({ seed: 9 });
+  GK.startRound(run);
+  run.rs.frameIdx = 1;
+  assert.strictEqual(GK.bonusCount(run), 3);
+  const s = GK.bonusSim(run, 0);
+  assert.ok(s.pins.every(p => p.type === 'gold'));
+  GK.bonusLaunch(run, s, 0, { aimX: 3, aim: 0, spin: 0.15, speed: 400 });
+  s.simulate();
+  const r = GK.bonusResult(run, s);
+  assert.strictEqual(run.rs.bonusPay, GK.bonusPay(r.pins));
+  assert.ok(GK.payout(run).some(l => /Bonus balls/.test(l.label)));
+  // jackpot pin shows up when forced, and the spin always pays something
+  const prev = GK.JACKPOT_CHANCE; GK.JACKPOT_CHANCE = 1;
+  try { assert.ok(GK.frameRack(run, 2).includes('jackpot')); } finally { GK.JACKPOT_CHANCE = prev; }
+  const m0 = run.money, c0 = run.cons.length, h0 = run.charms.length;
+  const sp = GK.jackpotSpin(run);
+  assert.strictEqual(sp.reels.length, 3);
+  assert.ok(run.money > m0 || run.cons.length > c0 || run.charms.length > h0);
+});
+
+test('v1.0 the Regulars drop by: gifts, dares and tips', () => {
+  const run = GK.newRun({ seed: 10 });
+  for (let i = 0; i < 30; i++) {
+    const ev = Object.assign({ id: 'regular' }, GK.regularVisit(run, GK.makeRng(i + 1)));
+    assert.ok(['quinn', 'kaleb', 'levi'].includes(ev.who) && ev.say && ev.take);
+    assert.ok(GK.takeEvent(run, ev).ok);
+  }
+  run.dare = { who: 'levi', pay: 10 };
+  const m = run.money;
+  assert.ok(GK.settleDare(run, 'strike').won); assert.strictEqual(run.money, m + 10); assert.strictEqual(run.dare, null);
+  run.grooveNext = 2; GK.startRound(run);
+  assert.ok(run.rs.groove >= 2 && run.grooveNext === 0);
+});
+
+test('v1.0 progress: XP, levels, cosmetics, collection and the Regulars board', () => {
+  assert.strictEqual(GK.levelOf(0).level, 1);
+  assert.strictEqual(GK.levelOf(GK.xpStep(1)).level, 2);
+  assert.strictEqual(GK.levelOf(1e9).level, GK.MAX_LEVEL);
+  const meta = { xp: 0 };
+  const res = GK.addXP(meta, GK.xpStep(1) + GK.xpStep(2));
+  assert.strictEqual(res.to, 3); assert.ok(res.unlocked.length >= 1);
+  assert.ok(GK.COSMETICS.length >= 40);
+  for (const k of Object.keys(GK.COSMETIC_KINDS)) assert.ok(GK.COSMETICS.some(c => c.kind === k && c.level === 1), 'a default ' + k);
+  // pin skins keep special pins readable: light bodies only
+  for (const c of GK.COSMETICS.filter(c => c.kind === 'pins')) { const n = parseInt(c.body.slice(1), 16); assert.ok(((n >> 16) + ((n >> 8) & 255) + (n & 255)) / 3 > 200, c.id); }
+  const run = GK.newRun({ seed: 11 });
+  run.stats.frames = 10; run.stats.strikes = 2; run.history = [{ won: true, round: 0 }, { won: true, round: 2 }];
+  assert.strictEqual(GK.runXP(run).total, 20 + 6 + 30 + 25);
+  const m2 = {};
+  assert.ok(GK.markSeen(m2, run));
+  assert.ok(GK.collectionProgress(m2).have > 0);
+  const beat = GK.beatRegulars(m2, 30000);
+  assert.deepStrictEqual(beat.map(r => r.who), ['kaleb', 'levi']);
+  assert.strictEqual(GK.beatRegulars(m2, 30000).length, 0, 'each regular is beaten once');
 });

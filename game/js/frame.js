@@ -9,7 +9,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (GK.rules(run).dark) L.dark = true;
     if (rs && rs.oil) L.oil = rs.oil;
     if (rs && rs.boss === 'fog') { L.dark = true; L.fog = true; }
-    if (rs && rs.cur && rs.cur.laneEvent === 'flicker') L.dark = true;
+    if (rs && rs.cur && (rs.cur.laneEvent === 'flicker' || rs.cur.laneEvent === 'blackout')) L.dark = true;
     return L;
   };
 
@@ -52,6 +52,11 @@ var GK = globalThis.GK = globalThis.GK || {};
     });
     sim.rememberLayout();
     if (keep && keep.pinState) sim.applyPinState(keep.pinState);
+    // Runaway pin: one standing pin slides back and forth until the ball gets to it.
+    if (rs.cur.laneEvent === 'runaway') {
+      if (rs.cur.runaway == null) { const up = sim.pins.filter(p => p.standing && p.type !== 'none'); rs.cur.runaway = up.length ? GK.stream(run.seed, 'runaway:' + run.alley + ':' + run.round + ':' + fi).pick(up).n : -1; }
+      sim.runaway = rs.cur.runaway;
+    }
     return sim;
   };
   // This frame's rack: Paint Ball conversions, Weighted Pins and the Pin Thief applied on top of
@@ -66,6 +71,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       const have = rack.map((t, i) => t === 'none' ? -1 : i).filter(i => i >= 0);
       if (have.length > 1) rack[GK.stream(run.seed, 'thief:' + run.alley + ':' + run.round + ':' + fi).pick(have)] = 'none';
     }
+    const jp = GK.jackpotPin ? GK.jackpotPin(run, fi, rack) : -1;
+    if (jp >= 0) rack[jp] = 'jackpot';
     return rack;
   };
   // Standing pins after a roll, so a saved frame can be rebuilt exactly.
@@ -296,6 +303,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       kind, rolls: cur.rolls, frameIdx: rs.frameIdx, lastFrame: rs.frameIdx === rs.framesMax - 1,
       leftSplit: cur.splitLeave, leave710: cur.leave710, loaded: rs.loadedNext,
       call: rs.boss === 'secretary' ? GK.callResult(cur.call, kind) : null,
+      party: cur.laneEvent === 'party', blackout: cur.laneEvent === 'blackout', runaway: cur.laneEvent === 'runaway' ? cur.runaway : null,
       groove: rs.groove || 0, grooveX: !!GK.flags(run, rs.stolen).grooveX, weighted: !!rs.weighted,
       framesLeft: rs.framesMax - rs.frameIdx, maxHook: cur.maxHook || 0, throws: cur.throws || cur.rolls.length,
       dark: !!GK.laneFor(run).dark, boss: !!rs.boss, oil: GK.laneFor(run).oil || 'house',
@@ -320,6 +328,9 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (kind === 'split') st.splits++;
     if (kind === 'gutter') st.gutters++;
     GK.afterFrame(res.ctx, run, rs.stolen);
+    GK.evolveCharms(res.ctx, run, rs.stolen).forEach(e => notes.push({ t: 'evolve', idx: e.idx, text: e.from + ' evolved into ' + e.to + '!' }));
+    if (cur.rolls.some(r => r.down.some(d => d.type === 'jackpot'))) { const sp = GK.jackpotSpin(run); notes.push({ t: 'jackpot', reels: sp.reels, text: sp.text }); }
+    if (run.dare && rs.frameIdx === 0 && !run.practice) { const d = GK.settleDare(run, kind); if (d) notes.push(d); }
     res.breaks.forEach(n => { if (run.rack[n - 1] === 'glass') { run.rack[n - 1] = 'std'; notes.push({ t: 'break', text: 'Glass pin ' + n + ' broke' }); } });
     if (rs.boss === 'enforcer' && (kind === 'open' || kind === 'gutter')) { const take = Math.min(3, Math.max(0, run.money)); run.money -= take; notes.push({ t: 'bet', text: take ? 'The Enforcer collects $' + take + ' for that open frame' : 'The Enforcer finds your pockets empty' }); }
     if (rs.boss === 'bookie' && cur.bet) {

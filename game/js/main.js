@@ -5,7 +5,10 @@
   const sleep = ms => new Promise(r => setTimeout(r, ms));
 
   let run = null, sim = null, phase = 'menu', sel = 0, aimX = 0;
-  let glow = null, fast = false, hitStop = 0, busyToken = 0;
+  let glow = null, fast = false, hitStop = 0, busyToken = 0, skipScore = false;
+  let tension = null; // the 'will it fall?' moment
+  let bonus = null; // bonus balls after a round won with frames to spare
+  let highlights = [], lastXP = null; // the run's 3 best frames for the highlight reel; XP from the last run
   let meta = GK.meta();
   GK._meta = meta;
   sfx.setMuted(!!meta.muted);
@@ -45,6 +48,7 @@
   }
   function refresh() {
     if (!run) return;
+    if (GK.markSeen(meta, run)) GK.saveMeta(meta);
     UI.hud(run); UI.charms(run, tapCharm); UI.card(run);
     sel = Math.min(sel, run.bag.length - 1);
     if (run.rs && GK.isStuck(run, sel)) sel = GK.firstFreeBall(run, sel);
@@ -64,9 +68,15 @@
     const where = s.alley >= GK.ALLEY_COUNT ? 'Championship' : 'Alley ' + (s.alley + 1) + ' · ' + GK.ROUND_NAMES[s.round];
     return where + ' · ' + GK.money(s.money) + (s.daily ? ' · daily' : '');
   }
-  const newRunScreen = () => UI.bagSelect(meta, o => startRun(o), title);
+  const urlSeed = (() => { try { return new URLSearchParams(location.search).get('seed'); } catch (e) { return null; } })();
+  const newRunScreen = () => { UI.bagSelect(meta, o => startRun(o), title); if (urlSeed && $('seedIn')) $('seedIn').value = urlSeed; };
+  GK.challengeText = function (run, won) {
+    const code = GK.seedCode(run.seed), url = location.origin + location.pathname + '?seed=' + code;
+    const reached = won ? 'beat the Gutter King' : 'reached ' + (GK.isChamp(run) ? 'the Championship' : 'Alley ' + (run.alley + 1) + ', ' + GK.roundName(run));
+    return 'I ' + reached + ' in Gutter Kings with a best frame of ' + fmt(run.stats.bestFrame) + '. Same lanes, same shops: seed ' + code + '. Beat me: ' + url;
+  };
   function title() {
-    phase = 'menu'; run = null; sim = null; replay = null; coach(null);
+    phase = 'menu'; run = null; sim = null; replay = null; bonus = null; coach(null);
     GK.music.stop();
     UI.hideModal();
     UI.title(meta, saveDesc(GK.load()), {
@@ -75,6 +85,8 @@
       daily: () => startRun({ bag: 'classic', seed: GK.dailySeed(), daily: true }),
       how: () => UI.how(),
       collection: () => UI.collection(meta),
+      locker: () => UI.locker(meta, () => { GK.saveMeta(meta); R.setCosmetics(GK.cosmeticsOn(meta)); }),
+      book: () => UI.book(meta),
       practice: () => UI.practiceSetup(startPractice, title),
       sound: el => { sfx.init(); sfx.setMuted(!sfx.muted); meta.muted = sfx.muted; GK.saveMeta(meta); el.textContent = sfx.muted ? 'Sound off' : 'Sound on'; }
     });
@@ -83,12 +95,12 @@
     sfx.init();
     run = GK.newRun(o);
     meta.runs++; GK.saveMeta(meta);
-    sel = 0; bestReplay = null;
+    sel = 0; bestReplay = null; highlights = []; lastXP = null;
     toIntro();
   }
   function resume(s) {
     sfx.init();
-    run = s; sel = 0; bestReplay = null;
+    run = s; sel = 0; bestReplay = null; highlights = []; lastXP = null;
     if (run.phase === 'shop' && run.shop) { themeRound(); showShop(); return; }
     if (run.phase === 'shop' && run.event) { themeRound(); showEvent(run.event); return; }
     if (run.phase === 'round' && run.rs && run.rs.cur) { themeRound(); UI.hideLayer(); resumeFrame(); return; }
@@ -99,6 +111,7 @@
   }
 
   function toIntro() {
+    bonus = null;
     GK.startRound(run);
     GK.save(run);
     themeRound();
@@ -155,6 +168,7 @@
     glow = null;
     if (!laneOf().dark || !sim) return;
     if (laneOf().fog) { glow = new Set(); return; }
+    if (run.rs && run.rs.cur && run.rs.cur.laneEvent === 'blackout') { glow = new Set(sim.pins.map(p => p.n)); return; }
     const rng = GK.stream(run.seed, 'glow:' + run.alley + ':' + run.round + ':' + run.rs.frameIdx + ':' + run.stats.throws);
     glow = new Set(rng.shuffle(sim.pins.map(p => p.n)).slice(0, 4));
   }
@@ -166,6 +180,7 @@
     setPhase('aim');
   }));
 
+  $('trophyBtn').addEventListener('click', () => { if (run) UI.trophyShelf(run); });
   $('rerackBtn').addEventListener('click', () => {
     if (phase !== 'aim' || !GK.rerack(run, sim)) return;
     pickGlow(); sfx.spare();
@@ -179,9 +194,9 @@
     sfx.init();
     const b = run.bag[sel];
     if (b.type === 'snake' && !prm.path) prm.path = GK.snakePath(prm.aimX, prm.aim, laneOf().lhw || C.LHW);
-    GK.launch(run, sim, sel, prm);
+    if (bonus) GK.bonusLaunch(run, sim, sel, prm);
+    else { GK.launch(run, sim, sel, prm); GK.save(run); }
     curPath = [];
-    GK.save(run);
     hitStop = 0; step = 'pos'; posT0 = performance.now(); recFrames = [];
     UI.shot(GK.BALLS[b.type].full + ' away');
     setPhase('rolling');
@@ -190,7 +205,12 @@
   function onSimEvent(e) {
     switch (e.t) {
       case 'clack': sfx.clack(e.v); break;
-      case 'first': hitStop = 0.07; R.shake = Math.min(4, R.shake + 2); GK.haptic('light'); break;
+      case 'first': {
+        const pocket = e.n === 1 && Math.abs(e.off || 0) > 1.5 && Math.abs(e.off || 0) < 5.5 && (e.v || 0) > 250;
+        if (pocket) { hitStop = 0.16; R.shake = Math.min(7, R.shake + 5); R.flash = Math.max(R.flash, 0.18); sfx.thump(); GK.haptic('heavy'); }
+        else { hitStop = 0.07; R.shake = Math.min(4, R.shake + 2); GK.haptic('light'); }
+        break;
+      }
       case 'down':
         if (e.by === 'pin') R.pop(e.x, e.z, 18, '+3', '#39c6d6');
         else if (e.by === 'late') R.pop(e.x, e.z, 18, '+4 late', '#39c6d6');
@@ -219,6 +239,7 @@
     setPhase('busy');
     sfx.roll(0);
     const token = ++busyToken;
+    if (bonus) return bonusRollEnd(token);
     const out = GK.afterRoll(run, sim);
     if (out.next === 'aim') GK.save(run);
     lastRec = { frames: recFrames, alley: run.alley, champ: GK.isChamp(run), lane: laneOf(), def: GK.alleyDef(run), preview: run.rs.cur && run.rs.cur.ball, glow, dark: laneOf().dark };
@@ -276,6 +297,14 @@
       UI.banner(label || 'REPLAY', 'tap to skip');
       setPhase('replay');
     });
+  }
+  async function playHighlights() {
+    const list = highlights.slice().sort((a, b) => a.score - b.score);
+    for (let i = 0; i < list.length; i++) {
+      const h = list[i];
+      R.setTheme(h.rec.def, h.rec.lane.lhw || C.LHW, h.rec.lane.magnet ? 12 : C.GUT, h.rec.lane.oil);
+      await playReplay(h.rec, 'HIGHLIGHT ' + (i + 1) + '/' + list.length + ' · ' + fmt(h.score));
+    }
   }
   function endReplay() {
     if (!replay) return;
@@ -355,41 +384,65 @@
     const rs = run.rs, s = GK.SHOTS[kind];
     const live = () => token === busyToken && run && run.rs === rs;
     const res = GK.scoreCurrent(run, kind);
-    if (GK.isStrikeKind(kind)) { R.shake = 6; sfx.strike(); R.flash = 0.35; GK.haptic('success'); }
-    else if (GK.isSpareKind(kind)) sfx.spare();
+    skipScore = false;
+    const streakN = GK.isStrikeKind(kind) ? (rs.streak || 0) + 1 : 0;
+    if (streakN) {
+      R.shake = Math.min(14, 5 + streakN * 1.5); R.flash = Math.min(0.7, 0.3 + streakN * 0.05); GK.haptic('success');
+      if (streakN >= 2) sfx.streak(streakN); else sfx.strike();
+      if (streakN >= 3) R.confetti(Math.min(90, 30 + streakN * 10));
+    } else if (GK.isSpareKind(kind)) sfx.spare();
     tvShow(kind, res.ctx.leave710);
     const pinsSum = rs.cur.rolls.reduce((a, r) => a + r.pins, 0);
-    UI.banner(s.name.toUpperCase(), kind === 'open' ? pinsSum + ' pins' : '');
+    if (streakN >= 2) UI.banner(GK.streakName(streakN), streakN >= 4 ? streakN + ' strikes in a row' : '', 0, Math.min(5, streakN - 1));
+    else UI.banner(s.name.toUpperCase(), kind === 'open' ? pinsSum + ' pins' : '');
     const d = fast ? 120 : 260;
-    await sleep(fast ? 250 : 450); if (!live()) return;
+    const wait = ms => skipScore ? Promise.resolve() : sleep(ms);
+    await wait(fast ? 250 : 450); if (!live()) return;
     let n = 0;
     for (const st of res.steps) {
-      if (st.op === 'set') { UI.tally(st.chips, st.mult, null); UI.shot(st.label); UI.bump($('chipsBox')); UI.bump($('multBox')); sfx.tick(440); await sleep(d); if (!live()) return; continue; }
+      if (st.op === 'set') { UI.tally(st.chips, st.mult, null); UI.shot(st.label); UI.bump($('chipsBox')); UI.bump($('multBox')); sfx.tick(440); await wait(d); if (!live()) return; continue; }
       UI.tally(st.chips, st.mult, null);
       const txt = stepText(st);
       UI.shot(st.label + (txt ? ' · ' + txt : ''));
       if (st.src === 'charm') UI.fireCharm(st.idx, txt || st.label, stepCol(st));
       if (st.op === 'chips') { UI.bump($('chipsBox')); sfx.chip(n); }
       else if (st.op === 'mult') { UI.bump($('multBox')); sfx.mult(n); }
-      else if (st.op === 'xmult') { UI.bump($('multBox')); sfx.xmult(); }
+      else if (st.op === 'xmult') { UI.bump($('multBox')); UI.jolt(); sfx.xmult(); R.shake = Math.max(R.shake, 3); }
       else if (st.op === 'money') { sfx.coin(); }
       else if (st.op === 'zero') { UI.bump($('eqBox')); sfx.nope(); }
       n++;
-      await sleep(d); if (!live()) return;
+      await wait(d); if (!live()) return;
     }
     UI.tally(res.chips, res.mult, res.score); UI.bump($('eqBox')); sfx.tick(880);
     UI.shot(s.name + ' · ' + fmt(res.chips) + ' × ' + (Math.round(res.mult * 100) / 100) + ' = ' + fmt(res.score));
-    await sleep(fast ? 200 : 380); if (!live()) return;
+    await wait(fast ? 200 : 380); if (!live()) return;
     const start = rs.total;
     const out = GK.commitFrame(run, kind, res);
     if (run.best && run.best.score === res.score && run.best.frame === rs.frameIdx - 1) bestReplay = lastRec;
+    if (lastRec && lastRec.frames && lastRec.frames.length > 4 && !run.practice) {
+      highlights.push({ score: res.score, rec: lastRec, kind });
+      highlights.sort((a, b) => b.score - a.score); highlights = highlights.slice(0, 3);
+    }
+    if (!run.practice) {
+      const beat = GK.beatRegulars(meta, res.score);
+      if (beat.length) {
+        const r0 = beat[beat.length - 1];
+        GK.saveMeta(meta);
+        setTimeout(() => { UI.toast('You beat ' + r0.name + '\'s best frame of ' + fmt(r0.frame) + '!', 2800); tv = { kind: r0.who, t: 0, v: 0 }; lastTv = { kind: r0.who, v: 0 }; sfx.win(); }, 600);
+      }
+    }
     feats({ t: 'frame', kind, score: res.score, ctx: res.ctx, leave710: res.ctx.leave710, breaks: res.breaks, run });
     if (kind === 'turkey' || kind === 'double') cheer('cheer'); else if (GK.isSpareKind(kind)) cheer('clap'); else if (kind === 'gutter') cheer('groan');
-    for (let i = 1; i <= 8; i++) { $('score').firstChild.textContent = fmt(start + res.score * i / 8); await sleep(30); if (!live()) return; }
+    for (let i = 1; i <= 8; i++) { $('score').firstChild.textContent = fmt(start + res.score * i / 8); await wait(30); if (!live()) return; }
     if (res.score > meta.bestFrame) { meta.bestFrame = res.score; GK.saveMeta(meta); }
     refresh();
-    for (const nt of out.notes) UI.toast(nt.text, 1800);
-    await sleep(fast ? 250 : 450); if (!live()) return;
+    for (const nt of out.notes) {
+      UI.toast(nt.text, nt.t === 'evolve' ? 2600 : 1800);
+      if (nt.t === 'evolve') { sfx.levelUp(); UI.fireCharm(nt.idx, 'EVOLVED!', '#ffd447'); R.confetti(25); }
+      if (nt.t === 'jackpot') { tv = { kind: 'jackpot', t: 0, v: 0, reels: nt.reels }; lastTv = { kind: 'jackpot', v: 0, reels: nt.reels }; for (let i = 0; i < 14; i++) setTimeout(() => sfx.slot(), i * 70); setTimeout(() => { sfx.win(); R.confetti(50); }, 1100); UI.banner('JACKPOT PIN!', nt.text, 1800, 4); }
+      if (nt.t === 'dare') { tv = { kind: nt.who, t: 0, v: 0 }; lastTv = { kind: nt.who, v: 0 }; if (nt.won) { sfx.coin(); R.confetti(25); } else sfx.taunt(); }
+    }
+    await wait(fast ? 250 : 450); if (!live()) return;
     UI.hideBanner();
     if (out.status === 'won') return roundWon();
     if (out.status === 'lost') return roundLost();
@@ -428,12 +481,49 @@
 
   function roundWon() {
     sfx.win();
+    const score = run.rs.total, ok = GK.overkill(run.rs);
+    if (ok && !run.practice) { UI.banner(ok.label + '!', fmt(score) + ' · ' + (Math.floor(score / run.rs.target * 10) / 10) + '× the target', 1600, Math.min(5, ok.tier + 1)); R.confetti(30 + ok.tier * 20); sfx.streak(2 + ok.tier * 2); R.shake = 6 + ok.tier * 2; }
+    else UI.banner('ROUND CLEARED', fmt(score), 1400);
+    const n = GK.bonusCount(run);
+    if (n > 0) {
+      bonus = { i: 0, n, pays: [] };
+      const tk = busyToken;
+      setTimeout(() => tk === busyToken && bonus && nextBonusBall(), 1500);
+      return;
+    }
+    finishRound();
+  }
+  // Bonus balls: a fresh rack of gold pins for every frame you didn't need (up to 3).
+  function nextBonusBall() {
+    sim = GK.bonusSim(run, bonus.i);
+    sim.onEvent = onSimEvent;
+    pickGlow(); resetTally();
+    step = 'pos'; posT0 = performance.now();
+    UI.banner('BONUS BALL ' + (bonus.i + 1) + '/' + bonus.n, 'Gold pins pay cash · every 4 pins = $1', 1500);
+    UI.shot('Bonus ball ' + (bonus.i + 1) + ' of ' + bonus.n + ' · knock down the gold!');
+    setPhase('aim');
+  }
+  async function bonusRollEnd(token) {
+    const r = GK.bonusResult(run, sim);
+    bonus.pays.push(r.pay);
+    if (r.strike) { sfx.strike(); R.confetti(40); R.shake = 6; UI.banner('GOLD STRIKE!', '+$' + r.pay, 1300, 3); }
+    else UI.banner(r.pins + ' GOLD PINS', r.pay ? '+$' + r.pay : 'no cash this time', 1100);
+    for (let i = 0; i < r.pay; i++) setTimeout(() => sfx.coin(), i * 120);
+    UI.shot('Bonus ball ' + (bonus.i + 1) + ': ' + r.pins + ' pins · +$' + r.pay);
+    await sleep(1400); if (token !== busyToken || !bonus) return;
+    bonus.i++;
+    if (bonus.i < bonus.n) return nextBonusBall();
+    bonus = null;
+    UI.hideBanner();
+    finishRound();
+  }
+  function finishRound() {
     const score = run.rs.total;
-    UI.banner('ROUND CLEARED', fmt(score), 1400);
     const lines = GK.payout(run);
     GK.applyPayout(run, lines);
     const payRun = JSON.parse(JSON.stringify(run));
     feats({ t: 'round', boss: run.rs.boss, run });
+    const beatBoss = !run.practice && run.rs.boss && run.rs.boss !== 'champion' ? GK.bossFor(run) : null;
     const nxt = GK.advance(run);
     if (nxt === 'won') {
       meta.wins++;
@@ -453,7 +543,13 @@
     GK.save(run);
     setPhase('menu');
     const tk = busyToken;
-    setTimeout(() => tk === busyToken && UI.payout(payRun, lines, score, () => run.event ? showEvent(run.event) : showShop()), 700);
+    const afterPay = () => run.event ? showEvent(run.event) : showShop();
+    const choices = beatBoss ? GK.trophyChoices(run, beatBoss) : [];
+    setTimeout(() => tk === busyToken && UI.payout(payRun, lines, score, () => {
+      if (!choices.length) return afterPay();
+      sfx.levelUp();
+      UI.trophyPick(beatBoss, choices, id => { const r = GK.takeTrophy(run, id); UI.toast(r.msg, 2200); GK.save(run); UI.hud(run); afterPay(); });
+    }, choices.length ? 'Claim your trophy' : null), 700);
   }
   function roundLost() {
     sfx.lose();
@@ -503,8 +599,20 @@
       UI.drillPicker(run, bi, id => { UI.hideModal(); after(free ? GK.takeEvent(run, run.event || { id: 'lane_mech' }, { ball: bi, drill: id }) : GK.redrill(run, bi, id)); }, UI.hideModal);
     }, UI.hideModal);
   }
+  function awardXP() {
+    if (!run || run.practice || run.xpDone) return;
+    run.xpDone = true;
+    const x = GK.runXP(run), res = GK.addXP(meta, x.total);
+    lastXP = Object.assign(res, { parts: x.parts });
+    GK.saveMeta(meta);
+  }
   function showEnd(won) {
+    awardXP();
+    if (lastXP && lastXP.to > lastXP.from) { sfx.levelUp(); setTimeout(() => R.confetti(40), 200); }
     UI.end(run, won, meta, {
+      xp: lastXP,
+      highlights: highlights.length ? () => { UI.hideLayer(); playHighlights().then(() => showEnd(won)); } : null,
+      challenge: () => GK.challengeText(run, won),
       endless: won ? () => {
         GK.startEndless(run); GK.openShop(run); GK.applyShopTags(run); GK.save(run);
         themeRound(); UI.toast('Endless mode: the alleys come around again, and the targets keep climbing.', 3200); showShop();
@@ -565,7 +673,7 @@
   }
 
   // ---------- consumables ----------
-  function tapCons(i) { if (phase === 'aim') consDetail(i, true); }
+  function tapCons(i) { if (phase === 'aim' && !bonus) consDetail(i, true); }
   function consDetail(i, inRound) {
     const id = run.cons[i], k = GK.CONS[id];
     const done = r => {
@@ -708,6 +816,7 @@
     $('pzone').style.left = z[0] * 100 + '%'; $('pzone').style.width = (z[1] - z[0]) * 100 + '%';
     const g = run && run.rs ? run.rs.groove || 0 : 0;
     $('grooveLbl').hidden = !g; $('grooveLbl').textContent = '♪ ' + g;
+    if (GK.music && GK.music.setGroove) GK.music.setGroove(g);
   }
   function confirmStep() {
     if (phase !== 'aim') return;
@@ -747,6 +856,7 @@
   cv.addEventListener('pointerdown', e => {
     sfx.init();
     if (phase === 'replay') { e.preventDefault(); endReplay(); return; }
+    if (phase === 'busy') skipScore = true;
     {
       const rr = cv.getBoundingClientRect(), bx = (e.clientX - rr.left) / rr.width * C.W, by = (e.clientY - rr.top) / rr.height * C.H;
       if (run && R.tvHit(bx, by)) { e.preventDefault(); openTV(); return; }
@@ -792,6 +902,28 @@
     const realDt = Math.min(0.05, (now - last) / 1000); last = now;
     let simDt = realDt;
     if (hitStop > 0) { hitStop -= realDt; simDt = realDt * 0.12; }
+    if (phase === 'rolling' && sim && !replay) {
+      const up = sim.pins.filter(p => p.standing && !p.gone && !p.cleared);
+      const down = sim.pins.filter(p => !p.standing && !p.counted).length;
+      const ballsBy = sim.balls.every(b => b.gone || b.z > C.ZH + 6 || b.gutter);
+      const teeter = up.filter(p => p.wob > 0.28 || p.fallAt);
+      if (!tension && ballsBy && down >= 3 && up.length >= 1 && up.length <= 2 && teeter.length) {
+        tension = { t: 0, beat: 0, pins: teeter.map(p => p.n) };
+        R.tension = 1;
+      }
+      if (tension) {
+        tension.t += realDt; tension.beat -= realDt;
+        if (tension.beat <= 0) { sfx.heart(); GK.haptic('light'); tension.beat = 0.55; }
+        const still = sim.pins.filter(p => tension.pins.includes(p.n) && p.standing && !p.gone);
+        const calm = still.every(p => p.wob < 0.06 && !p.fallAt);
+        if (still.length < tension.pins.length || tension.t > 2.6 || calm) {
+          const fell = tension.pins.length - still.length;
+          if (fell) { sfx.roar(); R.shake = 6; R.flash = 0.3; sim.pins.filter(p => tension.pins.includes(p.n) && !p.standing).forEach(p => { R.burst(p.x, p.z, '#ffd447', 14, 60); R.pop(p.x, p.z, 26, 'DOWN!', '#ffd447'); }); cheer('cheer'); }
+          else { sfx.taunt(); still.forEach(p => R.pop(p.x, p.z, 28, 'NOPE', '#ff5a6e')); cheer('groan'); }
+          tension = null; R.tension = 0;
+        } else simDt *= 0.3;
+      }
+    } else if (tension) { tension = null; R.tension = 0; }
     if (replay) {
       replay.t += realDt * replay.speed;
       while (replay.i < replay.frames.length - 1 && replay.frames[replay.i + 1].time <= replay.t) replay.i++;
@@ -801,7 +933,7 @@
         acc += simDt; let n = 0;
         while (acc >= GK.DT && n < 40) { sim.step(GK.DT); acc -= GK.DT; n++; if (!sim.rolling) break; }
         sfx.roll(GK.clamp((sim.fastest || 0) / 450, 0, 1));
-        const lc = GK.liveChips(run.rs.cur.rolls, sim), el = $('chips');
+        const lc = run.rs.cur ? GK.liveChips(run.rs.cur.rolls, sim) : 0, el = $('chips');
         if (el.textContent !== fmt(lc)) { el.textContent = fmt(lc); UI.bump($('chipsBox')); }
         if (recFrames.length < 900) recFrames.push(snapSim(sim));
         const mb = sim.balls.find(b => b.kind === 'main' && !b.gone && !(b.delay > 0));
@@ -839,6 +971,7 @@
       ret: run && run.rs && !rp ? { balls: run.bag, sel, stuck: run.rs.stuck && run.bag.length > 1 ? run.rs.stuck.idx : -1, inPlay: phase === 'rolling' && run.rs.cur ? run.rs.cur.ballIdx : -1 } : null,
       phase: rp ? 'replay' : phase, aimX, aimAng, step, time: now / 1000,
       boards: !rp && phase === 'aim' && step === 'pos' && run && GK.equipMods(run).boards,
+      party: !rp && !bonus && rs && rs.cur && rs.cur.laneEvent === 'party',
       hookPreview: !rp && phase === 'aim' && step === 'hook' && run && GK.equipMods(run).preview ? dialNow() : null,
       clearOil: !!(run && GK.equipMods(run).clearOil),
       preview: rp && replay.rec.preview ? { type: replay.rec.preview.type, ed: replay.rec.preview.ed, r: C.BALL_R } : thrown ? { type: thrown.type, ed: thrown.ed, r: C.BALL_R * wide } : b ? { type: b.type, ed: b.ed, r: (b.type === 'cluster' ? 2.3 : C.BALL_R) * wide } : null,
@@ -851,6 +984,7 @@
 
   // ---------- boot ----------
   R.setTheme(GK.ALLEYS[0], C.LHW, C.GUT);
+  R.setCosmetics(GK.cosmeticsOn(meta));
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { if (!run) R.buildStatic(); });
   fit();
   title();
