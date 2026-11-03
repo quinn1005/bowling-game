@@ -479,7 +479,22 @@
         if (r.need === 'replace') return UI.ballPicker(run, 'Leave a ball behind', r.msg, i => done(GK.takeEvent(run, ev, i)), UI.hideModal);
         done(r);
       },
-      leave: () => done(null)
+      leave: () => done(null),
+      // sell a charm or ball right from the event screen, then show the event again
+      charm: i => {
+        const c = run.charms[i]; GK._run = run;
+        UI.detail(UI.info('charm', c.id, c.ed, c), [
+          { label: 'Sell for $' + GK.charmSell(c), fn: () => { GK.sellCharm(run, i); sfx.coin(); UI.hideModal(); GK.save(run); showEvent(ev); }, cls: 'danger' },
+          { label: 'Close', fn: UI.hideModal, cls: 'alt' }
+        ]);
+      },
+      ball: i => {
+        const b = run.bag[i]; GK._run = run;
+        UI.detail(UI.info('ball', b.type, b.ed, b), [
+          { label: 'Sell for $' + GK.ballSell(b), fn: () => { const r = GK.sellBall(run, i); UI.hideModal(); if (!r.ok) { sfx.nope(); return UI.toast(r.msg); } sfx.coin(); GK.save(run); showEvent(ev); }, cls: 'danger', disabled: run.bag.length <= 1 },
+          { label: 'Close', fn: UI.hideModal, cls: 'alt' }
+        ]);
+      }
     });
   }
   // Pick a ball, then a layout. free = the lane mechanic's favour.

@@ -70,6 +70,37 @@ const must = (c, m) => { if (!c) throw new Error(m); };
     if (id === 'lane_mech') must(st.bag[0].endsWith(':flare'), 'free re-drill missing: ' + st.bag[0]);
     must(!st.event, 'event not cleared');
   }
+  // 4b) selling from the event screen to make room for the offered charm or ball
+  await page.evaluate(() => {
+    const r = GK.debug.run; r.money = 5;
+    r.charms = ['lucky_shoes', 'chalk_bag', 'domino', 'tip_jar', 'piggy_bank'].slice(0, r.maxCharms).map(id => GK.charmInst(id));
+    const ev = { id: 'shady', charm: 'tenth_frame' }; r.event = ev; GK.debug.showEvent(ev);
+  });
+  await page.waitForSelector('#layer [data-charm]');
+  await snap('f3b-event-sell');
+  const before = await page.evaluate(() => ({ n: GK.debug.run.charms.length, money: GK.debug.run.money }));
+  await page.click('#layer [data-charm="0"]');
+  await page.click('#modal .btn.danger');
+  await page.waitForSelector('#layer [data-a=take]');
+  const after = await page.evaluate(() => ({ n: GK.debug.run.charms.length, money: GK.debug.run.money }));
+  must(after.n === before.n - 1 && after.money > before.money, 'selling a charm on the event screen failed: ' + JSON.stringify([before, after]));
+  await page.click('#layer [data-a=take]');
+  await page.waitForSelector('#layer .shop');
+  must(await page.evaluate(() => GK.debug.run.charms.some(c => c.id === 'tenth_frame')), 'charm not taken after making room');
+  await page.evaluate(() => {
+    const r = GK.debug.run;
+    r.bag = Array.from({ length: GK.maxBag(r) }, (_, i) => ({ type: ['house', 'feather', 'lead', 'split'][i % 4], ed: null }));
+    const ev = { id: 'lost_found', ball: 'ghost' }; r.event = ev; GK.debug.showEvent(ev);
+  });
+  await page.waitForSelector('#layer [data-ball]');
+  const bagBefore = await page.evaluate(() => GK.debug.run.bag.length);
+  await page.click('#layer [data-ball="1"]');
+  await page.click('#modal .btn.danger');
+  await page.waitForSelector('#layer [data-a=take]');
+  must(await page.evaluate(() => GK.debug.run.bag.length) === bagBefore - 1, 'selling a ball on the event screen failed');
+  await page.click('#layer [data-a=take]');
+  await page.waitForSelector('#layer .shop');
+  must(await page.evaluate(() => GK.debug.run.bag.some(b => b.type === 'ghost')), 'ball not taken after making room');
   await snap('f4-shop');
   await page.click('#layerInner [data-a=drill]');
   await page.click('#modal [data-b="1"]'); await page.click('#modal [data-d=strong]');

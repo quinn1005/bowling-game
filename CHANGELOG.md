@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.9.2
+
+### Changed
+- **Sell from the event screen.** When an event offers a charm (the Shady Bowler) or a ball (the Lost & Found), your own charms or balls are listed underneath with their sell price. Tap one to sell it and make room, then take the offer. The screen also shows your money.
+
 ## v0.9.1
 
 ### New

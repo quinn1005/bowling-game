@@ -309,13 +309,29 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (ev.id === 'vending') { offer = '<p class="dim">You never know what\'s in there until it drops.</p>'; take = 'Pay $3'; }
     if (ev.id === 'shady') { const c = GK.CHARMS[ev.charm]; offer = '<div class="boss"><b>' + esc(c.name) + '</b><p>' + esc(GK.charmDesc(GK.charmInst(ev.charm))) + '</p></div>'; take = 'Take the charm'; }
     if (ev.id === 'lane_mech') { take = 'Re-drill a ball'; }
+    // Offered a charm or a ball? Your own are listed underneath so you can sell one to make room.
+    let owned = '';
+    if (ev.id === 'shady') {
+      const full = run.charms.length >= run.maxCharms;
+      owned = `<div class="sect">Your charms ${run.charms.length}/${run.maxCharms}${full ? ' · full, sell one to make room' : ' · tap to sell'}</div><div class="owned">${run.charms.map((c, i) => { const d = GK.CHARMS[c.id]; return `<button class="chip" data-charm="${i}" style="--rc:${GK.RARITY[d.rarity].col}">${esc(d.name)}${c.ed ? ' <small>' + GK.EDITIONS[c.ed].name + '</small>' : ''} <small>$${GK.charmSell(c)}</small></button>`; }).join('') || '<span class="lbl">No charms yet</span>'}</div>`;
+    }
+    if (ev.id === 'lost_found') {
+      const full = run.bag.length >= GK.maxBag(run);
+      owned = `<div class="sect">Your bag ${run.bag.length}/${GK.maxBag(run)}${full ? ' · full, sell one or swap one out' : ' · tap to sell'}</div><div class="owned">${run.bag.map((b, i) => `<button class="chip" data-ball="${i}" style="--rc:${GK.BALLS[b.type].col}"><i class="sw" style="background:${GK.BALLS[b.type].col}"></i>${esc(GK.BALLS[b.type].name)}${b.ed ? ' <small>' + GK.EDITIONS[b.ed].name + '</small>' : ''} <small>$${GK.ballSell(b)}</small></button>`).join('')}</div>`;
+    }
+    GK._run = run;
     UI.layer(`<div class="panel solid">
-      <div class="lbl">Between rounds</div>
+      <div class="lbl">Between rounds · ${GK.money(run.money)}</div>
       <h2>${esc(E.name)}</h2>
       <p>${esc(E.desc)}</p>
       ${offer}
+      ${owned}
       <div class="row2"><button class="btn" data-a="take" data-focus>${esc(take)}</button><button class="btn alt" data-a="leave">Walk away</button></div>
-    </div>`, r => { UI.on(r, '[data-a=take]', h.take); UI.on(r, '[data-a=leave]', h.leave); });
+    </div>`, r => {
+      UI.on(r, '[data-a=take]', h.take); UI.on(r, '[data-a=leave]', h.leave);
+      if (h.charm) UI.on(r, '[data-charm]', el => h.charm(+el.dataset.charm));
+      if (h.ball) UI.on(r, '[data-ball]', el => h.ball(+el.dataset.ball));
+    });
   };
 
   UI.drillPicker = function (run, bi, onPick, onCancel) {
