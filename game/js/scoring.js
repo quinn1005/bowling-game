@@ -62,7 +62,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       framesLeft: f.framesLeft != null ? f.framesLeft : 99,
       maxHook: f.maxHook || 0, throws: f.throws != null ? f.throws : rolls.length,
       dark: !!f.dark, boss: !!f.boss, oil: f.oil || 'house',
-      fumbles: f.fumbles || 0, jams: f.jams || 0, leftOne: !!f.leftOne
+      fumbles: f.fumbles || 0, jams: f.jams || 0, leftOne: !!f.leftOne,
+      travel: rolls[0] ? rolls[0].travel || 0 : 0
     };
   };
 
@@ -157,7 +158,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     // 3. charms
     const charms = run.charms || [];
     charms.forEach((inst, i) => {
-      if (opts.stolen === i) { push({ src: 'charm', idx: i, op: 'note', v: 0, label: 'Stolen by the Gutter King' }); return; }
+      if (opts.stolen === i) { push({ src: 'charm', idx: i, op: 'note', v: 0, label: opts.asleep ? 'Asleep (Old Father Time)' : 'Stolen by the Gutter King' }); return; }
       let def = GK.charmDef(inst), data = inst;
       if (def && def.copy) {
         const nb = charms[i + 1];
@@ -168,7 +169,9 @@ var GK = globalThis.GK = globalThis.GK || {};
         const ctxC = Object.assign({}, ctx, { run: Object.assign({}, run, { money: run.money + money }) });
         def.score(ctxC, s, data);
         if (retrigger) def.score(ctxC, s, data);
+        if (inst.corrupt) def.score(ctxC, s, data); // corrupted: triggers twice...
       }
+      if (inst.corrupt) s.money(-1, 'Corruption'); // ...and costs $1 a frame
       const ed = inst.ed;
       if (ed === 'foil') s.chips(GK.EDITIONS.foil.chips, 'Foil');
       if (ed === 'holo') s.mult(GK.EDITIONS.holo.mult, 'Holo');
@@ -193,6 +196,8 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (f.call === 'hit') bs.xmult(2, 'Called it!');
     if (f.call === 'miss') bs.xmult(0.5, 'Wrong call');
 
+    // The Echo: a frame that doesn't beat your echoed best scores half.
+    if (f.echo && chips * mult <= f.echo) bs.xmult(0.5, 'The Echo (' + Math.round(f.echo).toLocaleString('en-US') + ' to beat)');
     mult = Math.max(0, mult); chips = Math.max(0, chips);
     const score = Math.floor(chips * mult);
     return { steps, chips, mult, score, money, breaks, retrigger, ctx };

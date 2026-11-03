@@ -8,6 +8,7 @@
   let glow = null, fast = false, hitStop = 0, busyToken = 0, skipScore = false;
   let tension = null; // the 'will it fall?' moment
   let bonus = null; // bonus balls after a round won with frames to spare
+  let clockT0 = null; // Old Father Time's shot clock
   let highlights = [], lastXP = null; // the run's 3 best frames for the highlight reel; XP from the last run
   let meta = GK.meta();
   GK._meta = meta;
@@ -167,7 +168,7 @@
   function pickGlow() {
     glow = null;
     if (!laneOf().dark || !sim) return;
-    if (laneOf().fog) { glow = new Set(); return; }
+    if (laneOf().fog || laneOf().angler) { glow = new Set(); return; }
     if (run.rs && run.rs.cur && run.rs.cur.laneEvent === 'blackout') { glow = new Set(sim.pins.map(p => p.n)); return; }
     const rng = GK.stream(run.seed, 'glow:' + run.alley + ':' + run.round + ':' + run.rs.frameIdx + ':' + run.stats.throws);
     glow = new Set(rng.shuffle(sim.pins.map(p => p.n)).slice(0, 4));
@@ -536,6 +537,9 @@
       return;
     }
     feats({ t: 'reach', run });
+    const md = GK.checkMedal(meta, run);
+    if (md) { GK.saveMeta(meta); setTimeout(() => { UI.toast('Endless Medal #' + md.medals + '! +' + md.xp.gained + ' XP', 2800); sfx.levelUp(); }, 1200); }
+    (run.betNotes || []).forEach((t, i) => setTimeout(() => { UI.toast(t, 2200); sfx.coin(); }, 900 + i * 900));
     bumpMeta();
     GK.openShop(run);
     GK.applyShopTags(run);
@@ -554,7 +558,13 @@
   function roundLost() {
     sfx.lose();
     run.over = true; bumpMeta(); GK.clearSave();
-    if (GK.isEndless(run)) { meta.bestEndless = Math.max(meta.bestEndless || 0, run.alley - GK.ALLEY_COUNT); GK.saveMeta(meta); }
+    if (GK.isEndless(run)) {
+      const depth = run.alley - GK.ALLEY_COUNT;
+      meta.bestEndless = Math.max(meta.bestEndless || 0, depth);
+      const beat = GK.beatDepth(meta, depth);
+      if (beat.length) UI.toast('You went deeper than ' + beat.map(b => b.name).join(' and ') + ' in endless!', 2800);
+      GK.saveMeta(meta);
+    }
     setPhase('menu');
     UI.banner('RUN OVER', fmt(run.rs.total) + ' / ' + fmt(run.rs.target), 1500);
     const tk = busyToken;
@@ -571,6 +581,8 @@
     UI.eventScreen(run, ev, {
       take: () => {
         if (ev.id === 'lane_mech') return drillFlow(true, r => done(r));
+        if (ev.id === 'lost_bowler') return UI.ballPicker(run, 'Trade a ball', 'Pick the ball you\'ll give the stranger. You find out what you get after.', i => done(GK.takeEvent(run, ev, i)), UI.hideModal);
+        if (ev.id === 'card_game') return UI.choicePicker('Stake a charm', 'Heads: you win a copy. Tails: it\'s gone.', run.charms.map((c, i) => ({ id: String(i), name: GK.charmName(c), desc: GK.charmDesc(c) })), v => done(GK.takeEvent(run, ev, +v)), UI.hideModal);
         const r = GK.takeEvent(run, ev);
         if (r.need === 'replace') return UI.ballPicker(run, 'Leave a ball behind', r.msg, i => done(GK.takeEvent(run, ev, i)), UI.hideModal);
         done(r);
@@ -768,20 +780,21 @@
     const fl = GK.flags(run, run.rs ? run.rs.stolen : -1);
     return POWER_PERIOD * GK.equipMods(run).bar * (fl.slowmo && run.rs && run.rs.groove > 0 ? 1.3 : 1);
   }
+  const sliderK = () => run && run.rs && run.rs.boss === 'clockmaker' && !bonus ? 2 * (1 + 0.12 * run.rs.frameIdx) : 1;
   function powerNow() {
-    const t = (performance.now() - powerT0) / 1000;
+    const t = (performance.now() - powerT0) / 1000 * sliderK();
     const p = tri(t / barPeriod());
     return GK.equipMods(run).jitter ? GK.clamp(p + 0.025 * Math.sin(t * 41) * Math.sin(t * 13), 0, 1) : p;
   }
   // Start slider: the ball glides across the approach; angle slider: the arrow swings side to side.
   // Both start from the centre. Anchor Shoes slow the angle swing; Slide Shoes widen its range.
-  function posNow() { return (tri((performance.now() - posT0) / 1000 / (POS_PERIOD * GK.equipMods(run).posSlow) + 0.5) * 2 - 1) * aimLim(); }
+  function posNow() { return (tri((performance.now() - posT0) / 1000 * sliderK() / (POS_PERIOD * GK.equipMods(run).posSlow) + 0.5) * 2 - 1) * aimLim(); }
   function angNow() {
     const eq = GK.equipMods(run), a = eq.aim, per = ANG_PERIOD * Math.max(1, a) / Math.min(1, a) * eq.angSpeed;
-    return (tri((performance.now() - angT0) / 1000 / per + 0.5) * 2 - 1) * angLim();
+    return (tri((performance.now() - angT0) / 1000 * sliderK() / per + 0.5) * 2 - 1) * angLim();
   }
   // Hook dial: -1 (hard left) .. +1 (hard right), starting from the centre.
-  function dialNow() { return tri((performance.now() - dialT0) / 1000 / (DIAL_PERIOD * GK.equipMods(run).dial) + 0.5) * 2 - 1; }
+  function dialNow() { return tri((performance.now() - dialT0) / 1000 * sliderK() / (DIAL_PERIOD * GK.equipMods(run).dial) + 0.5) * 2 - 1; }
   const STEP_TEXT = {
     pos: ['1 · Tap to stop the start slider', 'Set start'],
     angle: ['2 · Tap to stop the angle', 'Set angle'],
@@ -889,6 +902,7 @@
   GK.debug.throw = prm => throwBall(Object.assign({ aimX, aim: 0, spin: 0, speed: 340 }, prm));
   GK.debug.skipReplay = () => endReplay();
   GK.debug.select = i => { sel = i; refresh(); };
+  GK.debug.showShop = () => { UI.hideModal(); showShop(); };
   GK.debug.setCosmetics = c => R.setCosmetics(c);
   GK.debug.pickBall = i => pickBall(i);
   GK.debug.showEvent = ev => { UI.hideModal(); showEvent(ev); };
@@ -948,6 +962,12 @@
       }
       if (phase !== 'rolling') { sim.updatePosts(); for (const f of sim.fx) f.t += realDt; sim.fx = sim.fx.filter(f => f.t < 0.6); }
     }
+    if (phase === 'aim' && run && run.rs && run.rs.boss === 'fathertime' && !bonus) {
+      if (clockT0 == null) clockT0 = now;
+      const left = 6 - (now - clockT0) / 1000;
+      R.shotClock = Math.max(0, left);
+      if (left <= 0) { clockT0 = null; R.shotClock = null; sfx.nope(); UI.toast('Time\'s up! The ball rolls as the sliders stand.', 1800); while (phase === 'aim' && step !== 'hook') confirmStep(); if (phase === 'aim') releaseHook(); }
+    } else { clockT0 = null; R.shotClock = null; }
     if (phase === 'aim' && step === 'pos') { aimX = posNow(); $('sneedle').style.left = ((aimX / aimLim() + 1) * 50) + '%'; }
     if (phase === 'aim' && step === 'angle') { aimAng = angNow(); $('sneedle').style.left = ((aimAng / angLim() + 1) * 50) + '%'; }
     if (phase === 'aim' && step === 'power') $('pneedle').style.left = (powerNow() * 100) + '%';
@@ -973,6 +993,7 @@
       phase: rp ? 'replay' : phase, aimX, aimAng, step, time: now / 1000,
       boards: !rp && phase === 'aim' && step === 'pos' && run && GK.equipMods(run).boards,
       party: !rp && !bonus && rs && rs.cur && rs.cur.laneEvent === 'party',
+      lane: !rp && run ? laneOf() : null,
       hookPreview: !rp && phase === 'aim' && step === 'hook' && run && GK.equipMods(run).preview ? dialNow() : null,
       clearOil: !!(run && GK.equipMods(run).clearOil),
       preview: rp && replay.rec.preview ? { type: replay.rec.preview.type, ed: replay.rec.preview.ed, r: C.BALL_R } : thrown ? { type: thrown.type, ed: thrown.ed, r: C.BALL_R * wide } : b ? { type: b.type, ed: b.ed, r: (b.type === 'cluster' ? 2.3 : C.BALL_R) * wide } : null,

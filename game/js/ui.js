@@ -99,6 +99,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         b.style.setProperty('--rc', GK.RARITY[d.rarity].col);
         if (c.ed) b.classList.add('ed-' + c.ed);
         if (c.evolved) b.classList.add('evolved');
+        if (c.corrupt) b.classList.add('corrupt');
         if (stolen === i) b.classList.add('stolen');
         b.innerHTML = '<span class="g">' + esc(GK.TAG_GLYPH[d.tag]) + '</span><span class="nm">' + esc(d.name) + '</span>';
         b.setAttribute('aria-label', d.name + ': ' + GK.charmDesc(c));
@@ -230,8 +231,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       ${UI.levelBar(meta)}
       <p class="dim">Looks only. New ones unlock as your bowler level goes up.</p>
       ${Object.entries(GK.COSMETIC_KINDS).map(([k, label]) => `<h3>${esc(label)}</h3><div class="cosm">${GK.COSMETICS.filter(c => c.kind === k).map(c => {
-        const ok = lvl >= c.level, sel = on[k] === c.id;
-        return `<button class="cos${sel ? ' on' : ''}" data-k="${k}" data-id="${c.id}" ${ok ? '' : 'disabled'}>${swatch(c)}<span>${esc(c.name)}</span><small>${ok ? (sel ? 'Wearing' : '') : 'Level ' + c.level}</small></button>`;
+        const ok = GK.canWear(meta, c), sel = on[k] === c.id;
+        return `<button class="cos${sel ? ' on' : ''}" data-k="${k}" data-id="${c.id}" ${ok ? '' : 'disabled'}>${swatch(c)}<span>${esc(c.name)}</span><small>${ok ? (sel ? 'Wearing' : '') : c.medals ? c.medals + ' Endless Medal' + (c.medals > 1 ? 's' : '') : 'Level ' + c.level}</small></button>`;
       }).join('')}</div>`).join('')}
       <button class="btn" data-a="ok">Done</button>
     </div>`, r => {
@@ -278,6 +279,9 @@ var GK = globalThis.GK = globalThis.GK || {};
         const L = GK.LEAGUES[id], open = leagueOpen(id), f = featFor('league:' + id);
         return `<button class="choice" data-l="${id}" aria-pressed="${id === league}" ${open ? '' : 'disabled'}><b>${esc(L.name)}</b><span>${open ? esc(L.desc) : 'Locked · feat: ' + esc(f ? f.name + ' (' + f.desc + ')' : '')}</span></button>`;
       }).join('')}</div>
+      <h3>Endless depth</h3>
+      <p class="dim">How deep into endless the Regulars have gone. Endless Medals: ${meta.medals || 0} (one for every 3 endless alleys).</p>
+      <div class="lines">${GK.REGULARS_DEPTH.map(r => `<div><span>${esc(r.name)}</span><b class="${meta.beatDepth && meta.beatDepth[r.who] ? 'w' : ''}">Endless ${r.depth}${meta.beatDepth && meta.beatDepth[r.who] ? ' · beaten' : ''}</b></div>`).join('')}<div class="tot"><span>You</span><b>${meta.bestEndless ? 'Endless ' + meta.bestEndless : '–'}</b></div></div>
       <h3>The Regulars' board</h3>
       <p class="dim">Their best single frames. Beat them.</p>
       <div class="lines">${GK.REGULARS_BOARD.map(r => `<div><span>${esc(r.name)}</span><b class="${meta.beatRegs && meta.beatRegs[r.who] ? 'w' : ''}">${fmt(r.frame)}${meta.beatRegs && meta.beatRegs[r.who] ? ' · beaten' : ''}</b></div>`).join('')}<div class="tot"><span>You</span><b>${fmt(meta.bestFrame || 0)}</b></div></div>
@@ -370,6 +374,8 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (ev.id === 'vending') { offer = '<p class="dim">You never know what\'s in there until it drops.</p>'; take = 'Pay $3'; }
     if (ev.id === 'shady') { const c = GK.CHARMS[ev.charm]; offer = '<div class="boss"><b>' + esc(c.name) + '</b><p>' + esc(GK.charmDesc(GK.charmInst(ev.charm))) + '</p></div>'; take = 'Take the charm'; }
     if (ev.id === 'lane_mech') { take = 'Re-drill a ball'; }
+    const T2 = { sale: 'Nice!', fountain: 'Toss in $5', lost_bowler: 'Trade a ball', regulars_bet: 'Deal!', card_game: 'Stake a charm' };
+    if (T2[ev.id]) take = T2[ev.id];
     if (ev.id === 'regular') {
       offer = `<div class="visit"><canvas width="${GK.PORTRAIT.W}" height="${GK.PORTRAIT.H}" data-who="${ev.who}"></canvas><div><p class="say">${esc(ev.say)}</p><p class="dim">${esc(ev.offer)}</p></div></div>`;
       take = ev.take;
@@ -607,10 +613,10 @@ var GK = globalThis.GK = globalThis.GK || {};
   UI.shop = function (run, h) {
     const shop = run.shop, nextTarget = GK.roundTarget(run);
     const card = (it, i) => {
-      const inf = UI.info(it.kind, it.id, it.ed);
+      const inf = UI.info(it.kind, it.id, it.ed, it.corrupt ? Object.assign(GK.charmInst(it.id, it.ed), { corrupt: true }) : undefined);
       const afford = GK.canAfford(run, it.price);
-      return `<div class="item${it.sold ? ' sold' : ''}" style="--rc:${inf.col}">
-        <span class="k">${esc(inf.k)}</span><span class="n">${esc(inf.name)}</span>${edTag(it.ed)}
+      return `<div class="item${it.sold ? ' sold' : ''}${it.corrupt ? ' corrupt' : ''}" style="--rc:${inf.col}">
+        <span class="k">${esc(it.corrupt ? 'Corrupted ' + inf.k : inf.k)}</span><span class="n">${esc(inf.name)}</span>${edTag(it.ed)}
         <span class="d">${esc(inf.desc)}</span>
         <button class="btn small" data-buy="${i}" ${it.sold || !afford ? 'disabled' : ''}>${it.sold ? 'Sold' : it.price === 0 ? 'Take (free)' : 'Buy $' + it.price}</button></div>`;
     };

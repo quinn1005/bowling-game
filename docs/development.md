@@ -43,6 +43,8 @@ Same setup as Neon Bastion (`quinn1005/Roguelike-App`): Capacitor wraps `game/` 
 - `fame.js` pixel portraits for the Wall of Fame (shown after beating the Gutter King).
 - `payoffs.js` (v1.0) boss trophies (3 themed per boss, their own shelf), charm evolutions, overkill and bonus balls.
 - `surprises.js` (v1.0) the jackpot pin and its slot machine, the Regulars dropping by (gifts, dares, tips) and the party/blackout/runaway lane events.
+- `endless.js` (v1.1) the seven endless-only alleys and their 14 bosses (overrides `alleyDef`/`bossFor` past the Championship), steeper endless targets, Endless Medals, corrupted charms and the Regulars' depth board.
+- `content2.js` (v1.1) new charms, balls, equipment and between-round events, each unlocked by a themed feat.
 - `progress.js` (v1.0) bowler XP and levels, level-unlocked cosmetics (trails, pin skins, lane finishes, crowd hats), the collection book and the Regulars' scoreboard.
 - `content.js` the v0.7 expansion: more charms, balls, pin types (Bouncy, Mirror), equipment, memberships and Black Market items, appended to the tables in `data.js`.
 - `physics.js` `GK.Sim`: 2D lane sim, fixed 240 Hz step, emits events (`down`, `first`, `wall`, `pit`, `explode`, `ballBounce`…) and per-roll counters. No DOM.

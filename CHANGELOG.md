@@ -1,5 +1,41 @@
 # Changelog
 
+## v1.1.0
+
+### Endless mode is its own game now
+After you beat the Gutter King, endless takes you through seven new alleys you can't see anywhere else, each with its own lane and two much harder bosses. Targets climb faster too.
+- **The Bowl-o-Rama Wreck:** holes in the lane swallow your ball. *The Demolition Foreman* knocks a new hole every frame; *The Scrapper* hauls off a third of your knocked pins before they score.
+- **Deep Sea Lanes:** slower throws and a current that pushes the pins. *The Kraken* grabs balls near the gutters; *The Angler* leaves you in the dark with one wandering lure light.
+- **The Haunted Hall:** ghost pins phase in and out as Phantom pins. *The Poltergeist* flings your leftover pins to new spots; *The Banshee* scrambles your charm order every frame.
+- **Volcano Lanes:** a ball that falls into a lava gutter burns up for the round. *The Magma King* burns the oil away faster every frame; *The Ash Cloud* hides the oil pattern on the lane and the lane map.
+- **Sky Lanes:** no gutters, just a drop-off. *The Wind Spirit* sends gusts that change direction mid-roll; *The Thunderbird* strikes 2 knocked pins back up.
+- **The Clockwork Tower:** brass gears turn across the lane. *The Clockmaker* runs every slider twice as fast, and faster each frame. *Old Father Time* has a 6-second shot clock on every throw (the ball rolls as the sliders stand when it runs out), and each frame one of your charms falls asleep.
+- **The Void** (repeats forever): the lane edges pull your ball outward. *The Hollow King* steals your two best charms and a trophy for the match; *The Echo* halves any frame that doesn't beat your best frame from the last round.
+- **Endless Medals:** one for every 3 endless alleys, worth XP and three medal-only cosmetics (Void swirl trail, Obsidian Trim pins, Void lane).
+- **Corrupted charms:** endless shops sometimes sell a corrupted charm. It triggers twice every frame but costs $1 a frame and sells for nothing.
+- **Endless depth board:** how deep Kaleb, Levi and Quinn got, on the Feats screen.
+
+### New charms (each unlocked by a themed feat)
+- **Glass Cannon** (×4 Mult, shatters on an open frame): win a round with no open or gutter frames.
+- **Pocket Watch** (Mult for slow, controlled throws): strike with a ball that takes over 1.3 s to reach the pins.
+- **Ricochet King** (×1.1 per wall bang and pin-on-pin hit): 10 of them in one frame.
+- **Bargain Bin** ($1 off and an extra shop item): buy 3 things in one shop visit.
+- **Perfectionist's Curse** (×3 on all-PERFECT frames, ×0.5 on a miss): 3 all-PERFECT frames in a row.
+- **Night Owl Pass** (+2 Mult per endless alley): reach the third endless alley.
+- **Rack Attack** (+5 Points per pin in your rack): fill all 15 pin spots.
+- **Taxidermy Trophy** (+3 Mult per trophy): hold 4 trophies.
+- **Second Wind** (one more frame when you'd lose): win a round on its very last frame.
+
+### New balls and equipment
+- **Anchor Ball:** nothing can push it off line after the arrows. Unlock: strike in Deep Sea Lanes.
+- **Gyro Ball:** stops at the pins and spins in place, sweeping them. Unlock: 8 pins down within half a second.
+- **Black Pearl:** hooks in the oil, straight on dry boards. Unlock: beat The Kraken.
+- **Grenade Ball:** explodes 3 seconds after release. Unlock: 3 explosions in one frame.
+- **Lucky Sweatband** (+1 re-rack, smaller PERFECT zone). Unlock: use every re-rack in a round and still win.
+
+### New events
+- **Pro Shop Sale** (next shop half price, 3 items), **The Lucky Fountain** ($5 for a 1 in 3 shot at a Rare charm), **The Lost Bowler** (blind ball trade), **The Regulars' Bet** (Kaleb, Levi and Quinn pay out as you go further) and **The Back Room Card Game** (stake a charm on a coin flip).
+
 ## v1.0.1
 
 ### Fixed

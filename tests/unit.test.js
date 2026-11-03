@@ -595,7 +595,7 @@ test('The Regulars: signature balls play like their owners and their feats are s
 });
 
 test('v1.0 boss trophies: 3 per boss, their own shelf, flags and scoring', () => {
-  const bosses = Object.keys(GK.BOSSES).filter(b => b !== 'champion');
+  const bosses = Object.keys(GK.BOSSES).filter(b => b !== 'champion' && !GK.BOSSES[b].endless);
   for (const b of bosses) assert.strictEqual(Object.values(GK.TROPHIES).filter(t => t.boss === b).length, 3, b);
   const run = GK.newRun({ seed: 6 });
   const slots = run.maxCharms;
@@ -685,4 +685,115 @@ test('v1.0 progress: XP, levels, cosmetics, collection and the Regulars board', 
   const beat = GK.beatRegulars(m2, 30000);
   assert.deepStrictEqual(beat.map(r => r.who), ['kaleb', 'levi']);
   assert.strictEqual(GK.beatRegulars(m2, 30000).length, 0, 'each regular is beaten once');
+});
+
+test('v1.1 endless alleys: 7 alleys, 2 brutal bosses each, The Void loops forever', () => {
+  assert.strictEqual(GK.ENDLESS_ALLEYS.length, 7);
+  GK.ENDLESS_ALLEYS.forEach(a => { assert.strictEqual(a.bosses.length, 2); a.bosses.forEach(b => assert.ok(GK.BOSSES[b] && GK.BOSSES[b].endless, b)); });
+  const run = GK.newRun({ seed: 12 });
+  run.alley = GK.ALLEY_COUNT + 1;
+  assert.ok(/Bowl-o-Rama/.test(GK.alleyDef(run).name));
+  run.round = 2; assert.ok(GK.ENDLESS_ALLEYS[0].bosses.includes(GK.bossFor(run)));
+  run.alley = GK.ALLEY_COUNT + 12; assert.ok(/The Void/.test(GK.alleyDef(run).name));
+  // regular alleys are untouched
+  run.alley = 0; run.round = 2; assert.ok(GK.ALLEYS[0].bosses.includes(GK.bossFor(run)));
+  // endless targets keep climbing fast
+  run.round = 0; run.alley = GK.ALLEY_COUNT + 1; const t1 = GK.roundTarget(run); run.alley++; assert.ok(GK.roundTarget(run) > t1 * 1.8);
+});
+
+test('v1.1 endless lanes: holes, the Kraken and the sky drop-off take the ball', () => {
+  const roll = (lane, prm) => { const s = new GK.Sim({ rng: GK.makeRng(2), lane: Object.assign({ oil: 'house' }, lane), rack: GK.padRack() }); s.launch({ type: 'house' }, Object.assign({ aimX: 0, aim: 0, spin: 0, speed: 380 }, prm)); s.simulate(); return s.summarize(); };
+  assert.strictEqual(roll({ holes: [{ x: 0, z: 120, r: 3.4 }] }).pins, 0, 'a hole on the line swallows the ball');
+  assert.ok(roll({}).pins > 0);
+  assert.strictEqual(roll({ kraken: true }, { aimX: 16, aim: 0.03 }).pins, 0, 'the Kraken grabs balls near the edge');
+  assert.ok(roll({}, { aimX: 16, aim: 0.03 }).pins >= 0);
+  const sky = new GK.Sim({ rng: GK.makeRng(2), lane: { sky: true }, rack: GK.padRack() });
+  sky.launch({ type: 'house' }, { aimX: 15, aim: 0.06, spin: 0, speed: 380 }); sky.simulate();
+  assert.ok(sky.balls[0].gone);
+});
+
+test('v1.1 balls: Anchor, Gyro, Black Pearl and Grenade', () => {
+  const sim = (type, lane, prm) => { const s = new GK.Sim({ rng: GK.makeRng(5), lane: Object.assign({ oil: 'house' }, lane || {}), rack: GK.padRack() }); s.launch({ type }, Object.assign({ aimX: 2, aim: 0, spin: 0, speed: 380 }, prm || {})); s.simulate(); return s; };
+  // the Anchor ignores wind once it's past the arrows
+  const windy = sim('house', { wind: true }), anchored = sim('anchor', { wind: true });
+  assert.ok(Math.abs(anchored.roll.xMax - anchored.roll.xMin) < Math.abs(windy.roll.xMax - windy.roll.xMin));
+  assert.ok(sim('gyro').summarize().pins > 0);
+  const g = sim('grenade', {}, { speed: 130 });
+  assert.ok(g.summarize().explosions >= 1 || g.balls[0].exploded, 'the grenade goes off');
+  // Black Pearl hooks more in oil than a normal ball
+  const oily = { oil: 'long' };
+  const pearl = sim('black_pearl', oily, { aimX: 0, spin: 0.6 }), house = sim('house', oily, { aimX: 0, spin: 0.6 });
+  assert.ok(pearl.roll.xMax - pearl.roll.xMin !== house.roll.xMax - house.roll.xMin);
+});
+
+test('v1.1 bosses: Hollow King, Banshee, Old Father Time, Echo, Scrapper', () => {
+  const run = GK.newRun({ seed: 13 });
+  run.charms = ['lucky_shoes', 'tenth_frame', 'hot_streak', 'chalk_bag'].map(id => GK.charmInst(id));
+  run.trophies = [{ id: 'deed' }];
+  run.alley = GK.ALLEY_COUNT + 7; run.round = 2; run.bossOverride = { alley: run.alley, id: 'hollow' };
+  GK.startRound(run);
+  assert.strictEqual(run.charms.length, 2); assert.strictEqual(run.trophies.length, 0);
+  GK.endRoundCleanup(run);
+  assert.strictEqual(run.charms.length, 4); assert.strictEqual(run.trophies.length, 1);
+  // Old Father Time puts a different charm to sleep each frame
+  run.bossOverride = { alley: run.alley, id: 'fathertime' };
+  GK.startRound(run);
+  GK.beginFrame(run); const a = run.rs.stolen;
+  run.rs.frameIdx = 1; run.rs.cur = null; GK.beginFrame(run);
+  assert.ok(a >= 0 && run.rs.stolen !== a);
+  // the Echo halves a frame that doesn't beat it
+  const f = { kind: 'open', rolls: [roll({ down: pins(5), pins: 5 })] };
+  const plain = GK.scoreFrame(f, GK.newRun({ seed: 1 }));
+  assert.strictEqual(GK.scoreFrame(Object.assign({ echo: 1e9 }, f), GK.newRun({ seed: 1 })).mult, plain.mult * 0.5);
+});
+
+test('v1.1 charms: corrupted, Glass Cannon, Second Wind, Taxidermy, Rack Attack; Sweatband', () => {
+  const run = GK.newRun({ seed: 14 });
+  const c = GK.charmInst('league_jacket'); c.corrupt = true; run.charms = [c];
+  const f = { kind: 'open', rolls: [roll({ down: pins(5), pins: 5 })] };
+  const r = GK.scoreFrame(f, run);
+  assert.strictEqual(r.mult, 1 + 3 + 3, 'corrupted charms trigger twice');
+  assert.strictEqual(r.money, -1, 'and cost $1');
+  assert.strictEqual(GK.charmSell(c), 0);
+  run.trophies = [{ id: 'deed' }, { id: 'master_key' }];
+  run.charms = [GK.charmInst('taxidermy')];
+  assert.strictEqual(GK.scoreFrame(f, run).mult, 1 + 6);
+  run.charms = [GK.charmInst('rack_attack')];
+  assert.strictEqual(GK.scoreFrame(f, run).chips, GK.scoreFrame(f, GK.newRun({ seed: 14 })).chips + 50);
+  // Glass Cannon breaks on an open frame
+  run.charms = [GK.charmInst('glass_cannon')];
+  GK.afterFrame({ kind: 'open' }, run);
+  assert.ok(run.charms[0].broken);
+  // Second Wind
+  const r2 = GK.newRun({ seed: 15 }); r2.charms = [GK.charmInst('second_wind')];
+  GK.startRound(r2); r2.rs.frameIdx = r2.rs.framesMax - 1; r2.rs.target = 1e12;
+  GK.beginFrame(r2);
+  const res = { score: 0, money: 0, breaks: [], ctx: { kind: 'open', perfects: 0, misses: 0, pins: 0, carry: 0, firstPin: 0, lastFrame: true } };
+  assert.strictEqual(GK.commitFrame(r2, 'open', res).status, 'next', 'one more frame');
+  // Lucky Sweatband: +1 re-rack
+  const r3 = GK.newRun({ seed: 16 }), r4 = GK.newRun({ seed: 16 }); r3.equip = { head: 'lucky_sweatband' };
+  assert.strictEqual(GK.flags(r3).reracks, GK.flags(r4).reracks + 1);
+});
+
+test('v1.1 events, bets, medals and themed unlocks', () => {
+  const run = GK.newRun({ seed: 17 });
+  run.money = 20;
+  assert.ok(GK.takeEvent(run, { id: 'sale' }).ok); GK.openShop(run);
+  assert.ok(run.shop.items.length <= 3 && run.shop.sale);
+  assert.ok(GK.takeEvent(run, { id: 'fountain', roll: 0.9 }).ok); assert.strictEqual(run.money, 15);
+  run.bag = [{ type: 'house' }, { type: 'feather' }];
+  assert.ok(GK.takeEvent(run, { id: 'lost_bowler', ball: 'ghost' }, 1).ok); assert.strictEqual(run.bag[1].type, 'ghost');
+  run.charms = [GK.charmInst('lucky_shoes')];
+  GK.takeEvent(run, { id: 'card_game', flip: false }, 0); assert.strictEqual(run.charms.length, 0);
+  GK.takeEvent(run, { id: 'regulars_bet' });
+  const m = run.money; GK.settleBets(run, false, run.alley);
+  assert.strictEqual(run.money, m + 4, 'Kaleb pays after the next round');
+  // medals every 3 endless alleys, and medal cosmetics need them
+  const meta = { xp: 0 };
+  run.alley = GK.ALLEY_COUNT + 4;
+  assert.strictEqual(GK.checkMedal(meta, run).medals, 1);
+  assert.ok(GK.canWear(meta, GK.cosmetic('trail', 'void')) && !GK.canWear(meta, GK.cosmetic('lane', 'void')));
+  // every new item is locked behind a feat
+  for (const k of ['charm:glass_cannon', 'charm:pocket_watch', 'charm:ricochet_king', 'charm:bargain_bin', 'charm:perfectionists_curse', 'charm:night_owl_pass', 'charm:rack_attack', 'charm:taxidermy', 'charm:second_wind', 'ball:anchor', 'ball:gyro', 'ball:black_pearl', 'ball:grenade', 'equip:lucky_sweatband'])
+    assert.ok(GK.LOCKED.has(k) && GK.FEATS.some(f => f.unlocks.includes(k)), k);
 });

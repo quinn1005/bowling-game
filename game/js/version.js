@@ -1,3 +1,3 @@
 // Bump this for every release; the APK build reads it for its version name.
 var GK = globalThis.GK = globalThis.GK || {};
-GK.VERSION = '1.0.1';
+GK.VERSION = '1.1.0';

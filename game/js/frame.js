@@ -8,6 +8,12 @@ var GK = globalThis.GK = globalThis.GK || {};
     const rs = run.rs;
     if (GK.rules(run).dark) L.dark = true;
     if (rs && rs.oil) L.oil = rs.oil;
+    // endless bosses that change the lane
+    if (rs && rs.holes) L.holes = rs.holes;
+    if (rs && rs.boss === 'kraken') L.kraken = true;
+    if (rs && rs.boss === 'angler') { L.dark = true; L.angler = true; }
+    if (rs && rs.boss === 'ash') L.ash = true;
+    if (rs && rs.boss === 'wind') L.wind = true;
     if (rs && rs.boss === 'fog') { L.dark = true; L.fog = true; }
     if (rs && rs.cur && (rs.cur.laneEvent === 'flicker' || rs.cur.laneEvent === 'blackout')) L.dark = true;
     return L;
@@ -39,6 +45,10 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (rs.boss === 'janitor' && fi > 0) rs.wear = rs.wear.map(w => w > 0.04 ? -0.2 : w);
       if (rs.boss === 'bookie') { const bet = Math.floor(Math.max(0, run.money) / 2); cur.bet = bet; run.money -= bet; }
       if (rs.boss === 'landlord') { if (run.money >= 2) { run.money -= 2; cur.rent = 2; } else cur.rentMiss = true; }
+      if (rs.boss === 'foreman' && fi > 0) rs.holes = (rs.holes || []).concat(GK.makeHoles(run, 1, 'f' + fi));
+      if (rs.boss === 'magma' && fi > 0) rs.wear = rs.wear.map(w => Math.min(1, w + 0.12 * fi));
+      if (rs.boss === 'banshee' && run.charms.length > 1) run.charms = GK.stream(run.seed, 'banshee:' + run.alley + ':' + fi).shuffle(run.charms.slice());
+      if (rs.boss === 'fathertime') { rs.stolen = run.charms.length ? fi % run.charms.length : -1; rs.asleep = true; }
       cur.rack = GK.frameRack(run, fi);
       cur.maxHook = 0; cur.throws = 0; cur.jams = 0; cur.fumbles = 0;
     }
@@ -71,6 +81,10 @@ var GK = globalThis.GK = globalThis.GK || {};
       const have = rack.map((t, i) => t === 'none' ? -1 : i).filter(i => i >= 0);
       if (have.length > 1) rack[GK.stream(run.seed, 'thief:' + run.alley + ':' + run.round + ':' + fi).pick(have)] = 'none';
     }
+    if ((GK.alleyDef(run).lane || {}).haunted) {
+      const hr = GK.stream(run.seed, 'haunt:' + run.alley + ':' + run.round + ':' + fi);
+      rack = rack.map(t => t === 'std' && hr() < 0.3 ? 'phantom' : t);
+    }
     const jp = GK.jackpotPin ? GK.jackpotPin(run, fi, rack) : -1;
     if (jp >= 0) rack[jp] = 'jackpot';
     return rack;
@@ -91,7 +105,8 @@ var GK = globalThis.GK = globalThis.GK || {};
   // Chances for the alley's machinery to act up.
   GK.MISHAPS = { respot: 0.05, stuck: 0.06 };
   // A ball stuck in the return can't be thrown until you throw a different ball.
-  GK.isStuck = (run, i) => !!(run.rs && run.rs.stuck && run.rs.stuck.idx === i && run.bag.length > 1);
+  GK.isBurned = (run, i) => !!(run.rs && run.rs.burned && run.rs.burned.includes(i) && run.bag.some((b, j) => !run.rs.burned.includes(j)));
+  GK.isStuck = (run, i) => !!(run.rs && run.rs.stuck && run.rs.stuck.idx === i && run.bag.length > 1) || GK.isBurned(run, i);
   GK.firstFreeBall = (run, pref) => {
     if (!GK.isStuck(run, pref) && run.bag[pref]) return pref;
     for (let i = 0; i < run.bag.length; i++) if (!GK.isStuck(run, i)) return i;
@@ -118,6 +133,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     cur.maxHook = Math.max(cur.maxHook || 0, Math.abs(prm.spin || 0));
     cur.throws = (cur.throws || 0) + 1;
     let speed = GK.clamp(prm.speed * eq.speed, 120, 560);
+    if ((GK.laneFor(run).deep)) speed *= 0.75;
     if (rs.boss === 'comet') speed = Math.min(speed, 380 * eq.speed);
     const p = Object.assign({}, prm, { speed });
     const dr = GK.DRILLS[ball.drill || 'stock'] || GK.DRILLS.stock;
@@ -137,6 +153,15 @@ var GK = globalThis.GK = globalThis.GK || {};
     }
     const rec = sim.summarize();
     cur.pending = null;
+    if (rs.boss === 'scrapper' && rec.down.length) {
+      const sr = GK.stream(run.seed, 'scrap:' + run.stats.throws + ':' + rs.frameIdx);
+      const kept = rec.down.filter(() => sr() >= 1 / 3), taken = rec.down.length - kept.length;
+      if (taken) { rec.down = kept; rec.pins = kept.length; notes.push({ t: 'mechanic', text: 'The Scrapper hauls off ' + taken + ' pin' + (taken > 1 ? 's' : '') + ' before they score', pins: [] }); }
+    }
+    if ((GK.alleyDef(run).lane || {}).lava && rec.gutterBall && run.bag.length > 1) {
+      rs.burned = rs.burned || [];
+      if (!rs.burned.includes(cur.ballIdx)) { rs.burned.push(cur.ballIdx); notes.push({ t: 'stuck', text: GK.BALLS[cur.ball.type].full + ' fell in the lava! It\'s gone for the rest of the round.', idx: cur.ballIdx }); }
+    }
     rec.ball = cur.ball.type; rec.edition = cur.ball.ed; rec.perfect = cur.perfect; rec.power = cur.power;
     run.stats.pins += rec.pins;
     // Groove: consecutive PERFECT throws this round.
@@ -231,6 +256,17 @@ var GK = globalThis.GK = globalThis.GK || {};
       cur.leave710 = nums.length === 2 && nums[0] === 7 && nums[1] === 10;
       if (cur.splitLeave) notes.push({ t: 'split', text: cur.leave710 ? 'The 7-10! Convert it for ×5' : 'Split leave · convert it for ×5' });
       sim.sweep();
+      if (rs.boss === 'poltergeist' && sim.standing().length) {
+        // the pins left standing are flung to new spots on the deck
+        const pr = GK.stream(run.seed, 'polt:' + run.stats.throws), spots = pr.shuffle(GK.spots(sim.lhw).slice(0, 10));
+        sim.standing().forEach((q, k) => { const [x, z] = spots[k]; q.x = q.sx = x; q.z = q.sz = z; q.vx = q.vz = 0; });
+        notes.push({ t: 'mechanic', text: 'The Poltergeist flings your pins around!', pins: [] });
+      }
+      if (rs.boss === 'thunderbird' && rec.down.length) {
+        const tr = GK.stream(run.seed, 'thunder:' + run.stats.throws), pick = tr.shuffle(rec.down.map(d => d.n)).slice(0, 2);
+        sim.standUp(pick);
+        notes.push({ t: 'mechanic', text: 'Lightning strikes ' + pick.length + ' pin' + (pick.length > 1 ? 's' : '') + ' back up!', pins: pick });
+      }
       const heatMech = run.round === 1 && !GK.isChamp(run) && GK.rules(run).heatMech;
       if ((rs.boss === 'mechanic' || heatMech) && rec.down.length) {
         const rng = GK.stream(run.seed, 'mech:' + run.alley + ':' + rs.frameIdx + ':' + run.stats.throws);
@@ -303,6 +339,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       kind, rolls: cur.rolls, frameIdx: rs.frameIdx, lastFrame: rs.frameIdx === rs.framesMax - 1,
       leftSplit: cur.splitLeave, leave710: cur.leave710, loaded: rs.loadedNext,
       call: rs.boss === 'secretary' ? GK.callResult(cur.call, kind) : null,
+      echo: rs.boss === 'echo' ? rs.echo || 0 : 0,
       party: cur.laneEvent === 'party', blackout: cur.laneEvent === 'blackout', runaway: cur.laneEvent === 'runaway' ? cur.runaway : null,
       groove: rs.groove || 0, grooveX: !!GK.flags(run, rs.stolen).grooveX, weighted: !!rs.weighted,
       framesLeft: rs.framesMax - rs.frameIdx, maxHook: cur.maxHook || 0, throws: cur.throws || cur.rolls.length,
@@ -312,7 +349,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       leagueMult: GK.rules(run).mult, leagueName: GK.LEAGUES[run.league || 'open'].name
     };
     const rng = GK.stream(run.seed, 'score:' + run.alley + ':' + run.round + ':' + rs.frameIdx + ':' + run.stats.throws);
-    return GK.scoreFrame(f, run, { rng, stolen: rs.stolen });
+    return GK.scoreFrame(f, run, { rng, stolen: rs.stolen, asleep: rs.boss === 'fathertime' });
   };
 
   // Apply a scored frame. Returns 'won' | 'lost' | 'next' and any notes.
@@ -329,6 +366,10 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (kind === 'gutter') st.gutters++;
     GK.afterFrame(res.ctx, run, rs.stolen);
     GK.evolveCharms(res.ctx, run, rs.stolen).forEach(e => notes.push({ t: 'evolve', idx: e.idx, text: e.from + ' evolved into ' + e.to + '!' }));
+    const broke = run.charms.filter(c => c.broken);
+    if (broke.length) { run.charms = run.charms.filter(c => !c.broken); notes.push({ t: 'shatter', text: 'Your Glass Cannon shattered!' }); }
+    st.flawless = res.ctx.perfects > 0 && res.ctx.misses === 0 ? (st.flawless || 0) + 1 : 0;
+    rs.bestFrame = Math.max(rs.bestFrame || 0, res.score);
     if (cur.rolls.some(r => r.down.some(d => d.type === 'jackpot'))) { const sp = GK.jackpotSpin(run); notes.push({ t: 'jackpot', reels: sp.reels, text: sp.text }); }
     if (run.dare && rs.frameIdx === 0 && !run.practice) { const d = GK.settleDare(run, kind); if (d) notes.push(d); }
     res.breaks.forEach(n => { if (run.rack[n - 1] === 'glass') { run.rack[n - 1] = 'std'; notes.push({ t: 'break', text: 'Glass pin ' + n + ' broke' }); } });
@@ -342,7 +383,11 @@ var GK = globalThis.GK = globalThis.GK || {};
     rs.loadedNext = false;
     rs.cur = null;
     if (!run.best || res.score > run.best.score) run.best = { score: res.score, kind, alley: run.alley, round: run.round, frame: rs.frameIdx, champ: GK.isChamp(run) };
-    const done = rs.total >= rs.target ? 'won' : rs.frameIdx >= rs.framesMax ? 'lost' : null;
+    let done = rs.total >= rs.target ? 'won' : rs.frameIdx >= rs.framesMax ? 'lost' : null;
+    if (done === 'lost' && !rs.windUsed && GK.flags(run, rs.stolen).secondWind) {
+      rs.windUsed = true; rs.framesMax++; done = null;
+      notes.push({ t: 'evolve', idx: run.charms.findIndex(c => c.id === 'second_wind'), text: 'Second Wind! One more frame.' });
+    }
     if (done) {
       run.history = run.history || [];
       run.history.push({ alley: run.alley, round: run.round, champ: GK.isChamp(run), target: rs.target, total: rs.total, won: done === 'won', frames: rs.frameIdx });

@@ -57,6 +57,9 @@ var GK = globalThis.GK = globalThis.GK || {};
       }
       this.magnetK = o.magnetK || 1;
       this.lightLead = !!o.lightLead; this.noWear = !!o.noWear; this.lowgRoll = false;
+      // endless lanes
+      this.holes = Array.isArray(L.holes) ? L.holes : []; this.deep = !!L.deep; this.kraken = !!L.kraken; this.sky = !!L.sky;
+      this.windy = !!L.wind; this.windPh = this.rng() * 6.28; this.voidPull = !!L.voidPull;
       this.heavyStd = !!o.heavyStd;
       this.time = 0; this.throwT = 0; this.settleT = 0;
       this.balls = []; this.blasts = []; this.fx = [];
@@ -146,7 +149,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       this.roll = {
         events: [], ball: t, carry: 0, late: 0, walls: 0, pit: 0, ballBounces: 0, explosions: 0, blasted: 0,
         swallowed: 0, firstPin: 0, firstT: -1, rubber: 0, gutterBall: false, contact: false, shattered: false, rebounded: false, direct: 0,
-        gutterPins: 0, xMin: Infinity, xMax: -Infinity, firstOff: null, painted: [], zaps: 0, startX: prm.aimX, thuds: 0
+        gutterPins: 0, xMin: Infinity, xMax: -Infinity, firstOff: null, painted: [], zaps: 0, startX: prm.aimX, thuds: 0, t0: this.time
       };
       for (const p of this.pins) { p.ballHit = false; p.wobbled = false; }
       this.rolling = true; this.throwT = 0; this.settleT = 0;
@@ -284,6 +287,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       for (let bi = 0; bi < this.balls.length; bi++) {
         const b = this.balls[bi]; if (b.gone) continue;
         if (b.delay > 0) { b.delay -= dt; continue; }
+        if (b.gutter && this.sky) { b.gone = true; this.emit({ t: 'fall', x: b.x, z: b.z }); continue; }
         if (b.gutter) {
           const gx = Math.sign(b.x) * (lhw + this.gut / 2);
           b.x += (gx - b.x) * Math.min(1, dt * 12); b.vx = 0; b.z += b.vz * dt;
@@ -302,11 +306,17 @@ var GK = globalThis.GK = globalThis.GK || {};
           // Kaleb's Wide Swing hooks hard on the backend.
           if (b.type === 'twohander') ax = b.spin * (hO * 0.4 + (hD * 1.35 - hO * 0.4) * (1 - oil));
           if (b.type === 'wideswing' && b.z > 150) ax *= 1.3;
+          if (b.type === 'black_pearl') ax = b.spin * (hO * 0.5 + hD * 0.9 * oil);
+          const hookOnly = ax;
           if (b.type === 'bubble' && !b.touched) ax = oil > 0.3 ? 0 : ax * 2;
           if (b.type === 'pinball' && !b.touched) ax += (this.rng() - 0.5) * 900;
           if (this.warp) ax += this.warp * Math.sin(b.z / 38 + this.warpPh);
           ax += this.tilt;
           if (this.magnet && Math.abs(b.x) > lhw - 7) ax += Math.sign(b.x) * 90 * this.magnetK;
+          if (this.windy) ax += 75 * Math.sin(this.time * 0.9 + this.windPh);
+          if (this.voidPull) ax += b.x * 5;
+          // the Anchor Ball sinks after the arrows: only its own hook moves it from there
+          if (b.type === 'anchor' && b.z > 60) { ax = hookOnly; b.m = 40; }
           if (b.path && !b.touched) {
             const tx = pathX(b.path, b.z + 24);
             if (tx != null) { b.vx = GK.clamp((tx - b.x) * b.vz / 24, -b.vz * 0.6, b.vz * 0.6); ax = 0; }
@@ -317,6 +327,7 @@ var GK = globalThis.GK = globalThis.GK || {};
           b.x += b.vx * dt; b.z += b.vz * dt;
           if (this.wear && this.oil !== 'ice' && !this.noWear) this.wearLine(b, lhw);
           this.special(b, dt, lhw);
+          if (this.endlessHazards(b, lhw)) continue;
           const bouncy = (b.type === 'bouncer' || this.bumpers) && !b.shard;
           if (bouncy && b.z < C.ZBACK && Math.abs(b.x) > lhw - b.r * 0.4 && Math.sign(b.vx) === Math.sign(b.x)) {
             b.x = Math.sign(b.x) * (lhw - b.r * 0.4); b.vx = -b.vx * 0.85 - Math.sign(b.x) * 15;
@@ -346,13 +357,15 @@ var GK = globalThis.GK = globalThis.GK || {};
             }
           }
         }
+        this.ballTimers(b, dt);
+        if (b.gone) continue;
         const sp = Math.hypot(b.vx, b.vz); fastest = Math.max(fastest, sp);
         b.rot += sp * dt / b.r;
         if (b.type === 'boomerang' && !b.returned && b.z > C.ZBACK - 8 && b.kind === 'main') {
           b.returned = true; b.vz = -Math.abs(b.vz) * 0.55; b.vx = -b.vx * 0.5 - b.x * 2; b.touched = true;
           this.emit({ t: 'boomerang', x: b.x, z: b.z });
         }
-        if (b.z > C.ZBACK + 12 || sp < 6 || b.z < C.BALL_Z0 - 30) b.gone = true;
+        if (b.z > C.ZBACK + 12 || (sp < 6 && !(b.gyroT > 0)) || b.z < C.BALL_Z0 - 30) b.gone = true;
         if (b.gone || b.gutter) continue;
         if (b.type === 'magnet' && !b.touched) {
           for (const p of this.pins) {
@@ -385,6 +398,7 @@ var GK = globalThis.GK = globalThis.GK || {};
             continue;
           }
           this.markContact(b, p);
+          if (b.type === 'gyro' && b.kind === 'main' && !b.gyroDone && !b.gyroT) { b.gyroT = 1.0; b.gyroV = Math.hypot(b.vx, b.vz); b.vx *= 0.1; b.vz *= 0.1; this.emit({ t: 'gyro', x: b.x, z: b.z }); }
           if (b.type === 'blackhole' && !b.shard) {
             p.swallowed = true; const was = p.standing; p.standing = false; p.fallen = true; p.gone = true; p.downBy = 'swallow'; p.downT = this.time;
             if (R) R.swallowed++;
@@ -441,6 +455,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         if (p.fallen) { p.fallT += dt; decel(p, this.fallDecel, dt); }
         else {
           decel(p, this.pinDecel, dt);
+          if (this.deep && this.rolling && p.standing) { const cur = 2.2 * Math.sin(this.time * 0.6); p.x = GK.clamp(p.x + cur * dt, -lhw + 2.6, lhw - 2.6); }
           p.wob *= Math.exp(-2.5 * dt);
           if (p.fallAt && this.time >= p.fallAt) this.topple(p, p.wobDir, 'late');
           if (p.standing && p.hp <= 1 && Math.hypot(p.x - p.sx, p.z - p.sz) > 3.5) this.topple(p, { x: p.x - p.sx, z: p.z - p.sz }, p.byPin ? 'pin' : 'ball');
@@ -517,6 +532,38 @@ var GK = globalThis.GK = globalThis.GK || {};
     }
 
     // Per-step behaviour of the special balls (and main-ball tracking for charms).
+    // Endless-lane hazards. Returns true if the ball is gone.
+    endlessHazards(b, lhw) {
+      const R = this.roll;
+      for (const h of this.holes) {
+        if (Math.hypot(b.x - h.x, b.z - h.z) < h.r - b.r * 0.2) {
+          b.gone = true; if (R && b.kind === 'main' && !R.contact) R.gutterBall = true;
+          this.emit({ t: 'hole', x: h.x, z: h.z }); return true;
+        }
+      }
+      if (this.kraken && b.z > 30 && b.z < C.ZH && Math.abs(b.x) > lhw - 3.2 && !b.grabbed) {
+        b.grabbed = true; b.gutter = true; b.x = Math.sign(b.x) * (lhw + 1);
+        if (R && b.kind === 'main' && !R.contact) R.gutterBall = true;
+        this.emit({ t: 'kraken', x: b.x, z: b.z }); return true;
+      }
+      return false;
+    }
+    // Gyro spin and the Grenade's fuse, run every step for those balls.
+    ballTimers(b, dt) {
+      if (b.type === 'gyro' && b.gyroT > 0) {
+        b.gyroT -= dt; b.rot += dt * 30;
+        for (const p of this.pins) {
+          if (!p.standing || p.gone || p.cleared) continue;
+          const dx = p.x - b.x, dz = p.z - b.z, d = Math.hypot(dx, dz);
+          if (d < b.r + 7 && d > 0.1) this.topple(p, { x: -dz / d + dx / d * 0.5, z: dx / d + dz / d * 0.5 }, 'ball');
+        }
+        if (b.gyroT <= 0) { b.gyroDone = true; b.vz = Math.max(b.vz, (b.gyroV || 200) * 0.5); }
+      }
+      if (b.type === 'grenade' && b.kind === 'main' && !b.exploded && this.throwT >= 3) {
+        b.exploded = true; b.gone = true; this.explode(b.x, b.z, 22, 340, 'ball');
+      }
+    }
+
     // The Loft Duck lands hard: the whole deck shakes, pins wobble and some fall late.
     thud(b) {
       b.landed = true; b.lift = 0; b.vz *= 0.93;
@@ -599,6 +646,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         leadDown: newly.filter(p => p.type === 'lead').length,
         painted: R ? R.painted.slice() : [], zaps: R ? R.zaps : 0,
         startX: R ? R.startX : 0, lhw: this.lhw, thuds: R ? R.thuds : 0,
+        travel: R && R.firstT >= 0 ? +(R.firstT - (R.t0 || 0)).toFixed(2) : 0,
         standing: this.standing().map(p => p.n)
       };
     }

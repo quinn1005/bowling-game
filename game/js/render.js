@@ -338,6 +338,25 @@ var GK = globalThis.GK = globalThis.GK || {};
     }
     circle(x, y, r, fill) { pdisc(this.cx, x, y, Math.max(0.3, r), fill); }
     pop(x, z, h, text, col) { this.pops.push({ x, z, h, text, col, t: 0 }); if (this.pops.length > 40) this.pops.shift(); }
+    // Endless lanes: holes, tentacles, ash, wind, the Void's pull.
+    drawEndlessLane(st, L, time) {
+      const cx = this.cx, lhw = this.lhw;
+      for (const h of Array.isArray(L.holes) ? L.holes : []) {
+        const q = P(h.x, h.z), rx = h.r * S0 * q.s, ry = rx * 0.42;
+        pell(cx, q.x, q.y, rx + 1, ry + 1, '#4a3a2a'); pell(cx, q.x, q.y, rx, ry, '#0a0604'); pell(cx, q.x, q.y + ry * 0.3, rx * 0.7, ry * 0.5, '#000000');
+      }
+      if (L.ash) for (let i = 0; i < 70; i++) { const x = ((i * 37.7) % (2 * lhw)) - lhw, z = (i * 53.3 + time * 4) % 300; const q = P(x, z); cx.fillStyle = i % 3 ? 'rgba(90,90,90,0.55)' : 'rgba(150,140,130,0.5)'; cx.fillRect(Math.round(q.x), Math.round(q.y), 1, 1); }
+      if (L.kraken) for (const side of [-1, 1]) for (let k = 0; k < 3; k++) {
+        const z0 = 70 + k * 80, ph = time * 2.2 + k * 1.7 + side;
+        let prev = null;
+        for (let j = 0; j <= 8; j++) { const z = z0 + j * 4, x = side * (lhw + 2 - j * 0.35 + Math.sin(ph + j * 0.6) * 1.6), q = P(x, z, 2 + j * 0.8); if (prev) pline(cx, prev.x, prev.y, q.x, q.y, j % 2 ? '#7a3a8a' : '#9a4aa8', Math.max(1, 3 - j * 0.25)); prev = q; }
+      }
+      if (L.wind && st.sim) {
+        const dir = Math.sign(Math.sin(st.sim.time * 0.9 + (st.sim.windPh || 0))) || 1;
+        for (let i = 0; i < 9; i++) { const z = 30 + i * 30, x = (((time * 40 * dir + i * 13) % (2 * lhw + 10)) + 2 * lhw + 10) % (2 * lhw + 10) - lhw - 5; const a = P(x, z, 6), b = P(x - dir * 6, z, 6); pline(cx, a.x, a.y, b.x, b.y, 'rgba(230,245,255,0.55)', 1); }
+      }
+      if (L.voidPull) for (let i = 0; i < 26; i++) { const side = i % 2 ? 1 : -1, z = (i * 23 + time * 30) % 300, x = side * (lhw - 2 + ((time * 6 + i) % 4)); const q = P(x, z); cx.fillStyle = i % 3 ? '#c88aff' : '#ffffff'; cx.fillRect(Math.round(q.x), Math.round(q.y), 1, 1); }
+    }
     // Cosmetics from the Locker: trail, pin skin, lane finish, crowd hats.
     setCosmetics(c) {
       this.cosm = c || {};
@@ -412,6 +431,7 @@ var GK = globalThis.GK = globalThis.GK || {};
             pline(cx, qa.x, qa.y, qb.x, qb.y, k > 0.5 ? '#ffffff' : '#fff6a0', 1);
           } break;
           case 'ducks': if (i % 4 === 0) { const ox = Math.round(q.x), oy = Math.round(q.y); cx.fillStyle = '#ffd23a'; cx.fillRect(ox - 2, oy, 4, 2); cx.fillRect(ox, oy - 2, 2, 2); cx.fillStyle = '#ff8a1a'; cx.fillRect(ox + 2, oy - 1, 1, 1); } break;
+          case 'void': { const a = now * 6 + i; pdisc(cx, q.x + Math.cos(a) * R0 * 0.7, q.y + Math.sin(a) * R0 * 0.4, Math.max(0.6, R0 * 0.35 * k), i % 2 ? '#c88aff' : '#4a2a8a'); break; }
           case 'comet': if (i > 0) { const a = this.trail[i - 1], qa = P(a.x, a.z, a.h * 0.7); pline(cx, qa.x, qa.y, q.x, q.y, k > 0.5 ? '#ffffff' : '#9fd8ff', Math.max(1, Math.round(R0 * k))); } break;
         }
       });
@@ -557,7 +577,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       const lhw = this.lhw || C.LHW, gut = 3 * d, lw = w - 2 * gut;
       const zMin = -8, zMax = C.ZH + 42, top = 6 * d, bot = 6 * d;
       const X = x => gut + (x + lhw) / (2 * lhw) * lw, Y = z => h - bot - (z - zMin) / (zMax - zMin) * (h - top - bot);
-      const key = this.oilVer + ':' + w + 'x' + h;
+      const key = this.oilVer + ':' + w + 'x' + h + ':' + !!this.ash;
       if (this.miniKey !== key) {
         this.miniKey = key;
         const c = this.miniCv || (this.miniCv = document.createElement('canvas'));
@@ -570,7 +590,7 @@ var GK = globalThis.GK = globalThis.GK || {};
           const z0 = zi * W.DZ, z1 = Math.min(zMax, z0 + W.DZ), y0 = Math.round(Y(z1)), y1 = Math.round(Y(Math.max(zMin, z0 === 0 ? zMin : z0)));
           for (let b = 0; b < NB; b++) {
             const xc = -lhw + (b + 0.5) / NB * 2 * lhw, zc = z0 + W.DZ / 2;
-            const o = zc > C.ZH - 10 ? 0 : GK.oilEff(this.oil, this.wear, xc, zc, lhw);
+            const o = zc > C.ZH - 10 || this.ash ? 0 : GK.oilEff(this.oil, this.wear, xc, zc, lhw);
             const wi = this.wear ? GK.wearIdx(xc, zc, lhw) : -1, wv = wi >= 0 ? Math.max(0, this.wear[wi]) : 0;
             const base = wood.map((v, k) => v + (worn[k] - v) * Math.min(1, wv * 3));
             const col = base.map((v, k) => Math.round(v + (oilC[k] - v) * Math.min(1, o * 1.1)));
@@ -879,6 +899,10 @@ var GK = globalThis.GK = globalThis.GK || {};
         case 'chain': px(-0.5, -0.1, '#d0d0e0', 2, 1); px(0.1, -0.1, '#d0d0e0', 2, 1); break;
         case 'moon': px(-0.3, 0.2, '#8a8a96', 2, 2); px(0.3, -0.2, '#8a8a96', 1, 1); px(0.2, 0.45, '#8a8a96', 1, 1); break;
         case 'twin': px(-0.05, -0.7, '#0e3a5a', 1, Math.round(R * 1.4)); break;
+        case 'anchor': px(-0.05, -0.6, '#d8e4f0', 1, Math.round(R * 1.1)); px(-0.35, -0.45, '#d8e4f0', Math.max(1, Math.round(R * 0.7)), 1); px(-0.45, 0.35, '#d8e4f0', 1, 1); px(0.35, 0.35, '#d8e4f0', 1, 1); px(-0.3, 0.45, '#d8e4f0', Math.max(1, Math.round(R * 0.6)), 1); break;
+        case 'gyro': { const a = (b ? b.rot : 0) * 2; for (let k = 0; k < 6; k++) { const t = a + k * Math.PI / 3; px(Math.cos(t) * 0.7, Math.sin(t) * 0.7, k % 2 ? '#ffffff' : '#0a6a50'); } break; }
+        case 'black_pearl': px(-0.4, -0.4, '#f0e8ff', 2, 2); px(0.2, 0.2, '#6a5a8a', 1, 1); break;
+        case 'grenade': px(-0.6, -0.15, '#2a3a1a', Math.max(1, Math.round(R * 1.2)), 1); px(-0.6, 0.25, '#2a3a1a', Math.max(1, Math.round(R * 1.2)), 1); px(-0.05, -0.6, '#2a3a1a', 1, Math.round(R * 1.2)); px(0.2, -1.05, '#c8c8c8', 2, 2); break;
         // The Regulars
         case 'twohander': { // Quinn's round shades
           const L = Math.max(1, Math.round(R * 0.32));
@@ -897,6 +921,13 @@ var GK = globalThis.GK = globalThis.GK || {};
 
     drawPost(q, time) {
       const cx = this.cx, base = P(q.x, q.z), top = P(q.x, q.z, 22), R = q.r * S0 * base.s;
+      if (this.gears) {
+        const c = P(q.x, q.z, 6), Rg = R * 2.2, rot = time * 2 * (q.w || 1);
+        pell(cx, base.x, base.y, Rg, Rg * 0.4, 'rgba(15,8,10,0.35)');
+        for (let k = 0; k < 8; k++) { const a = rot + k * Math.PI / 4; pdisc(cx, c.x + Math.cos(a) * Rg, c.y + Math.sin(a) * Rg * 0.9, Math.max(1, R * 0.45), '#a8843a'); }
+        pdisc(cx, c.x, c.y, Rg, '#c8a04a'); pdisc(cx, c.x, c.y, Rg * 0.55, '#7a5a20'); pdisc(cx, c.x, c.y, Rg * 0.25, '#e8c870');
+        return;
+      }
       pell(cx, base.x, base.y, R * 1.2, R * 0.4, 'rgba(15,8,10,0.35)');
       for (let y = Math.round(top.y); y < Math.round(base.y); y++) {
         cx.fillStyle = (Math.floor((y + time * 20) / 3) % 2) ? '#ff4a5a' : '#fff3e0';
@@ -982,12 +1013,16 @@ var GK = globalThis.GK = globalThis.GK || {};
     draw(st) {
       const cx = this.cx, sim = st.sim, time = st.time;
       this.party = !!st.party;
+      this.gears = !!(st.lane && st.lane.gears);
       const sx = this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0, sy = this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0;
       cx.setTransform(RS, 0, 0, RS, sx * RS, sy * RS);
       cx.imageSmoothingEnabled = true;
       cx.drawImage(this.bg, 0, 0, W, H);
       this.drawLaneFinish(); // under the oil, so the oil keeps its true colours
-      cx.drawImage(this.oilCv, 0, 0, W, H);
+      const L0 = st.lane || {};
+      this.ash = !!L0.ash;
+      if (!L0.ash) cx.drawImage(this.oilCv, 0, 0, W, H);
+      this.drawEndlessLane(st, L0, time);
       if (st.clearOil) cx.drawImage(this.oilCv, 0, 0, W, H); // Bowling Glasses
       if (!sim) { cx.drawImage(this.vig, 0, 0, W, H); return; }
       this.drawTilt(st.tilt, time);
@@ -1056,6 +1091,17 @@ var GK = globalThis.GK = globalThis.GK || {};
         ptext(cx, p.text, q.x, q.y, '800 7.5px Rubik, system-ui, sans-serif', p.col, 'center', '#140e12');
       }
       if (this.flash > 0) { cx.fillStyle = 'rgba(255,255,255,' + (this.flash * 0.6) + ')'; cx.fillRect(0, 0, W, H); }
+      // undersea tint and rising bubbles
+      if (st.lane && st.lane.deep) {
+        cx.fillStyle = 'rgba(20,110,150,0.16)'; cx.fillRect(0, 0, W, H);
+        for (let i = 0; i < 14; i++) { const x = (i * 29.3) % W, y = H - ((time * 22 + i * 47) % H); cx.fillStyle = 'rgba(200,240,255,0.5)'; cx.fillRect(Math.round(x), Math.round(y), 1, 1); }
+      }
+      // Old Father Time's shot clock
+      if (this.shotClock != null) {
+        const s = Math.ceil(this.shotClock), urgent = this.shotClock < 2;
+        ptext(cx, s + '', W / 2, 74, '800 18px Rubik, system-ui, sans-serif', urgent ? (Math.floor(st.time * 6) % 2 ? '#ff3a4a' : '#ffffff') : '#ffd447', 'center', '#140e12');
+        ptext(cx, 'SHOT CLOCK', W / 2, 82, '800 6px Rubik, system-ui, sans-serif', '#e8dcc8', 'center', '#140e12');
+      }
       // "will it fall?": the edges close in and pulse with the heartbeat
       if (this.tension) {
         const k = 0.35 + 0.15 * Math.sin(st.time * 11);
@@ -1073,6 +1119,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       g.globalCompositeOperation = 'destination-out';
       const hole = (x, y, r) => { pdisc(g, x, y, r, 'rgba(0,0,0,0.35)'); pdisc(g, x, y, r * 0.8, 'rgba(0,0,0,0.5)'); pdisc(g, x, y, r * 0.6, 'rgba(0,0,0,1)'); };
       const f = P(0, -20); hole(f.x, f.y, 34);
+      if (st.lane && st.lane.angler) { const lq = P(Math.sin(time * 0.7) * this.lhw * 0.7, 230 + 70 * Math.sin(time * 0.43)); hole(lq.x, lq.y, 30 * lq.s + 8); }
       for (const b of sim.balls) {
         if (b.gone || b.delay > 0) continue;
         if (st.strobe && b.z > 70 && Math.floor(time * 2.2) % 3 !== 0) continue;

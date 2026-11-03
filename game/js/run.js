@@ -52,7 +52,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     const ru = GK.rules(run);
     if (GK.isChamp(run)) return Math.round(GK.CHAMPIONSHIP.target * GK.CHAMP_SCALE * run.nextTargetMul * ru.target * ru.bossTarget / 50) * 50;
     let t;
-    if (GK.isEndless(run)) t = GK.CHAMPIONSHIP.target * 0.6 * Math.pow(1.7, run.alley - GK.ALLEY_COUNT - 1) * GK.ROUND_MULT[run.round];
+    if (GK.isEndless(run)) { const E = GK.ENDLESS_TARGET || { base: 0.6, growth: 1.7 }; t = GK.CHAMPIONSHIP.target * E.base * Math.pow(E.growth, run.alley - GK.ALLEY_COUNT - 1) * GK.ROUND_MULT[run.round]; }
     else t = GK.ALLEYS[run.alley].base * GK.ROUND_MULT[run.round] * GK.ALLEY_SCALE[run.alley];
     t *= run.nextTargetMul * ru.target * (run.round === 2 ? ru.bossTarget : 1);
     return Math.round(t / 50) * 50;
@@ -83,6 +83,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         if (v === true) f[k] = true; else if (typeof v === 'number') f[k] = (f[k] || 0) + v;
       }
     });
+    Object.values(run.equip || {}).forEach(id => { const e = GK.EQUIP[id]; if (e && e.reracks) f.reracks += e.reracks; });
     const m = run.members || [];
     if (m.includes('reservation')) f.frames++;
     if (m.includes('oil_pass')) f.reracks++;
@@ -142,6 +143,17 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (run.loadedPending) { rs.loadedNext = true; run.loadedPending = false; }
     const rng = GK.stream(run.seed, 'round:' + run.alley + ':' + run.round);
     if (boss === 'ringmaster' || boss === 'strongman') for (let i = 0; i < 12; i++) rs.tilts.push((rng() < 0.5 ? -1 : 1) * (12 + rng() * 12));
+    rs.reracksStart = rs.reracks;
+    const lane = GK.alleyDef(run).lane || {};
+    if (lane.holeCount) rs.holes = GK.makeHoles(run, lane.holeCount, 'start');
+    if (boss === 'banshee') rs.charmOrder = run.charms.slice();
+    if (boss === 'echo') rs.echo = Math.round((run.lastBest || 0) * 0.8);
+    if (boss === 'hollow') {
+      // The Hollow King takes the two most valuable charms and a trophy until the match ends.
+      const taken = [];
+      for (let k = 0; k < 2 && run.charms.length; k++) { const i = GK.mostValuableCharm(run); taken.push(run.charms.splice(i, 1)[0]); }
+      rs.hollow = { charms: taken, trophy: (run.trophies || []).length ? run.trophies.splice(rng.int(run.trophies.length), 1)[0] : null };
+    }
     if (boss === 'champion') {
       // The King's frames: pre-rolled so the match is fair and replayable from the seed.
       const w = []; for (let i = 0; i < framesMax; i++) w.push(0.6 + rng() * 0.9);
@@ -178,10 +190,17 @@ var GK = globalThis.GK = globalThis.GK || {};
   };
   GK.applyPayout = function (run, lines) { lines.forEach(l => { run.money += l.v; }); };
 
+  GK.endRoundCleanup = function (run) {
+    const rs = run.rs; if (!rs) return;
+    if (rs.hollow) { run.charms.push(...rs.hollow.charms); if (rs.hollow.trophy) run.trophies.push(rs.hollow.trophy); rs.hollow = null; }
+    if (rs.charmOrder) { const keep = rs.charmOrder.filter(c => run.charms.includes(c)); run.charms = keep.concat(run.charms.filter(c => !keep.includes(c))); rs.charmOrder = null; }
+    if (rs.bestFrame) run.lastBest = rs.bestFrame;
+  };
   // After a won round: move on. Returns 'shop' | 'won'.
   GK.advance = function (run) {
     // round-reset scaling charms
     const wasBoss = GK.isBoss(run), oldAlley = run.alley;
+    GK.endRoundCleanup(run);
     run.charms.forEach(c => { const d = GK.CHARMS[c.id]; if (d.roundReset) { c.v = 0; if (c.p != null) c.p = 0; } if (d.roundWin) d.roundWin(c, wasBoss); });
     // Hot Charms burn out
     run.charms = run.charms.filter(c => c.expires == null || --c.expires > 0);
@@ -189,6 +208,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (GK.isChamp(run) && !run.endless) { run.won = true; run.phase = 'won'; return 'won'; }
     run.round++;
     if (run.round > 2) { run.round = 0; run.alley++; }
+    run.betNotes = GK.settleBets ? GK.settleBets(run, wasBoss, oldAlley) : [];
     if (run.alley !== oldAlley && run.fakeIdSlot) { run.maxCharms++; run.fakeIdSlot = false; run.bossOverride = null; }
     run.phase = 'shop';
     return 'shop';
@@ -199,7 +219,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   GK.sellValue = item => Math.max(1, Math.floor(item.cost / 2) + (item.ed ? 1 : 0));
   // Resale Shop: everything sells at full price. Bake Sale: +$2 per round kept.
   const resale = () => GK._run && GK.flags(GK._run).resale;
-  GK.charmSell = c => (resale() ? GK.CHARMS[c.id].cost + (c.ed ? 2 : 0) : GK.sellValue({ cost: GK.CHARMS[c.id].cost, ed: c.ed })) + (c.id === 'bake_sale' ? 2 * (c.v || 0) : 0);
+  GK.charmSell = c => c.corrupt ? 0 : (resale() ? GK.CHARMS[c.id].cost + (c.ed ? 2 : 0) : GK.sellValue({ cost: GK.CHARMS[c.id].cost, ed: c.ed })) + (c.id === 'bake_sale' ? 2 * (c.v || 0) : 0);
   GK.ballSell = b => resale() ? GK.BALLS[b.type].cost + (b.ed ? 2 : 0) : GK.sellValue({ cost: GK.BALLS[b.type].cost, ed: b.ed });
   GK.consSell = id => resale() ? GK.CONS[id].cost : Math.max(1, Math.floor(GK.CONS[id].cost / 2));
 
@@ -209,6 +229,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (c.expires) s += ' Burns out in ' + c.expires + ' round' + (c.expires > 1 ? 's' : '') + '.';
     if (s.includes('{x}')) s = s.replace('{x}', d.show ? d.show(c) : '1');
     const E = GK.EVOLVE && GK.EVOLVE[c.id];
+    if (c.corrupt) s = 'CORRUPTED: triggers twice every frame, but costs $1 a frame and sells for nothing. ' + s;
     if (E && c.evolved) s = 'EVOLVED from ' + GK.CHARMS[c.id].name + '. ' + s;
     else if (E) s += ' Evolves into ' + E.name + ': ' + E.need + ' (' + Math.min(E.n, c.evo || 0) + '/' + E.n + ').';
     return s;
@@ -268,7 +289,9 @@ var GK = globalThis.GK = globalThis.GK || {};
     const b = pickBall(run, rng, []);
     if (b) { const ed = rollEdition(rng, 0.7); shop.items.push({ kind: 'ball', id: b, ed, price: GK.price(run, GK.BALLS[b].cost, ed) }); }
     const gx = [];
-    for (let i = 0; i < 2; i++) { const g = pickGood(run, rng, gx); gx.push(g.id); shop.items.push(g); }
+    for (let i = 0; i < 2 + (GK.flags(run).shopExtra || 0); i++) { const g = pickGood(run, rng, gx); gx.push(g.id); shop.items.push(g); }
+    // endless shops sometimes sell a corrupted charm
+    if (GK.isEndless(run)) shop.items.forEach(it => { if (it.kind === 'charm' && rng() < GK.CORRUPT_CHANCE) { it.corrupt = true; it.price = Math.max(1, Math.round(it.price * 0.75)); } });
     // One membership offer per alley; it stays until bought.
     if (run.memberAlley !== run.alley) {
       const pool = Object.keys(GK.MEMBERSHIPS).filter(k => !run.members.includes(k));
@@ -283,6 +306,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     run.shop = GK.rollShop(run, rng, false);
     run.shop.rerolls = 0;
     if (run.shopSmall) { run.shop.items = run.shop.items.slice(0, 2); run.shopSmall = false; }
+    if (run.saleNext) { run.shop.items = run.shop.items.slice(0, 3); run.shop.items.forEach(it => { it.price = Math.max(1, Math.ceil(it.price / 2)); }); run.shop.sale = true; run.saleNext = false; }
     run.phase = 'shop';
     return run.shop;
   };
@@ -312,7 +336,8 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (!GK.canAfford(run, it.price)) return { ok: false, msg: 'Not enough money' };
     if (it.kind === 'charm') {
       if (run.charms.length >= run.maxCharms) return { ok: false, msg: 'Charm slots full. Sell one first.' };
-      run.charms.push(GK.charmInst(it.id, it.ed));
+      const inst = GK.charmInst(it.id, it.ed); if (it.corrupt) inst.corrupt = true;
+      run.charms.push(inst);
     } else if (it.kind === 'ball') {
       if (run.bag.length >= GK.maxBag(run)) {
         if (replaceIdx == null) return { ok: false, need: 'replace', msg: 'Bag is full. Pick a ball to swap out.' };
@@ -324,7 +349,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     } else if (it.kind === 'equip') {
       run.equip[GK.EQUIP[it.id].slot] = it.id;
     }
-    run.money -= it.price; it.sold = true;
+    run.money -= it.price; it.sold = true; run.shop.bought = (run.shop.bought || 0) + 1;
     return { ok: true };
   };
   GK.buyMember = function (run) {
@@ -528,6 +553,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     }
     if (id === 'vending') ev.item = rng.pick(GK.CONS_LIST.filter(c => GK.isUnlocked('cons', c.id))).id;
     if (id === 'regular') Object.assign(ev, GK.regularVisit(run, rng));
+    if (GK.eventExtras) return GK.eventExtras(run, ev, rng);
     return ev;
   };
   // Accept an event's offer. arg: bag slot to replace (lost_found) or { ball, drill } (lane_mech).
@@ -551,6 +577,8 @@ var GK = globalThis.GK = globalThis.GK || {};
     }
     if (ev.id === 'lane_mech') return GK.redrill(run, arg.ball, arg.drill, true);
     if (ev.id === 'regular') return GK.takeRegular(run, ev);
+    const r2 = GK.takeEvent2 ? GK.takeEvent2(run, ev, arg) : null;
+    if (r2) return r2;
     return { ok: false };
   };
 
