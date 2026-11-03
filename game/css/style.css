@@ -367,12 +367,14 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
 .t-rainbow { background: linear-gradient(90deg, #ff5a6e, #ffd447, #7be38a, #39c6d6, #b58cff); }
 .t-bubbles { background: radial-gradient(circle at 25% 50%, #8fe0f0 3px, transparent 4px), radial-gradient(circle at 70% 50%, #8fe0f0 4px, transparent 5px); }
 .t-smoke { background: linear-gradient(90deg, transparent, #9a9aa8); }
-.t-stars, .t-sparkle { background: radial-gradient(circle at 20% 50%, #ffd447 2px, transparent 3px), radial-gradient(circle at 55% 40%, #fff 2px, transparent 3px), radial-gradient(circle at 85% 60%, #ffd447 2px, transparent 3px); }
-.t-hearts { background: radial-gradient(circle at 30% 50%, #ff5a8a 3px, transparent 4px), radial-gradient(circle at 70% 50%, #ff5a8a 3px, transparent 4px); }
+.t-sparkle { background: radial-gradient(circle at 20% 50%, #fff 1.5px, transparent 2px), radial-gradient(circle at 50% 30%, #bfe8ff 1.5px, transparent 2px), radial-gradient(circle at 80% 65%, #fff 1.5px, transparent 2px); }
+.t-stars { height: 16px; background: linear-gradient(90deg, transparent, #c8932a 40%, #ffd447) 0 55% / 100% 3px no-repeat; position: relative; }
+.t-stars::after { content: '★'; position: absolute; right: -2px; top: -6px; color: #ffe066; font-size: 18px; line-height: 1; text-shadow: 0 0 4px rgba(255, 210, 60, 0.8); }
+.t-hearts { background: none; height: 16px; } .t-hearts::after { content: '♥ ♥ ♥'; color: #ff5a8a; font-style: normal; font-size: 11px; letter-spacing: -1px; }
 .t-pixels { background: repeating-linear-gradient(90deg, #39c6d6 0 4px, transparent 4px 7px, #ff5a6e 7px 11px, transparent 11px 14px); }
-.t-lightning { background: linear-gradient(90deg, transparent, #fff6a0, #ffffff); }
-.t-ducks { background: radial-gradient(circle at 30% 50%, #ffd23a 3px, transparent 4px), radial-gradient(circle at 70% 50%, #ffd23a 3px, transparent 4px); }
-.t-comet { background: linear-gradient(90deg, transparent, #9fd8ff, #ffffff); }
+.t-lightning { background: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 10'><polyline points='0,5 5,1 9,8 14,2 18,8 23,1 27,7 34,4' fill='none' stroke='%236ab8ff' stroke-width='3'/><polyline points='0,5 5,1 9,8 14,2 18,8 23,1 27,7 34,4' fill='none' stroke='white' stroke-width='1'/></svg>") center / 100% 100% no-repeat; }
+.t-ducks { background: none; height: 16px; } .t-ducks::after { content: '🐤🐤'; font-style: normal; font-size: 12px; }
+.t-comet { height: 8px; border-radius: 0 6px 6px 0; background: linear-gradient(90deg, transparent, #9fd8ff 60%, #ffffff); box-shadow: 0 0 6px rgba(159, 216, 255, 0.8); }
 .hatsw { font-style: normal; font-size: 18px; line-height: 22px; height: 22px; }
 .bkgrid { display: flex; flex-wrap: wrap; gap: 5px; }
 .bk { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 99px; background: var(--panel2); box-shadow: inset 0 0 0 1px var(--line), inset 3px 0 0 var(--rc, var(--line)); }

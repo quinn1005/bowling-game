@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.0.1
+
+### Fixed
+- **Sparkle and Stardust trails looked the same.** Stardust is now a glowing gold streak with big five-point stars that float up and spin. Sparkle is bright white and ice-blue glints that twinkle around the ball.
+- **Lightning is now a crackling blue-and-white bolt**, so it no longer looks like a faint version of Comet tail.
+- **Locker swatches:** Sparkle, Stardust, Lightning, Comet tail, Hearts and Rubber ducks each have their own preview now.
+
 ## v1.0.0
 
 ### Every throw feels bigger

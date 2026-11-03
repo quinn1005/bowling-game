@@ -374,15 +374,43 @@ var GK = globalThis.GK = globalThis.GK || {};
         if (k <= 0) return;
         cx.globalAlpha = Math.min(1, k * 1.2);
         switch (style) {
-          case 'sparkle': if ((i + Math.floor(now * 20)) % 3 === 0) { cx.fillStyle = i % 2 ? '#ffffff' : '#ffe066'; const ox = Math.round(q.x + (Math.sin(i * 7) * R0)), oy = Math.round(q.y + Math.cos(i * 5) * R0 * 0.6); cx.fillRect(ox, oy - 1, 1, 3); cx.fillRect(ox - 1, oy, 3, 1); } break;
+          case 'sparkle': {
+            // bright four-point glints scattered around the path, twinkling on and off
+            const on = (i * 7 + Math.floor(now * 14)) % 4;
+            if (on < 2) {
+              const ox = Math.round(q.x + Math.sin(i * 7.3) * R0 * 1.3), oy = Math.round(q.y + Math.cos(i * 5.1) * R0 * 0.9), big = on === 0 && k > 0.4;
+              cx.fillStyle = i % 3 ? '#ffffff' : '#bfe8ff';
+              cx.fillRect(ox, oy - (big ? 3 : 2), 1, big ? 7 : 5); cx.fillRect(ox - (big ? 3 : 2), oy, big ? 7 : 5, 1);
+              if (big) { cx.fillRect(ox - 1, oy - 1, 3, 3); }
+            }
+            break;
+          }
           case 'fire': this.circle(q.x, q.y, R0 * 0.75 * k, k > 0.6 ? '#ffd447' : k > 0.3 ? '#ff8a2a' : '#c83a1a'); break;
           case 'bubbles': if (i % 2 === 0) { pdisc(cx, q.x + Math.sin(i) * R0 * 0.5, q.y - (1 - k) * 6, R0 * 0.35 + 0.8, '#bff4ff'); pdisc(cx, q.x + Math.sin(i) * R0 * 0.5, q.y - (1 - k) * 6, R0 * 0.35, 'rgba(60,140,180,0.5)'); } break;
           case 'smoke': this.circle(q.x, q.y - (1 - k) * 5, R0 * (1.1 - k * 0.5), 'rgba(150,150,165,' + (0.35 * k) + ')'); break;
           case 'rainbow': this.circle(q.x, q.y, R0 * 0.6, 'hsl(' + ((i * 25 + now * 200) % 360) + ',90%,62%)'); break;
-          case 'stars': if (i % 2 === 0) { cx.fillStyle = '#ffe066'; const ox = Math.round(q.x), oy = Math.round(q.y - (1 - k) * 4); cx.fillRect(ox, oy - 2, 1, 5); cx.fillRect(ox - 2, oy, 5, 1); } break;
+          case 'stars': {
+            // a soft gold dust streak along the path...
+            if (i > 0) { const a = this.trail[i - 1], qa = P(a.x, a.z, a.h * 0.7); pline(cx, qa.x, qa.y, q.x, q.y, k > 0.5 ? '#ffd447' : '#c8932a', Math.max(1, Math.round(R0 * 0.5 * k))); }
+            // ...and every few points a big five-point star that floats up and spins
+            if (i % 5 === 0) {
+              const sx2 = q.x + Math.sin(i * 1.7) * R0 * 0.8, sy2 = q.y - (1 - k) * 14, sz = 2.6 + k * 1.6, rot = (1 - k) * 3 + i;
+              const pts = [];
+              for (let j = 0; j < 10; j++) { const ang = rot + j * Math.PI / 5 - Math.PI / 2, rr = j % 2 ? sz * 0.45 : sz; pts.push({ x: sx2 + Math.cos(ang) * rr, y: sy2 + Math.sin(ang) * rr }); }
+              ppoly(cx, pts, '#ffe066');
+              cx.fillStyle = '#ffffff'; cx.fillRect(Math.round(sx2), Math.round(sy2), 1, 1);
+            }
+            break;
+          }
           case 'hearts': if (i % 3 === 0) { cx.fillStyle = '#ff5a8a'; const ox = Math.round(q.x), oy = Math.round(q.y - (1 - k) * 6); cx.fillRect(ox - 2, oy, 2, 2); cx.fillRect(ox + 1, oy, 2, 2); cx.fillRect(ox - 1, oy + 2, 3, 1); cx.fillRect(ox, oy + 3, 1, 1); } break;
           case 'pixels': { cx.fillStyle = ['#39c6d6', '#ff5a6e', '#ffd447', '#7be38a'][i % 4]; const z = Math.max(1, Math.round(R0 * 0.6 * k)); cx.fillRect(Math.round(q.x - z / 2), Math.round(q.y - z / 2), z, z); break; }
-          case 'lightning': if (i > 0) { const a = this.trail[i - 1], qa = P(a.x + Math.sin(i * 3.3) * 1.5, a.z, a.h * 0.7); pline(cx, qa.x, qa.y, q.x, q.y, i % 2 ? '#fff6a0' : '#ffffff', 1); } break;
+          case 'lightning': if (i > 0) {
+            // a crackling bolt: jagged, with a blue glow under a white core
+            const a = this.trail[i - 1], jx = Math.sin(i * 3.3 + Math.floor(now * 18)) * 2.2;
+            const qa = P(a.x + jx, a.z, a.h * 0.7), qb = P(p.x - jx, p.z, p.h * 0.7);
+            pline(cx, qa.x, qa.y, qb.x, qb.y, '#6ab8ff', 3);
+            pline(cx, qa.x, qa.y, qb.x, qb.y, k > 0.5 ? '#ffffff' : '#fff6a0', 1);
+          } break;
           case 'ducks': if (i % 4 === 0) { const ox = Math.round(q.x), oy = Math.round(q.y); cx.fillStyle = '#ffd23a'; cx.fillRect(ox - 2, oy, 4, 2); cx.fillRect(ox, oy - 2, 2, 2); cx.fillStyle = '#ff8a1a'; cx.fillRect(ox + 2, oy - 1, 1, 1); } break;
           case 'comet': if (i > 0) { const a = this.trail[i - 1], qa = P(a.x, a.z, a.h * 0.7); pline(cx, qa.x, qa.y, q.x, q.y, k > 0.5 ? '#ffffff' : '#9fd8ff', Math.max(1, Math.round(R0 * k))); } break;
         }

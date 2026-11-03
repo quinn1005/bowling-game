@@ -889,6 +889,7 @@
   GK.debug.throw = prm => throwBall(Object.assign({ aimX, aim: 0, spin: 0, speed: 340 }, prm));
   GK.debug.skipReplay = () => endReplay();
   GK.debug.select = i => { sel = i; refresh(); };
+  GK.debug.setCosmetics = c => R.setCosmetics(c);
   GK.debug.pickBall = i => pickBall(i);
   GK.debug.showEvent = ev => { UI.hideModal(); showEvent(ev); };
   GK.debug.showEnd = won => { busyToken++; UI.hideModal(); showEnd(won); };
