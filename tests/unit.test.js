@@ -503,13 +503,13 @@ test('v0.7 equipment and rules: flags and equipment mods combine', () => {
   const run = GK.newRun({ seed: 4 });
   run.equip = { shoes: 'spinning_shoes', gloves: 'rosin_bag', head: 'headband' };
   const eq = GK.equipMods(run);
-  assert.strictEqual(eq.angRange, 1.4); assert.strictEqual(eq.posSlow, 1.25); assert.strictEqual(eq.groove, 1);
+  assert.strictEqual(eq.angRange, 1.4); assert.strictEqual(eq.posSlow, 1.25); assert.strictEqual(eq.groove, 3);
   run.members = ['season_ticket', 'mechanic_call'];
   run.charms = [GK.charmInst('second_return')];
   assert.strictEqual(GK.maxBag(run), run.maxBag + 1);
   assert.ok(GK.flags(run).noJam);
   GK.startRound(run);
-  assert.strictEqual(run.rs.groove, 2, 'headband + season ticket');
+  assert.strictEqual(run.rs.groove, 6, 'headband + season ticket: +3 each');
 });
 
 test('Fourth Frame Ball: a strike in the last frame earns a bonus ball at a fresh rack', () => {
@@ -813,10 +813,17 @@ test('Groove carries across the whole run and only resets on a miss', () => {
   assert.strictEqual(run.rs.groove, 0, 'a miss resets it');
   GK.advance(run); GK.startRound(run);
   assert.strictEqual(run.rs.groove, 0, 'and it stays reset');
-  // "start every round with N Groove" is a floor, not an add-on
+  // the Headband adds +3 every round, on top of what you carry
   run.equip = { head: 'headband' };
   GK.advance(run); GK.startRound(run);
-  assert.strictEqual(run.rs.groove, 1);
-  run.groove = 5; GK.advance(run); GK.startRound(run);
-  assert.strictEqual(run.rs.groove, 5);
+  assert.strictEqual(run.rs.groove, 3);
+  GK.advance(run); GK.startRound(run);
+  assert.strictEqual(run.rs.groove, 6, 'it stacks round after round while you never miss');
+  run.members = ['season_ticket'];
+  GK.advance(run); GK.startRound(run);
+  assert.strictEqual(run.rs.groove, 12, 'Headband + Season Ticket: +6 a round');
+  // the Golden Turntable is a floor of 2
+  const t = GK.newRun({ seed: 22 }); t.trophies = [{ id: 'turntable' }];
+  GK.startRound(t); assert.strictEqual(t.rs.groove, 2);
+  t.groove = 5; GK.advance(t); GK.startRound(t); assert.strictEqual(t.rs.groove, 5);
 });

@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.2
+
+### Changed
+- **Headband and Season Ticket each add +3 Groove at the start of every round**, on top of the Groove you carry over. Keep hitting PERFECT and it keeps stacking (+6 a round with both). The Golden Turntable trophy still makes sure you start each round with at least 2.
+
 ## v1.1.1
 
 ### Changed

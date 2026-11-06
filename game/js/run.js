@@ -91,7 +91,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (m.includes('clearance')) f.discount = 0.25;
     if (m.includes('reroll_club')) f.rerollOff = 2;
     if (m.includes('mechanic_call')) f.noJam = true;
-    if (m.includes('season_ticket')) f.grooveStart = (f.grooveStart || 0) + 1;
+    if (m.includes('season_ticket')) f.grooveAdd = (f.grooveAdd || 0) + 3;
     if (m.includes('vip_lounge')) f.vip = true;
     const ru = GK.rules(run);
     f.frames += ru.frames; f.reracks += ru.reracks;
@@ -135,10 +135,11 @@ var GK = globalThis.GK = globalThis.GK || {};
       boss, tilts: [], king: null, kingTotal: 0
     };
     const eq = GK.equipMods(run);
-    // Groove lasts the whole run: it only resets when you miss the PERFECT zone. Items that
-    // "start every round with N Groove" make sure you have at least that much.
-    rs.groove = Math.max(run.groove || 0, (eq.groove || 0) + (fl.grooveStart || 0)) + (run.grooveNext || 0);
-    run.grooveNext = 0;
+    // Groove lasts the whole run: it only resets when you miss the PERFECT zone. The Headband
+    // and Season Ticket add +3 each at the start of every round; the Golden Turntable makes sure
+    // you start with at least 2.
+    rs.groove = Math.max(run.groove || 0, fl.grooveStart || 0) + (eq.groove || 0) + (fl.grooveAdd || 0) + (run.grooveNext || 0);
+    run.groove = rs.groove; run.grooveNext = 0;
     if (run.oilNext) { rs.oil = run.oilNext; run.oilNext = null; }
     if (boss && run.fixed === run.alley) { rs.target = Math.round(rs.target * 0.6 / 50) * 50; rs.fixed = true; }
     run.nextTargetMul = 1;
