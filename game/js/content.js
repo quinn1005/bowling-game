@@ -140,14 +140,14 @@ var GK = globalThis.GK = globalThis.GK || {};
     fingerless: { slot: 'gloves', name: 'Fingerless Gloves', cost: 6, desc: 'Throws are 10% faster, but the power bar jitters.', speed: 1.1, jitter: true },
     wrist_computer: { slot: 'wrist', name: 'Wrist Computer', cost: 7, desc: 'Shows a dotted preview of your hook while the dial swings.', preview: true },
     lucky_wristband: { slot: 'wrist', name: 'Lucky Wristband', cost: 6, desc: 'Once per round, a wild hook (past 70% on the dial) is pulled back to half.', tame: true },
-    headband: { slot: 'head', name: 'Headband', cost: 6, desc: 'Start every round with 1 Groove.', groove: 1 },
+    headband: { slot: 'head', name: 'Headband', cost: 6, desc: 'Start every round with at least 1 Groove.', groove: 1 },
     glasses: { slot: 'head', name: 'Bowling Glasses', cost: 5, desc: 'The oil pattern shows twice as clearly on the lane.', clearOil: true },
     knee_pad: { slot: 'legs', name: 'Knee Pad', cost: 6, desc: 'Missing the PERFECT zone only costs 1 Groove instead of all of it.', kneePad: true }
   });
 
   // ---------- memberships ----------
   Object.assign(GK.MEMBERSHIPS, {
-    season_ticket: { name: 'Season Ticket', cost: 12, desc: 'Start every round with 1 Groove.' },
+    season_ticket: { name: 'Season Ticket', cost: 12, desc: 'Start every round with at least 1 Groove.' },
     vip_lounge: { name: 'VIP Lounge', cost: 12, desc: 'Events between rounds happen twice as often.' },
     mechanic_call: { name: 'Mechanic on Call', cost: 12, desc: 'Balls never jam in the ball return.' }
   });

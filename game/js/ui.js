@@ -331,7 +331,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       <p><b>Your balls</b> sit on the ball return at the right of the approach. Tap one to pick it. Now and then a ball jams in the return and you have to throw a different one before it comes back.</p>
       <p><b>Oil:</b> the blue sheen on the lane is oil. The ball skids through oil and hooks on dry boards. Every alley has its own pattern, and it breaks down as you bowl: throw the same line again and again and it dries out (the boards turn brown) and your ball hooks earlier. The lane is re-oiled each round.</p>
       <p><b>The pinsetter</b> is old. Once in a while it fumbles after your first ball and drops a pin or two you left standing. Lucky you.</p>
-      <p><b>Groove:</b> PERFECT throws in a row build Groove. Each stack adds +1 Mult to every frame until you miss the zone.</p>
+      <p><b>Groove:</b> PERFECT throws in a row build Groove. Each stack adds +1 Mult to every frame. It carries over from round to round for the whole run, and resets only when you miss the zone.</p>
       <p><b>Score:</b> every frame scores <span style="color:var(--chips)">Points</span> × <span style="color:var(--mult)">Mult</span>. The shot sets the base (Strike, Spare, Split conversion, Double, Turkey…). Each pin adds Points. Pins knocking over pins, late wobblers and kickback bangs add bonus Points.</p>
       <p><b>Rounds:</b> reach the target within your frames. Each alley has a Qualifier, a Heat and a Boss Match. Miss a target and the run ends.</p>
       <p><b>Re-racks:</b> after a bad first roll, tap the glowing <b>↻</b> button at the top to spend a re-rack: all pins reset and you take roll one again.</p>

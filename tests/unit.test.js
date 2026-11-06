@@ -797,3 +797,26 @@ test('v1.1 events, bets, medals and themed unlocks', () => {
   for (const k of ['charm:glass_cannon', 'charm:pocket_watch', 'charm:ricochet_king', 'charm:bargain_bin', 'charm:perfectionists_curse', 'charm:night_owl_pass', 'charm:rack_attack', 'charm:taxidermy', 'charm:second_wind', 'ball:anchor', 'ball:gyro', 'ball:black_pearl', 'ball:grenade', 'equip:lucky_sweatband'])
     assert.ok(GK.LOCKED.has(k) && GK.FEATS.some(f => f.unlocks.includes(k)), k);
 });
+
+test('Groove carries across the whole run and only resets on a miss', () => {
+  const run = GK.newRun({ seed: 21 });
+  GK.startRound(run);
+  const throwOnce = perfect => { const sim = GK.beginFrame(run); GK.launch(run, sim, 0, { aimX: 3, aim: 0, spin: 0.15, speed: 400, perfect }); sim.simulate(); GK.afterRoll(run, sim); run.rs.cur = null; };
+  throwOnce(true); throwOnce(true); throwOnce(true);
+  assert.strictEqual(run.rs.groove, 3);
+  GK.advance(run); GK.startRound(run);
+  assert.strictEqual(run.rs.groove, 3, 'Groove survives into the next round');
+  throwOnce(true);
+  GK.advance(run); GK.startRound(run);
+  assert.strictEqual(run.rs.groove, 4);
+  throwOnce(false);
+  assert.strictEqual(run.rs.groove, 0, 'a miss resets it');
+  GK.advance(run); GK.startRound(run);
+  assert.strictEqual(run.rs.groove, 0, 'and it stays reset');
+  // "start every round with N Groove" is a floor, not an add-on
+  run.equip = { head: 'headband' };
+  GK.advance(run); GK.startRound(run);
+  assert.strictEqual(run.rs.groove, 1);
+  run.groove = 5; GK.advance(run); GK.startRound(run);
+  assert.strictEqual(run.rs.groove, 5);
+});

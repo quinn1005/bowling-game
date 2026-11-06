@@ -29,7 +29,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   T('landlord', 'eviction', 'Eviction Notice', '×1.4 Mult on any frame that clears the deck: Strikes and Spares.', { score: (c, s) => (strike(c.kind) || spare(c.kind)) && s.xmult(1.4) });
 
   T('strobe', 'disco_trophy', 'Mirrorball Trophy', '×1.3 Mult on every Strike.', { score: (c, s) => strike(c.kind) && s.xmult(1.3) });
-  T('strobe', 'turntable', 'Golden Turntable', 'Start every round with 2 Groove.', { flags: { grooveStart: 2 } });
+  T('strobe', 'turntable', 'Golden Turntable', 'Start every round with at least 2 Groove.', { flags: { grooveStart: 2 } });
   T('strobe', 'glowsticks', 'Glowsticks', '+5 Mult on dark lanes and in Boss Matches.', { score: (c, s) => (c.dark || c.boss) && s.mult(5) });
 
   T('fog', 'fog_lamp', 'Fog Lamp', 'The oil shows twice as clearly, and +15 Points every frame.', { eq: { clearOil: true }, score: (c, s) => s.chips(15) });

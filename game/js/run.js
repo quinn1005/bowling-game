@@ -13,7 +13,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       v: 1, seed, daily, bagId: sb.id, league: GK.LEAGUES && GK.LEAGUES[league] ? league : 'open', asc: Math.max(0, asc | 0),
       alley: 0, round: 0, money: 4 + (sb.money || 0),
       bag: sb.balls.map(type => ({ type, ed: null })), maxBag: 3,
-      charms: [], maxCharms: 5, cons: [], maxCons: 2, trophies: [],
+      charms: [], maxCharms: 5, cons: [], maxCons: 2, trophies: [], groove: 0,
       rack: GK.padRack(), levels: {}, members: [], equip: {},
       stats: { pins: 0, strikes: 0, spares: 0, splits: 0, gutters: 0, frames: 0, bestFrame: 0, throws: 0, score: 0, perfects: 0, pstreak: 0, bestPStreak: 0 },
       history: [], best: null, bosses: GK.pickBosses(seed), tags: [], practice: false, endless: false,
@@ -135,7 +135,9 @@ var GK = globalThis.GK = globalThis.GK || {};
       boss, tilts: [], king: null, kingTotal: 0
     };
     const eq = GK.equipMods(run);
-    rs.groove = (eq.groove || 0) + (fl.grooveStart || 0) + (run.grooveNext || 0);
+    // Groove lasts the whole run: it only resets when you miss the PERFECT zone. Items that
+    // "start every round with N Groove" make sure you have at least that much.
+    rs.groove = Math.max(run.groove || 0, (eq.groove || 0) + (fl.grooveStart || 0)) + (run.grooveNext || 0);
     run.grooveNext = 0;
     if (run.oilNext) { rs.oil = run.oilNext; run.oilNext = null; }
     if (boss && run.fixed === run.alley) { rs.target = Math.round(rs.target * 0.6 / 50) * 50; rs.fixed = true; }
@@ -445,7 +447,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       const j = rng.int(run.bag.length), lost = run.bag[j]; run.bag.splice(j, 1); run.money += 20;
       msg = '+$20. Your ' + GK.BALLS[lost.type].full + ' "shattered"';
     } else if (id === 'm_weighted') { run.rs.weighted = true; msg = 'Every pin is Lead this round, and scores double'; }
-    else if (id === 'm_snake_oil') { run.rs.groove = (run.rs.groove || 0) + 3; run.rs.snakeOil = true; msg = '+3 Groove. Misses cost $2 this round'; }
+    else if (id === 'm_snake_oil') { run.rs.groove = (run.rs.groove || 0) + 3; run.groove = run.rs.groove; run.rs.snakeOil = true; msg = '+3 Groove. Misses cost $2 this round'; }
     else if (id === 'm_debt') {
       if (!run.rs.boss || run.rs.boss === 'champion') return { ok: false, msg: 'Use this during a Boss Match (not the Championship).' };
       run.rs.boss = null; run.rs.stolen = -1; msg = 'The boss has been paid off for this round';

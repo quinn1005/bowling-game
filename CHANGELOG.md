@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.1
+
+### Changed
+- **Groove lasts the whole run.** It used to reset at the start of every round. Now it keeps stacking across rounds, alleys and bosses for as long as you keep hitting PERFECT, and resets only when you miss the zone (the Knee Pad still makes a miss cost just 1 Groove).
+- Items that "start every round with Groove" (Headband, Season Ticket, Golden Turntable) now make sure you start each round with **at least** that much, so they still help after a miss without stacking on top of a long streak.
+
 ## v1.1.0
 
 ### Endless mode is its own game now

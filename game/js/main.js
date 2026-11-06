@@ -320,7 +320,7 @@
     step_angle: 'Now the arrow swings. Tap when it points where you want your ball to go.',
     step_power: 'Tap inside the thin green zone for a PERFECT throw. Late taps go too hard and the ball wobbles.',
     step_hook: 'Last, the hook dial. Left curves the ball left, right curves it right. Stop it near the middle to roll straight.',
-    groove: 'PERFECT! Throw PERFECT again and again to build Groove: +1 Mult per stack on every frame.',
+    groove: 'PERFECT! Throw PERFECT again and again to build Groove: +1 Mult per stack on every frame. It lasts the whole run until you miss.',
     oil: 'See the boards turning brown? You are drying out your line. The ball will start hooking earlier there.',
     stuck: 'Your ball jammed in the ball return. Tap a different ball on the return; the stuck one comes back after.',
     respot: 'The old pinsetter fumbles now and then. Free pins!',

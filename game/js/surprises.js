@@ -72,7 +72,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     } else {
       ev.title = name + ' has a tip';
       ev.say = '"' + TIPS[who] + '"';
-      ev.offer = 'Start next round with 2 Groove'; ev.take = 'Good tip';
+      ev.offer = '+2 Groove at the start of next round'; ev.take = 'Good tip';
     }
     return ev;
   };

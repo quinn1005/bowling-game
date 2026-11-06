@@ -166,12 +166,12 @@ var GK = globalThis.GK = globalThis.GK || {};
     run.stats.pins += rec.pins;
     // Groove: consecutive PERFECT throws this round.
     if (cur.perfect === true) {
-      rs.groove = (rs.groove || 0) + 1; run.stats.perfects++; run.stats.pstreak++;
+      rs.groove = (rs.groove || 0) + 1; run.groove = rs.groove; run.stats.perfects++; run.stats.pstreak++;
       run.stats.bestPStreak = Math.max(run.stats.bestPStreak || 0, run.stats.pstreak);
       const pay = GK.rules(run).perfectPay;
       if (pay) { run.money += pay; notes.push({ t: 'pay', text: 'Pro Tour: +$' + pay + ' for a PERFECT throw' }); }
     } else if (cur.perfect === false) {
-      rs.groove = GK.equipMods(run).kneePad ? Math.max(0, (rs.groove || 0) - 1) : 0; run.stats.pstreak = 0;
+      rs.groove = GK.equipMods(run).kneePad ? Math.max(0, (rs.groove || 0) - 1) : 0; run.groove = rs.groove; run.stats.pstreak = 0;
       if (rs.snakeOil) { run.money -= 2; notes.push({ t: 'pay', text: 'Snake Oil: -$2 for missing the PERFECT zone' }); }
     }
     if (rs.bloodMoney && rec.pins) { run.money += rec.pins; notes.push({ t: 'pay', text: 'Blood Money: +$' + rec.pins }); }
