@@ -135,9 +135,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       boss, tilts: [], king: null, kingTotal: 0
     };
     const eq = GK.equipMods(run);
-    // Groove lasts the whole run: it only resets when you miss the PERFECT zone. The Headband
-    // and Season Ticket add +3 each at the start of every round; the Golden Turntable makes sure
-    // you start with at least 2.
+    // Groove lasts the whole run: it only resets when you miss the PERFECT zone. The Headband,
+    // Season Ticket and Golden Turntable each add +3 at the start of every round.
     rs.groove = Math.max(run.groove || 0, fl.grooveStart || 0) + (eq.groove || 0) + (fl.grooveAdd || 0) + (run.grooveNext || 0);
     run.groove = rs.groove; run.grooveNext = 0;
     if (run.oilNext) { rs.oil = run.oilNext; run.oilNext = null; }

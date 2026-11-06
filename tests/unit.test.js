@@ -822,8 +822,8 @@ test('Groove carries across the whole run and only resets on a miss', () => {
   run.members = ['season_ticket'];
   GK.advance(run); GK.startRound(run);
   assert.strictEqual(run.rs.groove, 12, 'Headband + Season Ticket: +6 a round');
-  // the Golden Turntable is a floor of 2
+  // the Golden Turntable adds +3 every round too
   const t = GK.newRun({ seed: 22 }); t.trophies = [{ id: 'turntable' }];
-  GK.startRound(t); assert.strictEqual(t.rs.groove, 2);
-  t.groove = 5; GK.advance(t); GK.startRound(t); assert.strictEqual(t.rs.groove, 5);
+  GK.startRound(t); assert.strictEqual(t.rs.groove, 3);
+  t.groove = 5; GK.advance(t); GK.startRound(t); assert.strictEqual(t.rs.groove, 8);
 });
