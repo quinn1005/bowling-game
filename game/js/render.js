@@ -1063,7 +1063,17 @@ var GK = globalThis.GK = globalThis.GK || {};
       this.party = !!st.party;
       this.gears = !!(st.lane && st.lane.gears);
       const sx = this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0, sy = this.shake > 0 ? (Math.random() - 0.5) * this.shake : 0;
-      cx.setTransform(RS, 0, 0, RS, sx * RS, sy * RS);
+      // Camera follow: while the ball rolls, ease in on it (up to 20%), never past the edges of
+      // the lane art; ease back out afterwards.
+      const camB = st.cam && sim ? sim.balls.find(b => b.kind === 'main' && !b.gone && !(b.delay > 0)) : null;
+      const cam = this.cam || (this.cam = { z: 1, x: W / 2, y: H * 0.55, t: time });
+      const cdt = GK.clamp(time - cam.t, 0, 0.1); cam.t = time;
+      let fx = W / 2, fy = H * 0.55, tz = 1;
+      if (camB) { const q = P(camB.x, camB.z); fx = q.x; fy = q.y; tz = 1 + 0.2 * GK.clamp(camB.z / C.ZH, 0, 1); }
+      const ease = Math.min(1, cdt * 3.5);
+      cam.z += (tz - cam.z) * ease; cam.x += (fx - cam.x) * ease; cam.y += (fy - cam.y) * ease;
+      const tx = GK.clamp(W / 2 - cam.x * cam.z, W - W * cam.z, 0), ty = GK.clamp(H * 0.55 - cam.y * cam.z, H - H * cam.z, 0);
+      cx.setTransform(RS * cam.z, 0, 0, RS * cam.z, (tx + sx) * RS, (ty + sy) * RS);
       cx.imageSmoothingEnabled = true;
       cx.drawImage(this.bg, 0, 0, W, H);
       this.drawLaneFinish(); // under the oil, so the oil keeps its true colours

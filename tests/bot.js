@@ -60,7 +60,7 @@ function shopPolicy(run) {
 
 function playRun(seed, verbose, skill = 'good', opts = {}) {
   const sk = SKILL[skill] || SKILL.good;
-  const run = GK.newRun(Object.assign({ seed, bag: 'classic' }, opts));
+  const run = opts.rush ? GK.newRushRun(seed) : GK.newRun(Object.assign({ seed, bag: 'classic' }, opts));
   const rng = GK.makeRng(seed ^ 0xabc);
   let frames = 0, scoreSum = 0, perfects = 0, throws = 0;
   while (!run.over && !run.won) {

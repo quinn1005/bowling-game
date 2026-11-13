@@ -16,6 +16,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (rs && rs.boss === 'wind') L.wind = true;
     if (rs && rs.boss === 'fog') { L.dark = true; L.fog = true; }
     if (rs && rs.cur && (rs.cur.laneEvent === 'flicker' || rs.cur.laneEvent === 'blackout')) L.dark = true;
+    if (GK.activeCurses && GK.activeCurses(run).includes('dark')) L.dark = true;
     return L;
   };
 
@@ -370,6 +371,8 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (broke.length) { run.charms = run.charms.filter(c => !c.broken); notes.push({ t: 'shatter', text: 'Your Glass Cannon shattered!' }); }
     st.flawless = res.ctx.perfects > 0 && res.ctx.misses === 0 ? (st.flawless || 0) + 1 : 0;
     rs.bestFrame = Math.max(rs.bestFrame || 0, res.score);
+    GK.logFrame(run, res.score);
+    GK.progressCurses(run, res.ctx).forEach(t => notes.push({ t: 'evolve', idx: -1, text: t }));
     if (cur.rolls.some(r => r.down.some(d => d.type === 'jackpot'))) { const sp = GK.jackpotSpin(run); notes.push({ t: 'jackpot', reels: sp.reels, text: sp.text }); }
     if (run.dare && rs.frameIdx === 0 && !run.practice) { const d = GK.settleDare(run, kind); if (d) notes.push(d); }
     res.breaks.forEach(n => { if (run.rack[n - 1] === 'glass') { run.rack[n - 1] = 'std'; notes.push({ t: 'break', text: 'Glass pin ' + n + ' broke' }); } });

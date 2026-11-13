@@ -147,7 +147,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   GK.isUnlocked = function (kind, id) {
     const key = kind + ':' + id;
     if (!GK.LOCKED.has(key)) return true;
-    if (!GK._meta) return true;
+    if (!GK._meta || GK._allUnlocked) return true;
     return GK.unlockedFor(GK._meta).has(key);
   };
   // Check an event against every unfinished feat. Returns the feats just completed.

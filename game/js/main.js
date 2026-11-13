@@ -70,20 +70,33 @@
     return where + ' · ' + GK.money(s.money) + (s.daily ? ' · daily' : '');
   }
   const urlSeed = (() => { try { return new URLSearchParams(location.search).get('seed'); } catch (e) { return null; } })();
-  const newRunScreen = () => { UI.bagSelect(meta, o => startRun(o), title); if (urlSeed && $('seedIn')) $('seedIn').value = urlSeed; };
+  const urlGhost = (() => { try { const g = new URLSearchParams(location.search).get('g'); return g ? GK.decodeGhost(g) : null; } catch (e) { return null; } })();
+  const newRunScreen = () => {
+    UI.bagSelect(meta, o => {
+      // race the friend's ghost when you play their seed
+      if (urlGhost && urlSeed && o.seed === GK.parseSeed(urlSeed)) o.ghost = urlGhost;
+      startRun(o);
+    }, title);
+    if (urlSeed && $('seedIn')) $('seedIn').value = urlSeed;
+  };
   GK.challengeText = function (run, won) {
-    const code = GK.seedCode(run.seed), url = location.origin + location.pathname + '?seed=' + code;
+    const code = GK.seedCode(run.seed), g = GK.encodeGhost(run.flog);
+    const url = location.origin + location.pathname + '?seed=' + code + (g && g.length < 1800 ? '&g=' + g : '');
     const reached = won ? 'beat the Gutter King' : 'reached ' + (GK.isChamp(run) ? 'the Championship' : 'Alley ' + (run.alley + 1) + ', ' + GK.roundName(run));
-    return 'I ' + reached + ' in Gutter Kings with a best frame of ' + fmt(run.stats.bestFrame) + '. Same lanes, same shops: seed ' + code + '. Beat me: ' + url;
+    return 'I ' + reached + ' in Gutter Kings with a best frame of ' + fmt(run.stats.bestFrame) + '. Same lanes, same shops: seed ' + code + '. Race my ghost: ' + url;
   };
   function title() {
     phase = 'menu'; run = null; sim = null; replay = null; bonus = null; coach(null);
+    GK._allUnlocked = false;
     GK.music.stop();
     UI.hideModal();
     UI.title(meta, saveDesc(GK.load()), {
       continue: () => { const s = GK.load(); if (s) resume(s); },
       new: newRunScreen,
       daily: () => startRun({ bag: 'classic', seed: GK.dailySeed(), daily: true }),
+      rush: () => startRush(),
+      h2h: () => UI.h2hPick(meta, opp => startH2H(opp), title),
+      cards: () => UI.cards(meta),
       how: () => UI.how(),
       collection: () => UI.collection(meta),
       locker: () => UI.locker(meta, () => { GK.saveMeta(meta); R.setCosmetics(GK.cosmeticsOn(meta)); }),
@@ -92,9 +105,78 @@
       sound: el => { sfx.init(); sfx.setMuted(!sfx.muted); meta.muted = sfx.muted; GK.saveMeta(meta); el.textContent = sfx.muted ? 'Sound off' : 'Sound on'; }
     });
   }
+  // Daily Boss Rush: the day's seed fixes the bosses, the starting build and the shops.
+  GK.rushSeed = () => (GK.dailySeed() ^ 0x5eed5) >>> 0;
+  function startRush() {
+    sfx.init();
+    run = GK.newRushRun(GK.rushSeed());
+    GK._allUnlocked = true;
+    meta.runs++; GK.saveMeta(meta);
+    sel = 0; bestReplay = null; highlights = []; lastXP = null;
+    toIntro();
+  }
+  // Head to Head against one of the Regulars.
+  function startH2H(opp) {
+    sfx.init();
+    run = GK.newH2HRun(opp, (Date.now() ^ (Math.random() * 1e9)) >>> 0);
+    GK._allUnlocked = false;
+    sel = 0; bestReplay = null; highlights = []; lastXP = null;
+    h2hDraft();
+  }
+  // The draft before each Head to Head round: you and the opponent take turns picking from one pool.
+  function h2hDraft() {
+    const H = run.h2h, O = GK.H2H[H.opp], tk = ++busyToken;
+    H.round++;
+    const d = GK.draftPool(run);
+    sim = null; setPhase('menu'); themeRound();
+    const swap = (i, r) => {
+      const opts = r.need === 'charm' ? run.charms.map((c, j) => ({ id: String(j), name: GK.charmName(c), desc: GK.charmDesc(c) }))
+        : r.need === 'ball' ? run.bag.map((b, j) => ({ id: String(j), name: GK.BALLS[b.type].full, desc: GK.BALLS[b.type].desc }))
+        : run.cons.map((id, j) => ({ id: String(j), name: GK.CONS[id].name, desc: GK.CONS[id].desc }));
+      UI.choicePicker('Swap one out', r.msg, opts, v => { UI.hideModal(); GK.takeDraft(run, d, i, 'me', +v); sfx.coin(); step(); }, UI.hideModal);
+    };
+    const step = () => {
+      if (tk !== busyToken) return;
+      if (d.turn === 'done') return h2hDraftDone(tk);
+      UI.draft(run, d, i => {
+        if (d.turn !== 'me') return;
+        const r = GK.takeDraft(run, d, i, 'me');
+        if (!r.ok) { if (r.need) swap(i, r); return; }
+        sfx.coin(); step();
+      });
+      if (d.turn === 'ai') setTimeout(() => {
+        if (tk !== busyToken) return;
+        const i = GK.aiPick(run, d), it = d.items[i];
+        GK.takeDraft(run, d, i, 'ai');
+        UI.toast(O.name + ' takes ' + UI.info(it.kind, it.id).name, 1600);
+        step();
+      }, 1200);
+    };
+    step();
+  }
+  function h2hDraftDone(tk) {
+    const O = GK.H2H[run.h2h.opp], used = GK.aiUseItems(run);
+    GK.h2hRoundStart(run);
+    if (used.length) UI.toast(O.name + ' uses ' + used.join(', '), 2600);
+    setTimeout(() => tk === busyToken && toIntro(), used.length ? 900 : 0);
+  }
+  // After your frames in a Head to Head round: the opponent finishes theirs, then the next draft.
+  async function h2hRoundEnd() {
+    const H = run.h2h, A = H.ai, O = GK.H2H[H.opp], tk = busyToken, r0 = run;
+    while (A.frameIdx < A.framesMax) { await opponentFrame(); if (tk !== busyToken || run !== r0) return; }
+    H.myTotal += run.rs.total; H.myRounds.push(run.rs.total);
+    if (H.round >= GK.H2H_ROUNDS) return h2hEnd();
+    setPhase('menu');
+    UI.banner('ROUND ' + H.round + ' OF ' + GK.H2H_ROUNDS + ' DONE', 'You ' + fmt(H.myTotal) + ' · ' + O.name + ' ' + fmt(H.total), 2000);
+    await sleep(2100);
+    if (tk !== busyToken || run !== r0) return;
+    UI.hideBanner(); h2hDraft();
+  }
   function startRun(o) {
     sfx.init();
+    GK._allUnlocked = false;
     run = GK.newRun(o);
+    if (o.ghost) run.ghost = o.ghost;
     meta.runs++; GK.saveMeta(meta);
     sel = 0; bestReplay = null; highlights = []; lastXP = null;
     toIntro();
@@ -102,6 +184,7 @@
   function resume(s) {
     sfx.init();
     run = s; sel = 0; bestReplay = null; highlights = []; lastXP = null;
+    GK._allUnlocked = !!run.rush;
     if (run.phase === 'shop' && run.shop) { themeRound(); showShop(); return; }
     if (run.phase === 'shop' && run.event) { themeRound(); showEvent(run.event); return; }
     if (run.phase === 'round' && run.rs && run.rs.cur) { themeRound(); UI.hideLayer(); resumeFrame(); return; }
@@ -119,7 +202,7 @@
     sim = null; resetTally(); setPhase('intro');
     UI.shot(GK.roundName(run) + ' · target ' + fmt(run.rs.target));
     if (GK.isBoss(run)) sfx.boss();
-    UI.intro(run, () => { UI.hideLayer(); beginFrame(); UI.banner(GK.roundName(run).toUpperCase(), 'Target ' + fmt(run.rs.target), 1800); },
+    UI.intro(run, () => { UI.hideLayer(); beginFrame(); UI.banner(run.h2h ? 'HEAD TO HEAD' : GK.roundName(run).toUpperCase(), run.h2h ? 'vs ' + GK.H2H[run.h2h.opp].name + ' · round ' + run.h2h.round + ' of ' + GK.H2H_ROUNDS : 'Target ' + fmt(run.rs.target), 1800); },
       GK.canSkip(run) ? () => { const r = GK.skipRound(run); sfx.coin(); UI.toast(r.msg, 3200); GK.save(run); feats({ t: 'shop', run }); toIntro(); } : null);
   }
 
@@ -195,6 +278,7 @@
     sfx.init();
     const b = run.bag[sel];
     if (b.type === 'snake' && !prm.path) prm.path = GK.snakePath(prm.aimX, prm.aim, laneOf().lhw || C.LHW);
+    sfx.rollStyle(GK.rollSound(b.type));
     if (bonus) GK.bonusLaunch(run, sim, sel, prm);
     else { GK.launch(run, sim, sel, prm); GK.save(run); }
     curPath = [];
@@ -288,17 +372,41 @@
     };
   }
   // Plays a recorded roll at 40% speed. Resolves when done or when the player taps to skip.
-  function playReplay(rec, label) {
+  function playReplay(rec, label, opt = {}) {
     if (!rec || !rec.frames || rec.frames.length < 4) return Promise.resolve();
     const fr = rec.frames, t0 = fr[0].time;
     let start = 0;
     const firstHit = fr.findIndex(f => f.balls.some(b => !b.gone && b.z > GK.C.ZH - 30));
-    if (firstHit > 0) { const tt = fr[firstHit].time - 0.45; start = Math.max(0, fr.findIndex(f => f.time >= tt)); }
+    if (firstHit > 0 && !opt.fromStart) { const tt = fr[firstHit].time - 0.45; start = Math.max(0, fr.findIndex(f => f.time >= tt)); }
     return new Promise(resolve => {
-      replay = { rec, frames: fr, i: start, t: fr[start].time, speed: 0.4, done: resolve };
+      replay = { rec, frames: fr, i: start, t: fr[start].time, speed: opt.speed || 0.4, done: resolve };
       UI.banner(label || 'REPLAY', 'tap to skip');
       setPhase('replay');
     });
+  }
+  // The opponent's frame in Head to Head: simulated with their ball and style, then played back.
+  async function opponentFrame() {
+    const opp = run.h2h.opp, O = GK.H2H[opp], A = run.h2h.ai, i = A.frameIdx, key = run.h2h.round + ':' + i;
+    const s2 = new GK.Sim({ lane: laneOf(), rng: GK.stream(run.seed, 'opp:' + key), rack: GK.padRack(), wear: GK.newWear() });
+    s2.rememberLayout();
+    const rng = GK.stream(run.seed, 'oppthrow:' + key), frames = [], rolls = [];
+    let split = false;
+    for (let ri = 0; ri < 2; ri++) {
+      s2.launch({ type: GK.h2hBall(opp, ri, run) }, GK.h2hThrow(opp, s2, rng, ri), {});
+      let n = 0;
+      while (s2.rolling && n < 240 * 12) { s2.step(GK.DT); if (n % 4 === 0 && frames.length < 900) frames.push(snapSim(s2)); n++; }
+      const rec = s2.summarize(); rolls.push(rec);
+      const st = s2.standing();
+      if (!st.length) break;
+      if (ri === 0) { split = GK.isSplitLeave(st, s2.lhw); s2.sweep(); if (frames.length < 900) frames.push(snapSim(s2)); }
+    }
+    const r = GK.h2hScore(run, rolls, !s2.standing().length, split);
+    UI.hud(run);
+    if (meta.replays !== false) await playReplay({ frames, preview: { type: O.ball, ed: null } }, O.name.toUpperCase() + '\'S FRAME ' + (i + 1) + '/' + A.framesMax, { speed: 1, fromStart: true });
+    if (!run || !run.h2h) return;
+    if (GK.isStrikeKind(r.kind)) { sfx.strike(); cheer('cheer'); } else if (GK.isSpareKind(r.kind)) sfx.spare();
+    UI.banner(O.name + ': ' + GK.SHOTS[r.kind].name.toUpperCase(), fmt(r.score) + ' · ' + fmt(run.h2h.total) + ' vs your ' + fmt(run.h2h.myTotal + run.rs.total), 1200);
+    await sleep(1300);
   }
   async function playHighlights() {
     const list = highlights.slice().sort((a, b) => a.score - b.score);
@@ -436,8 +544,9 @@
     feats({ t: 'frame', kind, score: res.score, ctx: res.ctx, leave710: res.ctx.leave710, breaks: res.breaks, run });
     if (kind === 'turkey' || kind === 'double') cheer('cheer'); else if (GK.isSpareKind(kind)) cheer('clap'); else if (kind === 'gutter') cheer('groan');
     for (let i = 1; i <= 8; i++) { $('score').firstChild.textContent = fmt(start + res.score * i / 8); await wait(30); if (!live()) return; }
-    if (res.score > meta.bestFrame) { meta.bestFrame = res.score; GK.saveMeta(meta); }
+    if (res.score > meta.bestFrame && !run.h2h) { meta.bestFrame = res.score; GK.saveMeta(meta); }
     refresh();
+    if (run.h2h && run.h2h.ai.frameIdx < run.h2h.ai.framesMax) { await opponentFrame(); if (!live()) return; }
     for (const nt of out.notes) {
       UI.toast(nt.text, nt.t === 'evolve' ? 2600 : 1800);
       if (nt.t === 'evolve') { sfx.levelUp(); UI.fireCharm(nt.idx, 'EVOLVED!', '#ffd447'); R.confetti(25); }
@@ -453,7 +562,7 @@
 
   // Check feats against an event; announce and save anything newly unlocked.
   function feats(ev) {
-    if (run && run.practice) return;
+    if (run && (run.practice || run.h2h)) return;
     const got = GK.checkFeats(meta, ev);
     if (!got.length) return;
     GK.saveMeta(meta);
@@ -463,8 +572,28 @@
     }, i * 2700));
   }
 
+  function h2hEnd() {
+    const H = run.h2h, O = GK.H2H[H.opp], me = H.myTotal, won = me > H.total;
+    meta.h2h = meta.h2h || {};
+    const rec = meta.h2h[H.opp] = meta.h2h[H.opp] || { w: 0, l: 0 };
+    if (won) rec.w++; else rec.l++;
+    const xp = GK.addXP(meta, won ? 60 : 20);
+    GK.saveMeta(meta); GK.clearSave();
+    if (won) { sfx.win(); R.confetti(60); } else sfx.lose();
+    setPhase('menu');
+    const tk = busyToken, r0 = run;
+    setTimeout(() => tk === busyToken && UI.h2hEnd(r0, meta, xp, { again: () => startH2H(H.opp), title }), 1100);
+  }
   function bumpMeta() {
-    if (run && run.practice) return;
+    if (run && (run.practice || run.h2h)) return;
+    if (run && run.rush) {
+      const d = new Date(), date = d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+      const depth = GK.rushDepth(run);
+      meta.rush = meta.rush || {};
+      if (!meta.rush[date] || depth > meta.rush[date].depth || (depth === meta.rush[date].depth && run.stats.score > meta.rush[date].score)) meta.rush[date] = { depth, score: run.stats.score };
+      GK.saveMeta(meta);
+      return;
+    }
     const reached = GK.isChamp(run) ? 9 : run.alley + 1;
     meta.bestAlley = Math.max(meta.bestAlley, run.won ? 9 : reached);
     if (run.daily) {
@@ -541,6 +670,7 @@
     const md = GK.checkMedal(meta, run);
     if (md) { GK.saveMeta(meta); setTimeout(() => { UI.toast('Endless Medal #' + md.medals + '! +' + md.xp.gained + ' XP', 2800); sfx.levelUp(); }, 1200); }
     (run.betNotes || []).forEach((t, i) => setTimeout(() => { UI.toast(t, 2200); sfx.coin(); }, 900 + i * 900));
+    (run.curseNotes || []).forEach((t, i) => setTimeout(() => { UI.toast(t, 2400); sfx.levelUp(); }, 1500 + i * 900));
     bumpMeta();
     GK.openShop(run);
     GK.applyShopTags(run);
@@ -557,6 +687,7 @@
     }, choices.length ? 'Claim your trophy' : null), 700);
   }
   function roundLost() {
+    if (run.h2h) return h2hRoundEnd();
     sfx.lose();
     run.over = true; bumpMeta(); GK.clearSave();
     if (GK.isEndless(run)) {
@@ -593,7 +724,7 @@
       charm: i => {
         const c = run.charms[i]; GK._run = run;
         UI.detail(UI.info('charm', c.id, c.ed, c), [
-          { label: 'Sell for $' + GK.charmSell(c), fn: () => { GK.sellCharm(run, i); sfx.coin(); UI.hideModal(); GK.save(run); showEvent(ev); }, cls: 'danger' },
+          { label: c.curse ? 'Cursed: can\'t sell' : 'Sell for $' + GK.charmSell(c), disabled: !!c.curse, fn: () => { GK.sellCharm(run, i); sfx.coin(); UI.hideModal(); GK.save(run); showEvent(ev); }, cls: 'danger' },
           { label: 'Close', fn: UI.hideModal, cls: 'alt' }
         ]);
       },
@@ -662,7 +793,7 @@
       charm: i => {
         const c = run.charms[i];
         UI.detail(UI.info('charm', c.id, c.ed, c), [
-          { label: 'Sell for $' + GK.charmSell(c), fn: () => { GK.sellCharm(run, i); sfx.coin(); UI.hideModal(); showShop(); }, cls: 'danger' },
+          { label: c.curse ? 'Cursed: can\'t sell' : 'Sell for $' + GK.charmSell(c), disabled: !!c.curse, fn: () => { GK.sellCharm(run, i); sfx.coin(); UI.hideModal(); showShop(); }, cls: 'danger' },
           { label: '← Move left', fn: () => { GK.moveCharm(run, i, -1); UI.hideModal(); showShop(); }, cls: 'alt', disabled: i === 0 },
           { label: 'Move right →', fn: () => { GK.moveCharm(run, i, 1); UI.hideModal(); showShop(); }, cls: 'alt', disabled: i === run.charms.length - 1 },
           { label: 'Close', fn: UI.hideModal, cls: 'alt' }
@@ -736,6 +867,8 @@
       replaysOn: () => meta.replays !== false,
       music: el => { meta.music = meta.music === false; GK.saveMeta(meta); GK.music.setOn(meta.music !== false); if (meta.music !== false) playMusic(); el.textContent = meta.music === false ? 'Music: off' : 'Music: on'; },
       musicOn: () => meta.music !== false,
+      cam: el => { meta.camFollow = meta.camFollow === false; GK.saveMeta(meta); el.textContent = meta.camFollow === false ? 'Camera: still' : 'Camera: follow'; },
+      camOn: () => meta.camFollow !== false,
       haptics: el => { meta.haptics = meta.haptics === false; GK.saveMeta(meta); GK.haptic.setOn(meta.haptics !== false); el.textContent = meta.haptics === false ? 'Vibration: off' : 'Vibration: on'; },
       hapticsOn: () => meta.haptics !== false,
       hints: el => { meta.hintsOff = !meta.hintsOff; if (!meta.hintsOff) meta.hints = {}; GK.saveMeta(meta); el.textContent = meta.hintsOff ? 'Hints: off' : 'Hints: on'; },
@@ -903,6 +1036,7 @@
   GK.debug.throw = prm => throwBall(Object.assign({ aimX, aim: 0, spin: 0, speed: 340 }, prm));
   GK.debug.skipReplay = () => endReplay();
   GK.debug.select = i => { sel = i; refresh(); };
+  GK.debug.title = () => { busyToken++; UI.hideModal(); title(); };
   GK.debug.showShop = () => { UI.hideModal(); showShop(); };
   GK.debug.setCosmetics = c => R.setCosmetics(c);
   GK.debug.pickBall = i => pickBall(i);
@@ -949,6 +1083,7 @@
         acc += simDt; let n = 0;
         while (acc >= GK.DT && n < 40) { sim.step(GK.DT); acc -= GK.DT; n++; if (!sim.rolling) break; }
         sfx.roll(GK.clamp((sim.fastest || 0) / 450, 0, 1));
+        { const mb0 = sim.balls.find(b => b.kind === 'main' && !b.gone && !(b.delay > 0)); if (mb0 && !mb0.gutter) sfx.rollTick(GK.rollSound(mb0.type), Math.hypot(mb0.vx, mb0.vz), realDt); }
         const lc = run.rs.cur ? GK.liveChips(run.rs.cur.rolls, sim) : 0, el = $('chips');
         if (el.textContent !== fmt(lc)) { el.textContent = fmt(lc); UI.bump($('chipsBox')); }
         if (recFrames.length < 900) recFrames.push(snapSim(sim));
@@ -1000,6 +1135,7 @@
       phase: rp ? 'replay' : phase, aimX, aimAng, step, time: now / 1000,
       boards: !rp && phase === 'aim' && step === 'pos' && run && GK.equipMods(run).boards,
       party: !rp && !bonus && rs && rs.cur && rs.cur.laneEvent === 'party',
+      cam: meta.camFollow !== false && (phase === 'rolling' || !!rp),
       lane: !rp && run ? laneOf() : null,
       hookPreview: !rp && phase === 'aim' && step === 'hook' && run && GK.equipMods(run).preview ? dialNow() : null,
       clearOil: !!(run && GK.equipMods(run).clearOil),

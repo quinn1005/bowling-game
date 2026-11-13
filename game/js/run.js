@@ -34,7 +34,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (!GK.isEndless(run)) return a;
     return Object.assign({}, a, { name: 'Endless ' + (run.alley - GK.ALLEY_COUNT) + ': ' + a.name });
   };
-  GK.roundName = run => GK.isChamp(run) ? 'Championship' : GK.ROUND_NAMES[run.round];
+  GK.roundName = run => run.h2h ? 'Round ' + run.h2h.round + ' of ' + GK.H2H_ROUNDS : GK.isChamp(run) ? 'Championship' : GK.ROUND_NAMES[run.round];
   GK.isBoss = run => GK.isChamp(run) || run.round === 2;
   // One boss per alley is picked when the run starts.
   GK.pickBosses = function (seed) {
@@ -50,11 +50,12 @@ var GK = globalThis.GK = globalThis.GK || {};
   GK.CHAMP_SCALE = 2.5;
   GK.roundTarget = function (run) {
     const ru = GK.rules(run);
-    if (GK.isChamp(run)) return Math.round(GK.CHAMPIONSHIP.target * GK.CHAMP_SCALE * run.nextTargetMul * ru.target * ru.bossTarget / 50) * 50;
+    if (GK.isChamp(run)) return Math.round(GK.CHAMPIONSHIP.target * GK.CHAMP_SCALE * run.nextTargetMul * ru.target * ru.bossTarget * (run.rush ? GK.RUSH_TARGET : 1) / 50) * 50;
     let t;
     if (GK.isEndless(run)) { const E = GK.ENDLESS_TARGET || { base: 0.6, growth: 1.7 }; t = GK.CHAMPIONSHIP.target * E.base * Math.pow(E.growth, run.alley - GK.ALLEY_COUNT - 1) * GK.ROUND_MULT[run.round]; }
     else t = GK.ALLEYS[run.alley].base * GK.ROUND_MULT[run.round] * GK.ALLEY_SCALE[run.alley];
     t *= run.nextTargetMul * ru.target * (run.round === 2 ? ru.bossTarget : 1);
+    if (run.rush) t *= GK.RUSH_TARGET;
     return Math.round(t / 50) * 50;
   };
 
@@ -84,6 +85,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       }
     });
     Object.values(run.equip || {}).forEach(id => { const e = GK.EQUIP[id]; if (e && e.reracks) f.reracks += e.reracks; });
+    if (GK.activeCurses && GK.activeCurses(run).includes('chains')) f.reracks -= 99;
     const m = run.members || [];
     if (m.includes('reservation')) f.frames++;
     if (m.includes('oil_pass')) f.reracks++;
@@ -111,6 +113,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     });
     const ru = GK.rules(run);
     m.bar *= ru.bar; m.dial *= ru.bar; m.zone *= ru.zone; m.speed *= ru.speed;
+    if (GK.activeCurses && GK.activeCurses(run).includes('heavy')) m.zone *= 0.75;
     return m;
   };
   GK.maxBag = run => run.maxBag + (GK.flags(run).bagPlus || 0);
@@ -128,10 +131,11 @@ var GK = globalThis.GK = globalThis.GK || {};
     const boss = GK.bossId(run);
     const stolen = (boss === 'king' || boss === 'champion') ? GK.mostValuableCharm(run) : -1;
     const fl = GK.flags(run, stolen);
-    const framesMax = GK.C.FRAMES + fl.frames;
+    const framesMax = run.h2h ? GK.H2H_FRAMES : GK.C.FRAMES + fl.frames;
+    run.roundNo = (run.roundNo || 0) + 1;
     const rs = {
       target: GK.roundTarget(run), total: 0, frames: [], frameIdx: 0, streak: 0, groove: 0, wear: GK.newWear(), stuck: null,
-      framesMax, reracks: GK.C.RERACKS + fl.reracks, stolen, loadedNext: false,
+      framesMax, reracks: Math.max(0, GK.C.RERACKS + fl.reracks), stolen, loadedNext: false,
       boss, tilts: [], king: null, kingTotal: 0
     };
     const eq = GK.equipMods(run);
@@ -145,6 +149,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (run.loadedPending) { rs.loadedNext = true; run.loadedPending = false; }
     const rng = GK.stream(run.seed, 'round:' + run.alley + ':' + run.round);
     if (boss === 'ringmaster' || boss === 'strongman') for (let i = 0; i < 12; i++) rs.tilts.push((rng() < 0.5 ? -1 : 1) * (12 + rng() * 12));
+    if (run.h2h) { rs.target = Infinity; rs.boss = null; rs.stolen = -1; }
     rs.reracksStart = rs.reracks;
     const lane = GK.alleyDef(run).lane || {};
     if (lane.holeCount) rs.holes = GK.makeHoles(run, lane.holeCount, 'start');
@@ -208,8 +213,9 @@ var GK = globalThis.GK = globalThis.GK || {};
     run.charms = run.charms.filter(c => c.expires == null || --c.expires > 0);
     if (wasBoss && run.fixed === oldAlley) run.fixed = null;
     if (GK.isChamp(run) && !run.endless) { run.won = true; run.phase = 'won'; return 'won'; }
-    run.round++;
-    if (run.round > 2) { run.round = 0; run.alley++; }
+    run.curseNotes = GK.progressCurses ? GK.progressCurses(run, null, true) : [];
+    if (run.rush) { run.alley++; run.round = 2; }
+    else { run.round++; if (run.round > 2) { run.round = 0; run.alley++; } }
     run.betNotes = GK.settleBets ? GK.settleBets(run, wasBoss, oldAlley) : [];
     if (run.alley !== oldAlley && run.fakeIdSlot) { run.maxCharms++; run.fakeIdSlot = false; run.bossOverride = null; }
     run.phase = 'shop';
@@ -232,6 +238,8 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (s.includes('{x}')) s = s.replace('{x}', d.show ? d.show(c) : '1');
     const E = GK.EVOLVE && GK.EVOLVE[c.id];
     if (c.corrupt) s = 'CORRUPTED: triggers twice every frame, but costs $1 a frame and sells for nothing. ' + s;
+    if (c.curse) s = GK.curseDesc(c) + s;
+    else if (c.blessed) s = 'Curse lifted: triggers twice every frame. ' + s;
     if (E && c.evolved) s = 'EVOLVED from ' + GK.CHARMS[c.id].name + '. ' + s;
     else if (E) s += ' Evolves into ' + E.name + ': ' + E.need + ' (' + Math.min(E.n, c.evo || 0) + '/' + E.n + ').';
     return s;
@@ -294,6 +302,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     for (let i = 0; i < 2 + (GK.flags(run).shopExtra || 0); i++) { const g = pickGood(run, rng, gx); gx.push(g.id); shop.items.push(g); }
     // endless shops sometimes sell a corrupted charm
     if (GK.isEndless(run)) shop.items.forEach(it => { if (it.kind === 'charm' && rng() < GK.CORRUPT_CHANCE) { it.corrupt = true; it.price = Math.max(1, Math.round(it.price * 0.75)); } });
+    if (run.alley > 0 || run.rush) shop.items.forEach(it => { if (it.kind === 'charm' && !it.corrupt && GK.CURSES && rng() < GK.CURSE_CHANCE) it.curse = rng.pick(Object.keys(GK.CURSES)); });
     // One membership offer per alley; it stays until bought.
     if (run.memberAlley !== run.alley) {
       const pool = Object.keys(GK.MEMBERSHIPS).filter(k => !run.members.includes(k));
@@ -339,6 +348,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (it.kind === 'charm') {
       if (run.charms.length >= run.maxCharms) return { ok: false, msg: 'Charm slots full. Sell one first.' };
       const inst = GK.charmInst(it.id, it.ed); if (it.corrupt) inst.corrupt = true;
+      if (it.curse) inst.curse = { id: it.curse, have: 0 };
       run.charms.push(inst);
     } else if (it.kind === 'ball') {
       if (run.bag.length >= GK.maxBag(run)) {
@@ -364,7 +374,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (id === 'pro_bag') run.maxBag++;
     return { ok: true };
   };
-  GK.sellCharm = function (run, i) { const c = run.charms[i]; if (!c) return; GK._run = run; run.money += GK.charmSell(c); run.charms.splice(i, 1); };
+  GK.sellCharm = function (run, i) { const c = run.charms[i]; if (!c || c.curse) return; GK._run = run; run.money += GK.charmSell(c); run.charms.splice(i, 1); };
   GK.sellCons = function (run, i) { const id = run.cons[i]; if (!id) return; GK._run = run; run.money += GK.consSell(id); run.cons.splice(i, 1); };
   GK.sellBall = function (run, i) {
     if (run.bag.length <= 1) return { ok: false, msg: 'You need at least one ball.' };

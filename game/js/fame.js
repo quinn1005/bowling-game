@@ -192,4 +192,51 @@ var GK = globalThis.GK = globalThis.GK || {};
     for (let i = 0; i < 2; i++) { ctx.fillStyle = 'rgba(0,0,0,' + (0.18 - i * 0.08) + ')'; ctx.fillRect(i, i, W - 2 * i, 1); ctx.fillRect(i, H - 1 - i, W - 2 * i, 1); ctx.fillRect(i, i, 1, H - 2 * i); ctx.fillRect(W - 1 - i, i, 1, H - 2 * i); }
   };
   GK.PORTRAIT = { W, H };
+
+  // ---------- achievement cards ----------
+  // One 48×64 pixel-art card per feat. Its colour and icon come from what the feat unlocks.
+  GK.CARD = { W: 48, H: 64 };
+  GK.drawCard = function (ctx, f, earned) {
+    const CW = 48, CH = 64;
+    const r = (x, y, w, h, c) => { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); };
+    const p = (x, y, c) => r(x, y, 1, 1, c);
+    const disc = (cx, cy, rad, c) => { for (let y = -rad; y <= rad; y++) for (let x = -rad; x <= rad; x++) if (x * x + y * y <= rad * rad + rad * 0.6) p(cx + x, cy + y, c); };
+    ctx.clearRect(0, 0, CW, CH);
+    if (!earned) {
+      // card back: a dark diamond pattern with a pin in the middle
+      r(0, 0, CW, CH, '#2a1e34'); r(2, 2, CW - 4, CH - 4, '#1a1220');
+      for (let y = 4; y < CH - 4; y += 6) for (let x = 4 + (y / 6 % 2) * 3; x < CW - 4; x += 6) p(x, y, '#3a2a4a');
+      r(21, 22, 6, 4, '#4a3a5a'); r(22, 20, 4, 2, '#4a3a5a'); r(20, 26, 8, 12, '#4a3a5a'); r(20, 27, 8, 1, '#6a4a6a');
+      r(20, 44, 8, 1, '#4a3a5a'); r(21, 45, 6, 1, '#4a3a5a');
+      return;
+    }
+    const kind = f.secret ? 'secret' : (f.unlocks[0] || 'charm:x').split(':')[0];
+    const col = { ball: ['#2a5ad0', '#163a8a'], charm: ['#8a3ad0', '#521e80'], equip: ['#d07a2a', '#8a4a14'], cons: ['#2a9a6a', '#14604a'], league: ['#c8a020', '#806010'], secret: ['#d03a8a', '#801a54'] }[kind] || ['#6a6a7a', '#3a3a4a'];
+    // frame and background
+    r(0, 0, CW, CH, '#f2c94c'); r(1, 1, CW - 2, CH - 2, '#c8932a'); r(2, 2, CW - 4, CH - 4, col[1]);
+    for (let y = 2; y < CH - 2; y++) for (let x = 2; x < CW - 2; x++) if ((x + y) % 7 === 0) p(x, y, col[0]);
+    disc(24, 26, 15, col[0]);
+    for (let k = 0; k < 6; k++) p(6 + k * 7, 6 + (k % 2) * 2, '#fff6c8'); // sparkles
+    // the icon
+    const id = (f.unlocks[0] || '').split(':')[1];
+    if (kind === 'ball') {
+      const b = GK.BALLS[id] || GK.BALLS.house;
+      disc(24, 26, 10, '#0e0a10'); disc(24, 26, 9, GK.shade(b.col, -0.35)); disc(23, 25, 8, b.col); disc(21, 22, 4, GK.shade(b.col, 0.25)); p(20, 21, '#ffffff');
+      disc(22, 25, 1, '#0e0a10'); disc(26, 25, 1, '#0e0a10'); disc(24, 29, 1, '#0e0a10');
+    } else if (kind === 'charm' || kind === 'secret') {
+      const c = GK.CHARMS[id], gem = kind === 'secret' ? '#ff7ac8' : c ? GK.RARITY[c.rarity].col : '#ffffff';
+      for (let y = 0; y < 18; y++) { const w = y < 6 ? 4 + y * 2 : Math.max(0, 16 - (y - 6) * 1.4); r(24 - Math.round(w / 2), 17 + y, Math.round(w), 1, y < 6 ? GK.shade(gem, 0.2) : gem); }
+      r(18, 22, 12, 1, GK.shade(gem, -0.3)); p(21, 19, '#ffffff'); p(22, 20, '#ffffff');
+      if (kind === 'secret') { r(23, 9, 2, 2, '#ffffff'); }
+    } else if (kind === 'equip') {
+      r(15, 28, 18, 5, '#3a2a1a'); r(15, 24, 10, 5, '#5a3a24'); r(16, 25, 8, 1, '#f2ebe0'); r(15, 32, 20, 2, '#1a1410'); r(25, 27, 8, 2, '#5a3a24');
+    } else if (kind === 'cons') {
+      r(17, 15, 14, 20, '#f2ebe0'); r(18, 16, 12, 18, '#ffffff'); r(20, 19, 8, 2, col[1]); r(20, 23, 8, 1, col[0]); r(20, 26, 6, 1, col[0]); r(20, 29, 7, 1, col[0]);
+    } else {
+      r(17, 16, 14, 8, '#ffd447'); r(19, 24, 10, 3, '#ffd447'); r(22, 27, 4, 4, '#c8932a'); r(18, 31, 12, 3, '#ffd447'); r(14, 17, 3, 4, '#ffd447'); r(31, 17, 3, 4, '#ffd447'); r(19, 17, 3, 3, '#fff6c8');
+    }
+    // the name band at the bottom
+    r(4, 46, CW - 8, 13, '#140e18'); r(5, 47, CW - 10, 11, '#241a2c');
+    for (let k = 0; k < 3; k++) r(8 + k * 12, 51, 8, 2, '#f2c94c');
+  };
 })();

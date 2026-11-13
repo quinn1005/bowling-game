@@ -1,5 +1,34 @@
 # Changelog
 
+## v1.2.0
+
+### Daily Boss Rush
+- **A new mode on the title screen.** Every boss, back to back, with a Pro Shop between each fight. You start with a set build (two common charms, an uncommon, two extra balls, a scorecard and $12) instead of an empty bag.
+- **Seeded for the day.** Everyone who plays on the same day gets the same build, the same bosses and the same shops, so you can compare how deep you got. Your best depth for the day shows on the button.
+- Everything is unlocked during a rush, so the shops can offer anything.
+
+### Head to Head, now with a draft
+- **Bowl against Quinn, Kaleb or Levi** on the same lane: you bowl a frame, then they bowl theirs, and you watch their throw.
+- **Three rounds of 5 frames, with a draft before each round.** You and your opponent take turns picking from one shared pool of 4 charms, 2 balls and 2 items, 3 picks each. Whatever you leave, they can take. Who picks first alternates each round. If your slots are full, you pick something to swap out.
+- **Tiered opponents, hardest first:**
+  - **Quinn** bowls the best and drafts the smartest: tests each charm in every slot of the build to find real synergies, takes picks that are much better for you, and saves items for the right moment (an Extra Frame once behind or in the last round, and a Loaded Ball only when the boost is worth the charm it destroys).
+  - **Kaleb** bowls a big wide swing, drafts the strongest-looking picks by rarity, keeps ×Mult charms at the end of the row, and saves items for the last round.
+  - **Levi** bowls straight down the middle, drafts on a hunch (he loves a fun ball) and uses items the moment he gets them.
+- The end screen shows the score for each round and the opponent's final build. Your record against each of them is kept.
+
+### Cursed charms
+- Shops sometimes sell a **cursed charm**. It triggers twice every frame, but you can't sell it and it carries a curse until you meet its condition: Heavy (smaller PERFECT zone, lifted by 6 PERFECTs), Leaky (-$1 a frame, lifted by 3 strikes), Dark (dark lane, lifted by 4 spares), Jinx (-3 Mult, lifted by a Turkey) or Chains (no re-racks, lifted by clearing 2 rounds). Lift it and it stays **blessed**, still triggering twice.
+
+### Ghost race
+- **Challenge links now carry your frames.** Open a friend's link and their ghost races you frame by frame: a pill in the HUD shows their score at the same point and whether you're ahead or behind.
+
+### Achievement cards
+- **Every feat is now a collectable card**, with its own art and colour by category. See them in the Collection under "Card gallery". Cards you haven't earned show their back.
+
+### Feel
+- **Every ball type sounds different as it rolls:** heavy balls rumble low, light ones hiss, glass rings, rubber squeaks and metal clanks.
+- **Camera follow:** the view leans in and follows the ball down the lane. You can turn it off in the menu.
+
 ## v1.1.5
 
 ### Changed

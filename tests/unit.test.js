@@ -847,3 +847,99 @@ test('Groove carries across the whole run and only resets on a miss', () => {
   GK.startRound(t); assert.strictEqual(t.rs.groove, 3);
   t.groove = 5; GK.advance(t); GK.startRound(t); assert.strictEqual(t.rs.groove, 8);
 });
+
+test('v1.2 Daily Boss Rush: same build for everyone, boss after boss, everything unlocked', () => {
+  const a = GK.newRushRun(4242), b = GK.newRushRun(4242), c = GK.newRushRun(999);
+  assert.deepStrictEqual(a.charms.map(x => x.id), b.charms.map(x => x.id));
+  assert.deepStrictEqual(a.bag.map(x => x.type), b.bag.map(x => x.type));
+  assert.ok(JSON.stringify(a.charms) !== JSON.stringify(c.charms) || JSON.stringify(a.bag) !== JSON.stringify(c.bag));
+  assert.strictEqual(a.charms.length, 3); assert.strictEqual(a.bag.length, 3);
+  GK.startRound(a);
+  assert.ok(GK.isBoss(a) && a.rs.boss, 'the rush starts with a boss');
+  GK.advance(a);
+  assert.strictEqual(a.alley, 1); assert.strictEqual(a.round, 2, 'straight to the next boss');
+  a.alley = GK.ALLEY_COUNT; assert.ok(GK.isChamp(a), 'ends with the Gutter King');
+  GK._meta = { feats: {} };
+  try { assert.ok(!GK.isUnlocked('ball', 'ghost')); GK._allUnlocked = true; assert.ok(GK.isUnlocked('ball', 'ghost')); }
+  finally { GK._allUnlocked = false; GK._meta = undefined; }
+});
+
+test('v1.2 Head to Head: 5-frame rounds, opponents bowl their own way', () => {
+  const run = GK.newH2HRun('levi', 31);
+  GK.startRound(run);
+  assert.strictEqual(run.rs.framesMax, 5); assert.strictEqual(run.rs.target, Infinity);
+  assert.strictEqual(GK.h2hBall('levi', 0), 'loftduck'); assert.strictEqual(GK.h2hBall('quinn', 1), 'house');
+  const s = new GK.Sim({ rng: GK.makeRng(3), lane: {}, rack: GK.padRack() });
+  s.launch({ type: GK.h2hBall('kaleb', 0) }, GK.h2hThrow('kaleb', s, GK.makeRng(5), 0)); s.simulate();
+  const r = GK.h2hScore(run, [s.summarize()], !s.standing().length, false, 0);
+  assert.ok(r.score >= 0 && run.h2h.total === r.score && run.h2h.frames.length === 1);
+});
+
+test('v1.2 Head to Head tiers: Quinn hardest, then Kaleb, then Levi', () => {
+  assert.ok(GK.H2H.quinn.skill > GK.H2H.kaleb.skill && GK.H2H.kaleb.skill > GK.H2H.levi.skill);
+  assert.ok(GK.H2H.quinn.iq > GK.H2H.kaleb.iq && GK.H2H.kaleb.iq > GK.H2H.levi.iq);
+});
+
+test('v1.2 draft: shared pool, alternating picks, slot swaps, AI keeps its frame count', () => {
+  const run = GK.newH2HRun('quinn', 41), H = run.h2h;
+  H.round = 1;
+  const d = GK.draftPool(run);
+  assert.strictEqual(d.items.length, 8); assert.strictEqual(d.turn, 'me');
+  assert.deepStrictEqual(d.items.map(i => i.kind), ['charm', 'charm', 'charm', 'charm', 'ball', 'ball', 'cons', 'cons']);
+  assert.deepStrictEqual(GK.draftPool(run).items, d.items, 'the pool is seeded');
+  let n = 0;
+  while (d.turn !== 'done' && n++ < 12) {
+    if (d.turn === 'ai') { const i = GK.aiPick(run, d); assert.ok(i >= 0 && i < d.items.length); GK.takeDraft(run, d, i, 'ai'); }
+    else assert.ok(GK.takeDraft(run, d, 0, 'me').ok);
+  }
+  assert.strictEqual(d.turn, 'done'); assert.strictEqual(d.items.length, 2); assert.strictEqual(d.log.length, 6);
+  assert.deepStrictEqual(d.log.map(l => l.who), ['me', 'ai', 'me', 'ai', 'me', 'ai']);
+  // full charm row: the player has to pick one to swap
+  run.charms = Array.from({ length: 5 }, () => GK.charmInst('chain_gang'));
+  const d2 = { items: [{ kind: 'charm', id: 'statue' }], turn: 'me', picks: { me: 0, ai: 0 }, per: 1, log: [] };
+  assert.strictEqual(GK.takeDraft(run, d2, 0, 'me').need, 'charm');
+  assert.ok(GK.takeDraft(run, d2, 0, 'me', 2).ok); assert.strictEqual(run.charms[2].id, 'statue'); assert.strictEqual(run.charms.length, 5);
+  // the AI's own frame counter, with an Extra Frame
+  H.ai.extraNext = 1; GK.h2hRoundStart(run); assert.strictEqual(H.ai.framesMax, 6); assert.strictEqual(H.ai.frameIdx, 0);
+  GK.h2hScore(run, [Object.assign(new GK.Sim({ rng: GK.makeRng(1), lane: {}, rack: GK.padRack() }).summarize(), { pins: 0 })], false, false);
+  assert.strictEqual(H.ai.frameIdx, 1);
+});
+
+test('v1.2 draft: item timing by tier', () => {
+  const mk = opp => { const r = GK.newH2HRun(opp, 42); r.h2h.round = 1; r.h2h.ai.cons = ['t_frame', 'card_strike']; return r; };
+  const levi = mk('levi'), kaleb = mk('kaleb'), quinn = mk('quinn');
+  assert.deepStrictEqual(GK.aiUseItems(levi).length, 2, 'Levi uses everything at once');
+  assert.deepStrictEqual(GK.aiUseItems(kaleb), ['Strike Card'], 'Kaleb saves the Extra Frame for the last round');
+  quinn.h2h.myTotal = 0; assert.deepStrictEqual(GK.aiUseItems(quinn), ['Strike Card'], 'Quinn holds the Extra Frame while ahead');
+  quinn.h2h.myTotal = 500; assert.ok(GK.aiUseItems(quinn).includes('Extra Frame'), 'Quinn uses it once behind');
+  kaleb.h2h.round = GK.H2H_ROUNDS; assert.ok(GK.aiUseItems(kaleb).includes('Extra Frame'));
+  assert.strictEqual(levi.h2h.ai.levels.strike, 1);
+});
+
+test('v1.2 curses: twice the effect, a drawback, no selling, lifted by its condition', () => {
+  const run = GK.newRun({ seed: 32 });
+  const c = GK.charmInst('league_jacket'); c.curse = { id: 'leaky', have: 0 }; run.charms = [c];
+  const f = { kind: 'strike', rolls: [roll({ down: pins(10), pins: 10 })] };
+  const r = GK.scoreFrame(f, run);
+  assert.strictEqual(r.mult, GK.scoreFrame(f, GK.newRun({ seed: 32 })).mult + 6, 'triggers twice');
+  assert.strictEqual(r.money, -1, 'Leaky Pockets');
+  const m = run.money; GK.sellCharm(run, 0); assert.strictEqual(run.charms.length, 1, 'can\'t sell'); assert.strictEqual(run.money, m);
+  for (let i = 0; i < 3; i++) GK.progressCurses(run, { kind: 'strike' });
+  assert.ok(!run.charms[0].curse && run.charms[0].blessed, 'lifted after 3 strikes');
+  assert.strictEqual(GK.scoreFrame(f, run).money, 0);
+  // Heavy Hands shrinks the zone; Chains takes the re-racks
+  const h = GK.newRun({ seed: 33 }); const hc = GK.charmInst('lucky_shoes'); hc.curse = { id: 'heavy', have: 0 }; h.charms = [hc];
+  assert.ok(Math.abs(GK.equipMods(h).zone - GK.equipMods(GK.newRun({ seed: 33 })).zone * 0.75) < 1e-9);
+  hc.curse = { id: 'chains', have: 0 }; GK.startRound(h); assert.strictEqual(h.rs.reracks, 0);
+});
+
+test('v1.2 ghost race and rolling sounds', () => {
+  const run = GK.newRun({ seed: 34 });
+  GK.startRound(run); GK.logFrame(run, 120); GK.logFrame(run, 3400);
+  GK.advance(run); GK.startRound(run); GK.logFrame(run, 99);
+  const g = GK.decodeGhost(GK.encodeGhost(run.flog));
+  assert.deepStrictEqual(g, [[120, 3400], [99]]);
+  assert.strictEqual(GK.ghostAt(g, 1, 2), 3520); assert.strictEqual(GK.ghostAt(g, 2, 1), 99); assert.strictEqual(GK.ghostAt(g, 3, 1), null);
+  assert.strictEqual(GK.rollSound('wrecking'), 'heavy'); assert.strictEqual(GK.rollSound('loftduck'), 'squeak');
+  assert.strictEqual(GK.rollSound('glass'), 'glass'); assert.strictEqual(GK.rollSound('house'), 'normal');
+});

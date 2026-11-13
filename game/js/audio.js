@@ -2,7 +2,7 @@
 'use strict';
 var GK = globalThis.GK = globalThis.GK || {};
 GK.sfx = (() => {
-  let ac = null, noiseBuf = null, rumbleGain = null, muted = false, lastClack = 0, master = null;
+  let ac = null, noiseBuf = null, rumbleGain = null, muted = false, lastClack = 0, master = null, rumbleLp = null, rollMul = 1, rollAcc = 0;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   function init() {
     if (ac) { if (ac.state === 'suspended') ac.resume(); return; }
@@ -13,7 +13,7 @@ GK.sfx = (() => {
       const d = noiseBuf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
       rumbleGain = ac.createGain(); rumbleGain.gain.value = 0;
-      const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 150;
+      const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 150; rumbleLp = lp;
       const rumble = ac.createBufferSource(); rumble.buffer = noiseBuf; rumble.loop = true;
       rumble.connect(lp).connect(rumbleGain).connect(master); rumble.start();
     } catch (e) { ac = null; }
@@ -46,7 +46,26 @@ GK.sfx = (() => {
       noise(0, 0.09, 1700 + Math.random() * 1800, 2.5, v * 0.5);
       tone(650 + Math.random() * 700, 0, 0.06, 'triangle', v * 0.12);
     },
-    roll(v) { if (ac && rumbleGain) rumbleGain.gain.setTargetAtTime(muted ? 0 : v * 0.35, ac.currentTime, 0.05); },
+    roll(v) { if (ac && rumbleGain) rumbleGain.gain.setTargetAtTime(muted ? 0 : v * 0.35 * rollMul, ac.currentTime, 0.05); },
+    // Each kind of ball rolls differently: heavy balls rumble low and loud, light ones hiss,
+    // glass rings, the duck squeaks, chains clank.
+    rollStyle(kind) {
+      const S = { heavy: [70, 1.6], light: [420, 0.45], glass: [320, 0.55], squeak: [220, 0.7], clank: [190, 0.9], normal: [150, 1] }[kind] || [150, 1];
+      rollMul = S[1]; rollAcc = 0;
+      if (ac && rumbleLp) rumbleLp.frequency.setTargetAtTime(S[0], ac.currentTime, 0.05);
+    },
+    rollTick(kind, speed, dt) {
+      if (!ok()) return;
+      rollAcc += dt * Math.min(2, speed / 300);
+      const every = { heavy: 0.42, light: 0.6, glass: 0.32, squeak: 0.55, clank: 0.28 }[kind];
+      if (!every || rollAcc < every) return;
+      rollAcc = 0;
+      if (kind === 'heavy') tone(48, 0, 0.18, 'sine', 0.22, 38);
+      if (kind === 'light') noise(0, 0.12, 5200, 1.2, 0.05, 'highpass');
+      if (kind === 'glass') { tone(2200 + Math.random() * 600, 0, 0.18, 'sine', 0.035); tone(3300, 0.01, 0.12, 'sine', 0.018); }
+      if (kind === 'squeak') tone(1300 + Math.random() * 300, 0, 0.08, 'square', 0.025, 1900);
+      if (kind === 'clank') { noise(0, 0.05, 3200, 6, 0.12); tone(900, 0, 0.05, 'square', 0.02); }
+    },
     gutter() { tone(90, 0, 0.35, 'sine', 0.25); tone(70, 0.08, 0.3, 'sine', 0.15); },
     strike() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, i * 0.07, 0.16)); },
     spare() { [523, 784, 1047].forEach((f, i) => tone(f, i * 0.08, 0.14)); },

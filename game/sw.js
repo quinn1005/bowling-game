@@ -1,7 +1,7 @@
 // Gutter Kings service worker: cache-first for the game's own files so it plays offline once installed.
-const CACHE = 'gk-v25';
+const CACHE = 'gk-v26';
 const FILES = ['./', 'index.html', 'css/style.css', 'icon.svg', 'manifest.webmanifest',
-  'js/version.js', 'js/core.js', 'js/data.js', 'js/content.js', 'js/payoffs.js', 'js/physics.js', 'js/scoring.js', 'js/meta.js', 'js/run.js', 'js/frame.js', 'js/surprises.js', 'js/progress.js', 'js/endless.js', 'js/content2.js', 'js/audio.js', 'js/render.js', 'js/fame.js', 'js/ui.js', 'js/main.js'];
+  'js/version.js', 'js/core.js', 'js/data.js', 'js/content.js', 'js/payoffs.js', 'js/physics.js', 'js/scoring.js', 'js/meta.js', 'js/run.js', 'js/frame.js', 'js/surprises.js', 'js/progress.js', 'js/endless.js', 'js/content2.js', 'js/modes.js', 'js/audio.js', 'js/render.js', 'js/fame.js', 'js/ui.js', 'js/main.js'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
 self.addEventListener('fetch', e => {
