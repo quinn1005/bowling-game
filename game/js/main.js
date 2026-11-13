@@ -315,7 +315,7 @@
       case 'shards': sfx.shatter(); R.burst(e.x, e.z, '#bff4ff', 8, 50); break;
       case 'pit': break;
       case 'rebound': sfx.bounce(); R.pop(e.x, e.z, 10, 'REBOUND', '#7be38a'); break;
-      case 'tentacleHit': sfx.thud(); R.shake = Math.max(R.shake, 4); R.pop(e.x, e.z, 12, 'SLAP!', '#d88aff'); GK.haptic('medium'); break;
+      case 'tentacleHit': if (run && run.rs) run.rs.slaps = (run.rs.slaps || 0) + 1; sfx.thud(); R.shake = Math.max(R.shake, 4); R.pop(e.x, e.z, 12, 'SLAP!', '#d88aff'); GK.haptic('medium'); break;
       case 'squeak': sfx.squeak(); R.pop(e.x, e.z, 24, 'SQUEAK', '#ffd23a'); break;
       case 'thud': sfx.thud(); GK.haptic('heavy'); R.shake = 6; R.burst(e.x, e.z, '#e8c890', 8, 25); R.pop(e.x, e.z, 8, 'THUD!', '#ffd23a'); break;
     }
@@ -562,13 +562,15 @@
 
   // Check feats against an event; announce and save anything newly unlocked.
   function feats(ev) {
-    if (run && (run.practice || run.h2h)) return;
+    if (run && (run.practice || (run.h2h && ev.t !== 'h2h'))) return;
     const got = GK.checkFeats(meta, ev);
     if (!got.length) return;
+    got.forEach(f => { if (f.hard) GK.addXP(meta, GK.HARD_XP); });
     GK.saveMeta(meta);
     got.forEach((f, i) => setTimeout(() => {
-      UI.toast('Feat: ' + f.name + ' · Unlocked ' + f.unlocks.map(GK.unlockName).join(', '), 2600);
+      UI.toast(f.hard ? 'Hard feat: ' + f.name + '! +' + GK.HARD_XP + ' XP and a new card' : 'Feat: ' + f.name + ' · Unlocked ' + f.unlocks.map(GK.unlockName).join(', '), 2600);
       sfx.win();
+      if (f.hard) R.confetti(40);
     }, i * 2700));
   }
 
@@ -578,6 +580,7 @@
     const rec = meta.h2h[H.opp] = meta.h2h[H.opp] || { w: 0, l: 0 };
     if (won) rec.w++; else rec.l++;
     const xp = GK.addXP(meta, won ? 60 : 20);
+    feats({ t: 'h2h', won, run });
     GK.saveMeta(meta); GK.clearSave();
     if (won) { sfx.win(); R.confetti(60); } else sfx.lose();
     setPhase('menu');
@@ -586,6 +589,7 @@
   }
   function bumpMeta() {
     if (run && (run.practice || run.h2h)) return;
+    const r0 = run; queueMicrotask(() => feats({ t: 'end', run: r0 }));
     if (run && run.rush) {
       const d = new Date(), date = d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
       const depth = GK.rushDepth(run);
@@ -653,6 +657,7 @@
     const lines = GK.payout(run);
     GK.applyPayout(run, lines);
     const payRun = JSON.parse(JSON.stringify(run));
+    if (!run.practice) { const used = (run.rs.reracksStart || 0) - (run.rs.reracks || 0); run.alleyClean = (run.round === 0 || run.alleyClean === true) && used <= 0; }
     feats({ t: 'round', boss: run.rs.boss, run });
     const beatBoss = !run.practice && run.rs.boss && run.rs.boss !== 'champion' ? GK.bossFor(run) : null;
     const nxt = GK.advance(run);

@@ -313,10 +313,58 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (!c.curse) return;
       const C = GK.CURSES[c.curse.id];
       c.curse.have += roundWon ? (c.curse.id === 'chains' ? 1 : 0) : (C.count(ctx) || 0);
-      if (c.curse.have >= C.n) { c.curse = null; c.blessed = true; out.push(GK.charmName(c) + ': ' + C.name + ' lifted! Its drawback is gone.'); }
+      if (c.curse.have >= C.n) { c.curse = null; c.blessed = true; if (run.stats) run.stats.lifted = (run.stats.lifted || 0) + 1; out.push(GK.charmName(c) + ': ' + C.name + ' lifted! Its drawback is gone.'); }
     });
     return out;
   };
+
+  // ---------- hard feats ----------
+  // No unlocks: each one is a card for the gallery and +100 XP.
+  GK.HARD_XP = 100;
+  const hard = (id, name, desc, check, o) => GK.FEATS.push(Object.assign({ id, name, desc, unlocks: [], hard: true, check }, o || {}));
+  const fr = e => e.t === 'frame', rnd = e => e.t === 'round' && e.run && e.run.rs;
+  const sameSet = (a, b) => a && a.length === b.length && b.every(n => a.includes(n));
+  const hexCount = run => run.charms.filter(c => GK.hexOf(c)).length;
+  const fullRun = e => e.t === 'run' && e.won && !e.run.rush;
+  const day = d => d.getUTCFullYear() + '-' + String(d.getUTCMonth() + 1).padStart(2, '0') + '-' + String(d.getUTCDate()).padStart(2, '0');
+  GK.rushStreak = function (meta, now) {
+    const r = (meta && meta.rush) || {}, d = new Date(now || Date.now()); let n = 0;
+    while (r[day(d)]) { n++; d.setUTCDate(d.getUTCDate() - 1); }
+    return n;
+  };
+  const ghostTotal = g => g ? g.reduce((a, rd) => a + rd.reduce((x, y) => x + y, 0), 0) : 0;
+  hard('perfect_round', 'Perfect Round', 'Win a Boss Match with a strike in every frame you bowled (at least 4 frames).',
+    e => rnd(e) && e.boss && e.run.rs.frames.length >= 4 && e.run.rs.frames.every(f => GK.isStrikeKind(f.kind)));
+  hard('twelve', 'Twelve in a Row', 'Roll 12 strikes in a row in one run.', e => e.run && (e.run.stats.sstreak || 0) >= 12);
+  hard('big_four', 'Big Four', 'Convert the 4-6-7-10 split.', e => fr(e) && GK.isSpareKind(e.kind) && sameSet(e.ctx.leave, [4, 6, 7, 10]));
+  hard('greek_church', 'Greek Church', 'Convert the 4-6-7-9-10 split.', e => fr(e) && GK.isSpareKind(e.kind) && sameSet(e.ctx.leave, [4, 6, 7, 9, 10]));
+  hard('pure_groove', 'Pure Groove', 'Throw 30 PERFECT throws in a row in one run.', e => e.run && (e.run.stats.pstreak || 0) >= 30);
+  hard('no_help', 'No Help Needed', 'Clear a whole alley, all three rounds, without a re-rack or a skip.', e => rnd(e) && e.run.round === 2 && e.run.alleyClean === true);
+  hard('naked_run', 'Naked Run', 'Beat the Gutter King without bowling a single frame with a charm.', e => fullRun(e) && !(e.run.stats.maxCharms || 0));
+  hard('cheapskate', 'Cheapskate', 'Beat the Gutter King without buying anything (free items are fine).', e => fullRun(e) && !(e.run.stats.buys || 0));
+  hard('no_skips', 'No Skips, No Mercy', 'Beat the Gutter King without skipping a single round.', e => fullRun(e) && !(e.run.stats.skips || 0));
+  hard('one_frame', 'One-Frame Wonder', 'Clear a Boss Match on its very first frame.', e => rnd(e) && e.boss && e.run.rs.frameIdx === 1);
+  hard('millionaire', 'Millionaire', 'Score 1,000,000 in one frame.', e => fr(e) && e.score >= 1e6);
+  hard('hoarder', 'Hoarder', 'Hold $100 at once.', e => e.run && !e.run.h2h && e.run.money >= 100);
+  hard('kraken_slayer', 'Kraken Slayer', 'Beat The Kraken without your ball touching a single tentacle.', e => rnd(e) && e.boss === 'kraken' && !e.run.rs.slaps);
+  hard('abyss', 'Into the Abyss', 'Reach the last endless alley.', e => e.run && GK.ENDLESS_ALLEYS && e.run.alley >= GK.ALLEY_COUNT + GK.ENDLESS_ALLEYS.length);
+  hard('rush_top', 'Rush to the Top', 'Beat every boss in a Daily Boss Rush.', e => e.t === 'run' && e.won && e.run.rush);
+  hard('daily_grinder', 'Daily Grinder', 'Play the Daily Boss Rush 7 days in a row.', (e, meta) => e.t === 'end' && e.run.rush && GK.rushStreak(meta) >= 7);
+  hard('upset', 'Upset', 'Beat Quinn in Head to Head.', e => e.t === 'h2h' && e.won && e.run.h2h.opp === 'quinn');
+  hard('clean_sweep', 'Clean Sweep', 'Beat Quinn in all three rounds of a Head to Head match.', e => {
+    if (e.t !== 'h2h' || e.run.h2h.opp !== 'quinn') return false;
+    const H = e.run.h2h, theirs = r => H.frames.filter(f => f.round === r).reduce((a, f) => a + f.score, 0);
+    return H.myRounds.length === GK.H2H_ROUNDS && H.myRounds.every((s, i) => s > theirs(i + 1));
+  });
+  hard('ghostbuster', 'Ghostbuster', 'Double a friend\'s ghost: finish with twice their score after bowling at least as many rounds.',
+    e => e.t === 'end' && e.run.ghost && ghostTotal(e.run.ghost) > 0 && (e.run.flog || []).filter(Boolean).length >= e.run.ghost.length && e.run.stats.score >= 2 * ghostTotal(e.run.ghost));
+  hard('exorcist', 'Exorcist', 'Lift the curse from 3 hexed charms in one run.', e => e.run && (e.run.stats.lifted || 0) >= 3);
+  hard('full_evolution', 'Full Evolution', 'Hold 3 evolved charms at once.', e => e.run && e.run.charms.filter(c => c.evolved).length >= 3);
+  hard('hex_mastery', 'Hex Mastery', 'Beat the Gutter King while holding 3 hexed charms.', e => e.t === 'run' && e.won && hexCount(e.run) >= 3);
+  hard('glass_act', 'Glass Act', 'Win a Boss Match with your Glass Cannon still in one piece.', e => rnd(e) && e.boss && e.run.charms.some(c => c.id === 'glass_cannon' && !c.broken));
+  hard('full_rainbow', 'Full Rainbow', 'Hold a Foil, a Holo and a Neon charm at the same time.', e => e.run && ['foil', 'holo', 'neon'].every(ed => e.run.charms.some(c => c.ed === ed)));
+  hard('butterfly', 'Butterfly Effect', 'Win a round by 1% of the target or less.', e => rnd(e) && isFinite(e.run.rs.target) && e.run.rs.total >= e.run.rs.target && e.run.rs.total - e.run.rs.target <= e.run.rs.target * 0.01, { secret: true });
+  hard('last_pin', 'Last Pin Standing', 'Leave the same single pin standing after your first ball 5 frames in a row.', e => e.run && e.run.stats.onePin && e.run.stats.onePin.k >= 5, { secret: true });
 
   // ---------- ghost race ----------
   // Every frame score of the run, round by round, so a friend can race your ghost on the same seed.

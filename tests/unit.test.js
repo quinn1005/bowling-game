@@ -956,3 +956,39 @@ test('v1.2 ghost race and rolling sounds', () => {
   assert.strictEqual(GK.rollSound('wrecking'), 'heavy'); assert.strictEqual(GK.rollSound('loftduck'), 'squeak');
   assert.strictEqual(GK.rollSound('glass'), 'glass'); assert.strictEqual(GK.rollSound('house'), 'normal');
 });
+
+test('v1.2.6 hard feats: no unlocks, and their conditions', () => {
+  const H = GK.FEATS.filter(f => f.hard);
+  assert.strictEqual(H.length, 26);
+  for (const f of H) assert.deepStrictEqual(f.unlocks, []);
+  const meta = () => ({ feats: {} });
+  const got = (ev, m = meta()) => GK.checkFeats(m, ev).filter(f => f.hard).map(f => f.id);
+  const run = GK.newRun({ seed: 70 });
+  // 12 strikes in a row across frames
+  run.stats.sstreak = 12; assert.ok(got({ t: 'frame', kind: 'strike', ctx: { leave: [] }, score: 10, run }).includes('twelve'));
+  run.stats.sstreak = 0;
+  // the Big Four and Greek Church read the first ball's leave
+  assert.ok(got({ t: 'frame', kind: 'split', ctx: { leave: [10, 7, 6, 4] }, score: 1, run }).includes('big_four'));
+  assert.ok(got({ t: 'frame', kind: 'split', ctx: { leave: [4, 6, 7, 9, 10] }, score: 1, run }).includes('greek_church'));
+  assert.ok(!got({ t: 'frame', kind: 'open', ctx: { leave: [4, 6, 7, 10] }, score: 1, run }).includes('big_four'));
+  // a clean full run
+  const won = GK.newRun({ seed: 71 }); won.stats.maxCharms = 0; won.stats.buys = 0; won.stats.skips = 0;
+  const w = got({ t: 'run', won: true, run: won });
+  assert.ok(w.includes('naked_run') && w.includes('cheapskate') && w.includes('no_skips'));
+  won.rush = true; assert.ok(!got({ t: 'run', won: true, run: won }).includes('naked_run'), 'not from a Boss Rush');
+  // Daily Grinder counts consecutive days
+  const m = { feats: {}, rush: {} }, d = new Date();
+  for (let i = 0; i < 7; i++) { const x = new Date(d); x.setUTCDate(x.getUTCDate() - i); m.rush[x.toISOString().slice(0, 10)] = { depth: 1, score: 1 }; }
+  assert.strictEqual(GK.rushStreak(m), 7);
+  assert.ok(got({ t: 'end', run: Object.assign(GK.newRun({ seed: 72 }), { rush: true }) }, m).includes('daily_grinder'));
+  // the single-pin streak and the leave are tracked when a frame is committed
+  const r2 = GK.newRun({ seed: 73 }); GK.startRound(r2);
+  const leaveOne = () => { r2.rs.cur = { rolls: [{ down: [1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => ({ n, type: 'std', by: 'ball' })), pins: 9 }, { down: [{ n: 10, type: 'std', by: 'ball' }], pins: 1 }] }; r2.rs.target = 1e12; GK.commitFrame(r2, 'spare', { score: 1, money: 0, ctx: { kind: 'spare', perfects: 0, misses: 0, leave: null }, breaks: [] }); };
+  for (let i = 0; i < 5; i++) leaveOne();
+  assert.deepStrictEqual(r2.stats.onePin, { n: 10, k: 5 });
+  assert.ok(got({ t: 'frame', kind: 'spare', ctx: { leave: [10] }, score: 1, run: r2 }).includes('last_pin'));
+  // Head to Head: Upset and Clean Sweep
+  const h = GK.newH2HRun('quinn', 74); h.h2h.myRounds = [100, 100, 100]; h.h2h.frames = [1, 2, 3].map(r => ({ round: r, score: 50 }));
+  const hw = got({ t: 'h2h', won: true, run: h });
+  assert.ok(hw.includes('upset') && hw.includes('clean_sweep'));
+});

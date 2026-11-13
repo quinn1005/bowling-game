@@ -393,7 +393,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       <p class="dim">${prog.have} of ${prog.total} items unlocked · ${nDone} of ${GK.FEATS.length} feats</p>
       <div>${GK.FEATS.map(f => f.secret && !done[f.id]
         ? `<div class="feat secret"><b class="no">SECRET</b><b>???</b><span>A secret feat. Nobody at the alley will say what it takes.</span></div>`
-        : `<div class="feat${f.secret ? ' secret' : ''}"><b class="${done[f.id] ? 'ok' : 'no'}">${done[f.id] ? 'DONE' : 'LOCKED'}</b><b>${esc(f.name)}</b><span>${esc(f.desc)} Unlocks ${esc(f.unlocks.map(k => GK.unlockName(k) + ' (' + KIND[k.split(':')[0]] + ')').join(', '))}.</span></div>`).join('')}</div>
+        : `<div class="feat${f.secret ? ' secret' : ''}"><b class="${done[f.id] ? 'ok' : 'no'}">${done[f.id] ? 'DONE' : 'LOCKED'}</b><b>${esc(f.name)}</b><span>${esc(f.desc)} ${f.hard ? 'Hard feat: +' + GK.HARD_XP + ' XP and its card.' : 'Unlocks ' + esc(f.unlocks.map(k => GK.unlockName(k) + ' (' + KIND[k.split(':')[0]] + ')').join(', ')) + '.'}</span></div>`).join('')}</div>
       <h3>Ascension</h3><p class="dim">${meta.maxAsc ? 'Unlocked up to level ' + meta.maxAsc + ' of ' + GK.MAX_ASC + '.' : 'Beat the Gutter King to unlock.'}</p>
       <h3>Your daily runs</h3>
       ${log.length ? '<div class="story">' + log.map(x => `<div><span>${esc(x.date)}</span><b>${esc(x.label)} · best frame ${fmt(x.best || 0)}</b></div>`).join('') + '</div>' : '<p class="dim">No daily runs yet.</p>'}

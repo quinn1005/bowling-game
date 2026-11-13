@@ -365,6 +365,16 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (kind === 'spare') st.spares++;
     if (kind === 'split') st.splits++;
     if (kind === 'gutter') st.gutters++;
+    st.sstreak = GK.isStrikeKind(kind) ? (st.sstreak || 0) + 1 : 0; st.bestSStreak = Math.max(st.bestSStreak || 0, st.sstreak);
+    st.maxCharms = Math.max(st.maxCharms || 0, run.charms.length);
+    // what the first ball left standing (for the split and single-pin feats)
+    const r0 = cur.rolls[0];
+    if (r0) {
+      const d0 = new Set(r0.down.map(d => d.n));
+      res.ctx.leave = GK.padRack(run.rack).map((t, i) => t !== 'none' && !d0.has(i + 1) ? i + 1 : 0).filter(Boolean);
+      const one = res.ctx.leave.length === 1 ? res.ctx.leave[0] : 0;
+      st.onePin = one ? { n: one, k: st.onePin && st.onePin.n === one ? st.onePin.k + 1 : 1 } : null;
+    }
     GK.afterFrame(res.ctx, run, rs.stolen);
     GK.evolveCharms(res.ctx, run, rs.stolen).forEach(e => notes.push({ t: 'evolve', idx: e.idx, text: e.from + ' evolved into ' + e.to + '!' }));
     const broke = run.charms.filter(c => c.broken);

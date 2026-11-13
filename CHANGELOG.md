@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.2.6
+
+### 26 new hard feats
+Each one is worth **+100 XP** and adds a card with a platinum frame to the gallery. They don't unlock anything; they're bragging rights.
+- **Bowling:** Perfect Round (win a Boss Match with a strike in every frame you bowled, at least 4), Twelve in a Row, Big Four (convert the 4-6-7-10), Greek Church (convert the 4-6-7-9-10), Pure Groove (30 PERFECT throws in a row), No Help Needed (a whole alley with no re-racks and no skips).
+- **Runs:** Naked Run (beat the Gutter King without bowling a frame with a charm), Cheapskate (without buying anything), No Skips, No Mercy, One-Frame Wonder (clear a Boss Match on its first frame), Millionaire (1,000,000 in one frame), Hoarder ($100 at once).
+- **Bosses and endless:** Kraken Slayer (beat The Kraken without touching a tentacle), Into the Abyss (reach the last endless alley).
+- **Modes:** Rush to the Top (beat every boss in a Daily Boss Rush), Daily Grinder (play the Boss Rush 7 days in a row), Upset (beat Quinn in Head to Head), Clean Sweep (beat Quinn in all three rounds), Ghostbuster (finish with double a friend's ghost).
+- **Charms:** Exorcist (lift 3 curses in one run), Full Evolution (3 evolved charms at once), Hex Mastery (beat the Gutter King holding 3 hexed charms), Glass Act (win a Boss Match with your Glass Cannon intact), Full Rainbow (a Foil, a Holo and a Neon charm at once).
+- **Secret:** two more you'll have to find.
+
 ## v1.2.5
 
 ### Changed

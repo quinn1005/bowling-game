@@ -362,7 +362,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     } else if (it.kind === 'equip') {
       run.equip[GK.EQUIP[it.id].slot] = it.id;
     }
-    run.money -= it.price; it.sold = true; run.shop.bought = (run.shop.bought || 0) + 1;
+    run.money -= it.price; it.sold = true; run.shop.bought = (run.shop.bought || 0) + 1; if (it.price > 0) run.stats.buys = (run.stats.buys || 0) + 1;
     return { ok: true };
   };
   GK.buyMember = function (run) {
@@ -506,6 +506,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       else { run.money += 4; msg = 'Trick Tag: no free slot, so you got $4 instead.'; }
     } else run.tags.push(tag);
     if (run.rs) run.history.push({ alley: run.alley, round: run.round, champ: false, target: run.rs.target, total: 0, won: true, skipped: true, frames: 0 });
+    run.stats.skips = (run.stats.skips || 0) + 1; run.alleyClean = false;
     run.round++;
     if (run.round > 2) { run.round = 0; run.alley++; }
     run.rs = null; run.phase = 'intro';

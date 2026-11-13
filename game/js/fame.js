@@ -210,10 +210,11 @@ var GK = globalThis.GK = globalThis.GK || {};
       r(20, 44, 8, 1, '#4a3a5a'); r(21, 45, 6, 1, '#4a3a5a');
       return;
     }
-    const kind = f.secret ? 'secret' : (f.unlocks[0] || 'charm:x').split(':')[0];
-    const col = { ball: ['#2a5ad0', '#163a8a'], charm: ['#8a3ad0', '#521e80'], equip: ['#d07a2a', '#8a4a14'], cons: ['#2a9a6a', '#14604a'], league: ['#c8a020', '#806010'], secret: ['#d03a8a', '#801a54'] }[kind] || ['#6a6a7a', '#3a3a4a'];
+    const kind = f.secret ? 'secret' : f.hard ? 'hard' : (f.unlocks[0] || 'charm:x').split(':')[0];
+    const col = { ball: ['#2a5ad0', '#163a8a'], charm: ['#8a3ad0', '#521e80'], equip: ['#d07a2a', '#8a4a14'], cons: ['#2a9a6a', '#14604a'], league: ['#c8a020', '#806010'], secret: ['#d03a8a', '#801a54'], hard: ['#3a3a4a', '#16141c'] }[kind] || ['#6a6a7a', '#3a3a4a'];
     // frame and background
-    r(0, 0, CW, CH, '#f2c94c'); r(1, 1, CW - 2, CH - 2, '#c8932a'); r(2, 2, CW - 4, CH - 4, col[1]);
+    const fr0 = f.hard ? ['#f4f4ff', '#9a9ab8'] : ['#f2c94c', '#c8932a'];
+    r(0, 0, CW, CH, fr0[0]); r(1, 1, CW - 2, CH - 2, fr0[1]); r(2, 2, CW - 4, CH - 4, col[1]);
     for (let y = 2; y < CH - 2; y++) for (let x = 2; x < CW - 2; x++) if ((x + y) % 7 === 0) p(x, y, col[0]);
     disc(24, 26, 15, col[0]);
     for (let k = 0; k < 6; k++) p(6 + k * 7, 6 + (k % 2) * 2, '#fff6c8'); // sparkles

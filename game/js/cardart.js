@@ -314,6 +314,66 @@
       for (const [x, y] of [[34, 15], [37, 25], [10, 17]]) { k.poly([[x, y - 4], [x + 3, y + 1], [x, y + 3], [x - 3, y + 1]], BLUE); k.p(x - 1, y, '#ffffff'); }
     }
   };
+  // ---------- the hard feats ----------
+  const PURPLE = '#9a5ae8', SILVER = '#d8d8e8';
+  const noSign = (k, cx, cy, rad) => { k.ring(cx, cy, rad, INK, 4); k.ring(cx, cy, rad - 1, RED, 2); k.line(cx - rad * 0.7, cy - rad * 0.7, cx + rad * 0.7, cy + rad * 0.7, INK, 4); k.line(cx - rad * 0.7, cy - rad * 0.7, cx + rad * 0.7, cy + rad * 0.7, RED, 2); };
+  const coin = (k, cx, cy) => { k.ell(cx, cy, 5, 2, INK); k.ell(cx, cy, 4, 1, GOLD); k.r(cx - 4, cy, 9, 1, GOLD2); };
+  Object.assign(ICON, {
+    perfect_round: k => { for (const [x, y] of [[10, 12], [25, 12], [10, 27], [25, 27]]) { k.box(x, y, 13, 13, WHITE); k.X(x + 2, y + 2, x + 10, y + 10, RED, 2); } },
+    twelve: k => { k.ctext('12', 24, 13, 4, GOLD); k.X(17, 34, 23, 40, RED, 1); k.X(25, 34, 31, 40, RED, 1); },
+    big_four: k => { k.pin(11, 11, 15); k.pin(37, 11, 15); k.pin(18, 25, 15); k.pin(30, 25, 15); k.ctext('4', 24, 14, 2, GOLD); },
+    greek_church: k => { k.pin(10, 14, 14); k.pin(31, 14, 14); k.pin(38, 14, 14); k.pin(16, 27, 13); k.pin(30, 27, 13); k.r(22, 8, 2, 9, GOLD); k.r(19, 10, 8, 2, GOLD); },
+    pure_groove: k => { ICON.groove(k); k.ctext('30', 26, 33, 1, WHITE); k.sparkle(10, 12); k.sparkle(40, 22); },
+    no_help: k => { // the re-rack arrows, crossed out
+      k.ring(24, 26, 10, WHITE, 2); k.poly([[30, 13], [37, 17], [30, 21]], WHITE); k.poly([[18, 31], [11, 35], [18, 39]], WHITE); noSign(k, 24, 26, 15);
+    },
+    naked_run: k => { // empty charm slots under a crown
+      crown(k, 24, 9, 0.9); for (let i = 0; i < 3; i++) { const x = 10 + i * 10; k.r(x, 26, 8, 9, INK); k.r(x + 1, 27, 6, 7, col1); for (let j = 0; j < 4; j++) { k.p(x + 1 + j * 2, 27, GREY); k.p(x + 1 + j * 2, 33, GREY); } }
+    },
+    cheapskate: k => { k.box(9, 20, 30, 18, BROWN); k.r(9, 20, 30, 3, '#9a6a3a'); k.ring(24, 19, 5, INK, 3); k.ring(24, 19, 4, GREY, 1); k.box(19, 22, 10, 9, GOLD); k.r(23, 25, 2, 3, INK); },
+    no_skips: k => { k.poly([[11, 17], [21, 26], [11, 35]], WHITE); k.poly([[21, 17], [31, 26], [21, 35]], WHITE); k.box(32, 17, 3, 18, WHITE); noSign(k, 24, 26, 15); },
+    one_frame: k => { k.ctext('1', 18, 12, 5, GOLD); k.poly([[34, 9], [27, 24], [32, 24], [28, 40], [39, 20], [34, 20], [38, 9]], WHITE); },
+    millionaire: k => { for (let i = 0; i < 6; i++) { coin(k, 14, 39 - i * 3); coin(k, 34, 39 - i * 2); } for (let i = 0; i < 9; i++) coin(k, 24, 40 - i * 3); k.sparkle(10, 12); k.sparkle(38, 14); k.sparkle(24, 9, GOLD); },
+    hoarder: k => { // an open treasure chest full of gold
+      k.box(10, 26, 28, 14, BROWN); k.r(10, 31, 28, 2, GOLD2); k.poly([[10, 26], [12, 14], [36, 14], [38, 26]], '#9a6a3a'); k.r(12, 16, 24, 2, GOLD2);
+      k.ell(24, 26, 12, 3, GOLD); k.p(17, 25, '#fff6c8'); k.p(28, 24, '#fff6c8'); k.box(22, 30, 4, 4, GOLD); k.sparkle(32, 22); k.sparkle(15, 21);
+    },
+    kraken_slayer: k => { // a tentacle and a sword
+      let prev = null; for (let t = 0; t <= 1; t += 0.05) { const x = 12 + 10 * Math.sin(t * 5), y = 42 - t * 30; const w = Math.max(1, Math.round(5 - t * 4)); if (prev) { k.line(prev[0], prev[1], Math.round(x), Math.round(y), INK, w + 2); } prev = [Math.round(x), Math.round(y)]; }
+      prev = null; for (let t = 0; t <= 1; t += 0.05) { const x = 12 + 10 * Math.sin(t * 5), y = 42 - t * 30; const w = Math.max(1, Math.round(5 - t * 4)); if (prev) k.line(prev[0], prev[1], Math.round(x), Math.round(y), PURPLE, w); prev = [Math.round(x), Math.round(y)]; }
+      k.oline(38, 10, 24, 34, SILVER, 2); k.oline(21, 28, 30, 34, GOLD, 2); k.oline(23, 34, 20, 38, BROWN, 2);
+    },
+    abyss: k => { for (let i = 0; i < 6; i++) { k.ell(24, 28 + i, 15 - i * 2, 9 - i * 1.4, i % 2 ? '#1a1430' : '#2a2050'); } k.ell(24, 33, 4, 2, '#000000'); k.ball(24, 15, 4, '#2a5ad0'); k.line(24, 8, 24, 10, WHITE); k.line(20, 9, 21, 11, WHITE); k.line(28, 9, 27, 11, WHITE); },
+    rush_top: k => { // a peak with a flag on top
+      k.poly([[6, 42], [24, 14], [42, 42]], GREY2); k.poly([[24, 14], [29, 22], [26, 21], [24, 24], [21, 21], [19, 22]], WHITE, false);
+      k.line(24, 14, 24, 6, INK, 1); k.poly([[25, 6], [33, 8], [25, 11]], RED); skull(k, 15, 36, 0.6); skull(k, 33, 36, 0.6);
+    },
+    daily_grinder: k => { // a calendar week, every day ticked
+      k.box(9, 11, 30, 30, WHITE); k.r(9, 11, 30, 6, RED); k.r(14, 9, 2, 4, INK); k.r(32, 9, 2, 4, INK);
+      for (let i = 0; i < 7; i++) { const x = 12 + (i % 4) * 7, y = 21 + Math.floor(i / 4) * 9; k.line(x, y + 2, x + 2, y + 4, GREEN, 2); k.line(x + 2, y + 4, x + 5, y - 1, GREEN, 2); }
+    },
+    upset: k => { k.ball(22, 30, 9, sig('twohander', '#d42a44')); crown(k, 30, 9, 0.8); k.line(36, 20, 40, 23, WHITE); k.line(38, 17, 42, 18, WHITE); k.sparkle(10, 14, GOLD); },
+    clean_sweep: k => { ICON.clean_up(k); for (let i = 0; i < 3; i++) { const x = 11 + i * 9; k.oline(x, 11, x + 2, 13, GREEN, 1); k.oline(x + 2, 13, x + 6, 8, GREEN, 1); } },
+    ghostbuster: k => { k.poly([[14, 38], [14, 20], [18, 12], [30, 12], [34, 20], [34, 38], [30, 34], [26, 38], [22, 34], [18, 38]], WHITE); k.r(19, 20, 3, 4, INK); k.r(26, 20, 3, 4, INK); k.ell(24, 29, 2, 2, INK); noSign(k, 24, 26, 15); },
+    exorcist: k => { // a candle burning off a wisp of curse
+      k.box(19, 24, 10, 16, '#f2ebc8'); k.r(19, 24, 10, 2, '#fff6dc'); k.line(24, 24, 24, 21, INK); k.poly([[24, 13], [27, 19], [24, 22], [21, 19]], GOLD); k.p(24, 18, WHITE);
+      for (let i = 0; i < 8; i++) k.disc(32 + Math.round(Math.sin(i) * 3), 30 - i * 3, 1 + (i % 2), PURPLE); k.box(15, 40, 18, 2, GOLD2);
+    },
+    full_evolution: k => { [[12, 36, 3], [24, 30, 5], [35, 22, 7]].forEach(([x, y, r]) => { k.poly([[x - r, y], [x, y - r - 2], [x + r, y], [x, y + r + 2]], GK.shade(GOLD, -0.1 * (3 - r / 2))); k.p(x - 1, y - 2, '#ffffff'); }); k.oline(16, 33, 19, 31, WHITE, 1); k.oline(29, 26, 31, 24, WHITE, 1); },
+    hex_mastery: k => { // an eye in a hexagon
+      const pts = []; for (let i = 0; i < 6; i++) { const a = Math.PI / 6 + i * Math.PI / 3; pts.push([24 + Math.cos(a) * 15, 26 + Math.sin(a) * 15]); } k.poly(pts, '#4a1a6a');
+      k.ell(24, 26, 9, 5, '#e8d8ff'); k.disc(24, 26, 4, PURPLE); k.disc(24, 26, 2, INK); k.p(22, 24, WHITE); for (let i = 0; i < 6; i++) k.p(Math.round(pts[i][0]), Math.round(pts[i][1]), GOLD);
+    },
+    glass_act: k => { // an unbroken glass cannon
+      k.poly([[8, 30], [30, 18], [34, 25], [12, 37]], '#bfe8ff'); k.line(12, 30, 30, 21, WHITE); k.disc(16, 37, 5, INK); k.disc(16, 37, 4, BROWN); k.disc(16, 37, 1, GOLD); k.sparkle(36, 14); k.sparkle(28, 32);
+    },
+    full_rainbow: k => { const cols = [RED, ORANGE, GOLD, GREEN, BLUE, PURPLE]; cols.forEach((c, i) => k.ring(24, 36, 17 - i * 2, c, 2)); k.r(6, 37, 36, 6, col1); k.ell(9, 37, 5, 3, WHITE); k.ell(39, 37, 5, 3, WHITE); },
+    butterfly: k => {
+      k.ell(16, 20, 7, 8, ORANGE); k.ell(32, 20, 7, 8, ORANGE); k.ell(17, 33, 5, 5, GOLD); k.ell(31, 33, 5, 5, GOLD);
+      k.disc(15, 19, 2, INK); k.disc(33, 19, 2, INK); k.r(23, 15, 2, 24, INK); k.line(23, 15, 19, 9, INK); k.line(24, 15, 29, 9, INK);
+    },
+    last_pin: k => { k.poly([[20, 6], [28, 6], [38, 42], [10, 42]], '#ffffff22', false); k.ell(24, 40, 10, 2, '#ffffff44'); k.pin(24, 16, 24); }
+  });
   let col0 = '#000', col1 = '#000';
   // Draw a feat's icon if it has one. Returns false so the caller can fall back to the generic icon.
   GK.drawFeatIcon = function (ctx, featId, colors) {
