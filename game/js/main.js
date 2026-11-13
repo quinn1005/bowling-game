@@ -231,6 +231,7 @@
       case 'shards': sfx.shatter(); R.burst(e.x, e.z, '#bff4ff', 8, 50); break;
       case 'pit': break;
       case 'rebound': sfx.bounce(); R.pop(e.x, e.z, 10, 'REBOUND', '#7be38a'); break;
+      case 'tentacleHit': sfx.thud(); R.shake = Math.max(R.shake, 4); R.pop(e.x, e.z, 12, 'SLAP!', '#d88aff'); GK.haptic('medium'); break;
       case 'squeak': sfx.squeak(); R.pop(e.x, e.z, 24, 'SQUEAK', '#ffd23a'); break;
       case 'thud': sfx.thud(); GK.haptic('heavy'); R.shake = 6; R.burst(e.x, e.z, '#e8c890', 8, 25); R.pop(e.x, e.z, 8, 'THUD!', '#ffd23a'); break;
     }
@@ -961,6 +962,12 @@
         if (phase !== 'rolling' && p.fallen && p.fallT < 0.3) p.fallT += realDt;
       }
       if (phase !== 'rolling') { sim.updatePosts(); for (const f of sim.fx) f.t += realDt; sim.fx = sim.fx.filter(f => f.t < 0.6); }
+    }
+    // the Kraken's tentacles thump down on the lane, aiming or rolling
+    if (sim && sim.tentacles && sim.tentacles.length && !replay) for (const tn of sim.tentacles) {
+      const ph = GK.tentacleState(tn, sim.time).phase;
+      if (ph === 'down' && tn._ph !== 'down') { sfx.thump(); R.shake = Math.max(R.shake, 3); GK.haptic('light'); }
+      tn._ph = ph;
     }
     if (phase === 'aim' && run && run.rs && run.rs.boss === 'fathertime' && !bonus) {
       if (clockT0 == null) clockT0 = now;

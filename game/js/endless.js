@@ -8,7 +8,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   Object.assign(GK.BOSSES, {
     foreman: { name: 'The Demolition Foreman', desc: 'Knocks a new hole in the lane every frame. Balls that roll over a hole are gone.', endless: true },
     scrapper: { name: 'The Scrapper', desc: 'Every pin you knock down has a 1 in 3 chance to be hauled off before it scores.', endless: true },
-    kraken: { name: 'The Kraken', desc: 'Tentacles rise from the gutters and grab any ball within 3 boards of the edge.', endless: true },
+    kraken: { name: 'The Kraken', desc: 'Three tentacles on each side slam down across the lane at random, blocking it for a moment. Watch for their shadows and time your throw.', endless: true },
     angler: { name: 'The Angler', desc: 'Pitch black. Only a wandering lure light shows part of the deck.', endless: true },
     poltergeist: { name: 'The Poltergeist', desc: 'After your first roll, the pins left standing are flung to new spots on the deck.', endless: true },
     banshee: { name: 'The Banshee', desc: 'Her scream scrambles the order of your charms every frame.', endless: true },
@@ -62,6 +62,31 @@ var GK = globalThis.GK = globalThis.GK || {};
   };
   // Endless targets climb hard: these alleys are meant for builds that already beat the King.
   GK.ENDLESS_TARGET = { base: 0.8, growth: 1.85 };
+
+  // The Kraken's tentacles: 3 per side, each slamming across the lane on its own random schedule.
+  // A slam winds up (the tentacle rears back and its shadow darkens the lane), comes down and lies
+  // across the lane as a wall for a moment, then pulls back into the gutter.
+  GK.TENTACLE = { wind: 0.5, down: 1.5, back: 0.45, thick: 2.2 };
+  GK.makeTentacles = function (rng, lhw) {
+    const out = [];
+    [[-1, [90, 160, 230]], [1, [125, 195, 262]]].forEach(([side, zs]) => zs.forEach(z => {
+      const slams = []; let t = 1.2 + rng() * 3.5;
+      while (t < 120) { slams.push(+t.toFixed(2)); t += 2.8 + rng() * 3.6; }
+      out.push({ side, z, reach: lhw * (0.62 + rng() * 0.2), ph: rng() * 6.28, slams });
+    }));
+    return out;
+  };
+  // { phase: 'idle' | 'wind' | 'down' | 'back', k: 0..1 progress through that phase, since: seconds since impact }
+  GK.tentacleState = function (tn, t) {
+    const T = GK.TENTACLE;
+    for (const s of tn.slams) {
+      if (t < s - T.wind) break;
+      if (t < s) return { phase: 'wind', k: (t - (s - T.wind)) / T.wind };
+      if (t < s + T.down) return { phase: 'down', k: (t - s) / T.down, since: t - s };
+      if (t < s + T.down + T.back) return { phase: 'back', k: (t - s - T.down) / T.back };
+    }
+    return { phase: 'idle', k: 0 };
+  };
 
   // Lane holes for the Bowl-o-Rama Wreck (and one more every frame against the Foreman).
   GK.makeHoles = function (run, n, tag) {

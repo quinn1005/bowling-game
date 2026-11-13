@@ -705,8 +705,22 @@ test('v1.1 endless lanes: holes, the Kraken and the sky drop-off take the ball',
   const roll = (lane, prm) => { const s = new GK.Sim({ rng: GK.makeRng(2), lane: Object.assign({ oil: 'house' }, lane), rack: GK.padRack() }); s.launch({ type: 'house' }, Object.assign({ aimX: 0, aim: 0, spin: 0, speed: 380 }, prm)); s.simulate(); return s.summarize(); };
   assert.strictEqual(roll({ holes: [{ x: 0, z: 120, r: 3.4 }] }).pins, 0, 'a hole on the line swallows the ball');
   assert.ok(roll({}).pins > 0);
-  assert.strictEqual(roll({ kraken: true }, { aimX: 16, aim: 0.03 }).pins, 0, 'the Kraken grabs balls near the edge');
-  assert.ok(roll({}, { aimX: 16, aim: 0.03 }).pins >= 0);
+  // the Kraken: a tentacle lying across the lane is a wall the ball bounces off
+  const k = new GK.Sim({ rng: GK.makeRng(2), lane: { kraken: true, oil: 'house' }, rack: GK.padRack() });
+  assert.strictEqual(k.tentacles.length, 6);
+  assert.ok(k.tentacles.every(t => t.slams.length > 5), 'each tentacle slams again and again');
+  const wall = { side: -1, z: 150, reach: 30, ph: 0, slams: [0.2] };
+  assert.strictEqual(GK.tentacleState(wall, 0).phase, 'wind');
+  assert.strictEqual(GK.tentacleState(wall, 0.5).phase, 'down');
+  assert.strictEqual(GK.tentacleState(wall, 1.9).phase, 'back');
+  assert.strictEqual(GK.tentacleState(wall, 3).phase, 'idle');
+  k.tentacles = [wall];
+  k.launch({ type: 'house' }, { aimX: -6, aim: 0, spin: 0, speed: 380 }); k.simulate();
+  assert.strictEqual(k.summarize().pins, 0, 'blocked by the tentacle');
+  const k2 = new GK.Sim({ rng: GK.makeRng(2), lane: { kraken: true, oil: 'house' }, rack: GK.padRack() });
+  k2.tentacles = [Object.assign({}, wall, { slams: [50] })];
+  k2.launch({ type: 'house' }, { aimX: -6, aim: 0, spin: 0, speed: 380 }); k2.simulate();
+  assert.ok(k2.summarize().pins > 0, 'no tentacle down, the ball gets through');
   const sky = new GK.Sim({ rng: GK.makeRng(2), lane: { sky: true }, rack: GK.padRack() });
   sky.launch({ type: 'house' }, { aimX: 15, aim: 0.06, spin: 0, speed: 380 }); sky.simulate();
   assert.ok(sky.balls[0].gone);

@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.4
+
+### Changed
+- **The Kraken reworked.** Its tentacles no longer grab your ball. Instead, three tentacles on each side slam down across the lane at random intervals and lie there as walls for a moment. A ball that hits one bounces off with a SLAP. Watch for the dark shadow on the lane as a tentacle rears up: that's where it's about to land.
+- **New tentacle animations:** an idle sway in the gutters (curling and uncurling), a rear-up that shudders before the slam, a splash and squash when it hits the lane, a writhe while it's down, and a peel back into the gutter.
+
 ## v1.1.3
 
 ### Changed

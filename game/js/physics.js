@@ -59,6 +59,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       this.lightLead = !!o.lightLead; this.noWear = !!o.noWear; this.lowgRoll = false;
       // endless lanes
       this.holes = Array.isArray(L.holes) ? L.holes : []; this.deep = !!L.deep; this.kraken = !!L.kraken; this.sky = !!L.sky;
+      this.tentacles = L.kraken && GK.makeTentacles ? GK.makeTentacles(GK.makeRng((this.rng() * 1e9) >>> 0), this.lhw) : [];
       this.windy = !!L.wind; this.windPh = this.rng() * 6.28; this.voidPull = !!L.voidPull;
       this.heavyStd = !!o.heavyStd;
       this.time = 0; this.throwT = 0; this.settleT = 0;
@@ -541,10 +542,19 @@ var GK = globalThis.GK = globalThis.GK || {};
           this.emit({ t: 'hole', x: h.x, z: h.z }); return true;
         }
       }
-      if (this.kraken && b.z > 30 && b.z < C.ZH && Math.abs(b.x) > lhw - 3.2 && !b.grabbed) {
-        b.grabbed = true; b.gutter = true; b.x = Math.sign(b.x) * (lhw + 1);
-        if (R && b.kind === 'main' && !R.contact) R.gutterBall = true;
-        this.emit({ t: 'kraken', x: b.x, z: b.z }); return true;
+      // a tentacle lying across the lane is a wall: a capsule from the gutter to its tip
+      for (const tn of this.tentacles) {
+        if (GK.tentacleState(tn, this.time).phase !== 'down') continue;
+        const x0 = tn.side * (lhw + 1), x1 = tn.side * (lhw - tn.reach), lo = Math.min(x0, x1), hi = Math.max(x0, x1);
+        const px = GK.clamp(b.x, lo, hi), dx = b.x - px, dz = b.z - tn.z, d = Math.hypot(dx, dz), R0 = b.r + GK.TENTACLE.thick;
+        if (d >= R0 || d < 1e-4) continue;
+        const nx = dx / d, nz = dz / d;
+        b.x = px + nx * R0; b.z = tn.z + nz * R0;
+        const vn = b.vx * nx + b.vz * nz;
+        if (vn < 0) {
+          b.vx -= 1.5 * vn * nx; b.vz -= 1.5 * vn * nz;
+          if (!b.slapped || this.time - b.slapped > 0.2) { b.slapped = this.time; this.emit({ t: 'tentacleHit', x: b.x, z: b.z }); }
+        }
       }
       return false;
     }

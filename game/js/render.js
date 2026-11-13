@@ -346,10 +346,14 @@ var GK = globalThis.GK = globalThis.GK || {};
         pell(cx, q.x, q.y, rx + 1, ry + 1, '#4a3a2a'); pell(cx, q.x, q.y, rx, ry, '#0a0604'); pell(cx, q.x, q.y + ry * 0.3, rx * 0.7, ry * 0.5, '#000000');
       }
       if (L.ash) for (let i = 0; i < 70; i++) { const x = ((i * 37.7) % (2 * lhw)) - lhw, z = (i * 53.3 + time * 4) % 300; const q = P(x, z); cx.fillStyle = i % 3 ? 'rgba(90,90,90,0.55)' : 'rgba(150,140,130,0.5)'; cx.fillRect(Math.round(q.x), Math.round(q.y), 1, 1); }
-      if (L.kraken) for (const side of [-1, 1]) for (let k = 0; k < 3; k++) {
-        const z0 = 70 + k * 80, ph = time * 2.2 + k * 1.7 + side;
-        let prev = null;
-        for (let j = 0; j <= 8; j++) { const z = z0 + j * 4, x = side * (lhw + 2 - j * 0.35 + Math.sin(ph + j * 0.6) * 1.6), q = P(x, z, 2 + j * 0.8); if (prev) pline(cx, prev.x, prev.y, q.x, q.y, j % 2 ? '#7a3a8a' : '#9a4aa8', Math.max(1, 3 - j * 0.25)); prev = q; }
+      // the Kraken's warning shadows: the lane darkens where a tentacle is about to land
+      if (L.kraken && st.sim && st.sim.tentacles) for (const tn of st.sim.tentacles) {
+        const s = GK.tentacleState(tn, st.sim.time);
+        if (s.phase !== 'wind') continue;
+        const x0 = tn.side * lhw, x1 = tn.side * (lhw - tn.reach);
+        cx.globalAlpha = 0.15 + 0.4 * s.k;
+        ppoly(cx, [P(x0, tn.z - 5), P(x1, tn.z - 3), P(x1, tn.z + 3), P(x0, tn.z + 5)], '#140818');
+        cx.globalAlpha = 1;
       }
       if (L.wind && st.sim) {
         const dir = Math.sign(Math.sin(st.sim.time * 0.9 + (st.sim.windPh || 0))) || 1;
@@ -357,6 +361,50 @@ var GK = globalThis.GK = globalThis.GK || {};
       }
       if (L.voidPull) for (let i = 0; i < 26; i++) { const side = i % 2 ? 1 : -1, z = (i * 23 + time * 30) % 300, x = side * (lhw - 2 + ((time * 6 + i) % 4)); const q = P(x, z); cx.fillStyle = i % 3 ? '#c88aff' : '#ffffff'; cx.fillRect(Math.round(q.x), Math.round(q.y), 1, 1); }
     }
+    // A Kraken tentacle. Idle: it sways in the gutter, curling and uncurling. Wind-up: it rears up
+    // high. Down: it lies across the lane, writhing (with a squash and a splash as it lands).
+    // Back: it peels off the lane into the gutter.
+    drawTentacle(tn, simT, time) {
+      const cx = this.cx, lhw = this.lhw, N = 12, side = tn.side, s = GK.tentacleState(tn, simT);
+      const baseX = side * (lhw + this.gut * 0.55);
+      const idle = u => ({
+        x: baseX - side * u * 3 + Math.sin(time * 2 + tn.ph + u * 3) * 1.6 * u,
+        z: tn.z + Math.sin(time * 1.3 + tn.ph + u * 2) * 2.2 * u,
+        h: u * 15 + Math.sin(time * 2.4 + tn.ph + u * 4) * 2.4 * u + (u > 0.75 ? Math.sin((u - 0.75) * 12 + time * 3) * 2 : 0)
+      });
+      const reared = (u, k) => { const a = idle(u), shake = k > 0.7 ? Math.sin(time * 40) * 0.6 : 0; return { x: a.x + side * u * 6 * k + shake, z: a.z - u * 6 * k, h: a.h + u * u * 38 * k }; };
+      const lying = u => {
+        const since = s.since || 0, squash = since < 0.15 ? 1 - since / 0.15 : 0;
+        return {
+          x: baseX - side * u * (tn.reach + this.gut * 0.55),
+          z: tn.z + Math.sin(time * 9 + u * 6 + tn.ph) * 0.7 * u,
+          h: (u < 0.15 ? (0.15 - u) * 14 : 0) + 1.4 + Math.abs(Math.sin(time * 7 + u * 8)) * 0.6 * u + squash * 3 * Math.sin(u * Math.PI)
+        };
+      };
+      const pt = u => {
+        if (s.phase === 'wind') return reared(u, s.k);
+        if (s.phase === 'down') return lying(u);
+        if (s.phase === 'back') { const a = lying(u), b = idle(u), k = s.k * s.k; return { x: a.x + (b.x - a.x) * k, z: a.z + (b.z - a.z) * k, h: a.h + (b.h - a.h) * k }; }
+        return idle(u);
+      };
+      const pts = []; for (let j = 0; j <= N; j++) { const u = j / N, p = pt(u); pts.push({ u, q: P(p.x, p.z, p.h), p }); }
+      // shadow on the lane when it lies across it
+      if (s.phase === 'down') { const a = P(pts[0].p.x, tn.z + 1.5), b = P(pts[N].p.x, tn.z + 1.5); pline(cx, a.x, a.y, b.x, b.y, 'rgba(10,4,14,0.35)', 3); }
+      const body = '#7a3a8a', dark = '#4e1c5c', light = '#b46ac4', sucker = '#f2c4ea';
+      const rad = u => (2.7 * (1 - u) + 0.6) * S0;
+      for (const { u, q } of pts) this.circle(q.x, q.y, rad(u) * q.s + 0.7, dark);
+      for (const { u, q } of pts) { this.circle(q.x, q.y, rad(u) * q.s, body); this.circle(q.x - rad(u) * q.s * 0.3, q.y - rad(u) * q.s * 0.35, rad(u) * q.s * 0.45, light); }
+      // suckers along the underside
+      for (let j = 1; j < N; j += 2) { const { u, q } = pts[j], r = rad(u) * q.s; this.circle(q.x + r * 0.15, q.y + r * 0.45, Math.max(0.6, r * 0.32), sucker); }
+      // the splash as it hits the lane
+      if (s.phase === 'down' && s.since < 0.35) {
+        const k = s.since / 0.35;
+        cx.globalAlpha = 1 - k;
+        for (let i = 0; i < 10; i++) { const u = i / 9, p = lying(u), q = P(p.x + Math.sin(i * 2.3) * 3 * k, tn.z + Math.cos(i * 1.7) * 4 * k, 2 + 10 * k * (1 - k) * 4); this.circle(q.x, q.y, 1, i % 2 ? '#bff0ff' : '#ffffff'); }
+        cx.globalAlpha = 1;
+      }
+    }
+
     // Cosmetics from the Locker: trail, pin skin, lane finish, crowd hats.
     setCosmetics(c) {
       this.cosm = c || {};
@@ -1031,6 +1079,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       const items = [];
       for (const p of sim.pins) items.push({ z: p.z, f: () => this.drawPin(p, sim, time) });
       for (const q of sim.posts) items.push({ z: q.z, f: () => this.drawPost(q, time) });
+      if (sim.tentacles) for (const tn of sim.tentacles) items.push({ z: tn.z, f: () => this.drawTentacle(tn, sim.time, time) });
       const strobeOn = Math.floor(time * 2.2) % 3 === 0;
       for (const b of sim.balls) {
         if (b.gone || b.delay > 0) continue;
