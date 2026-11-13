@@ -709,6 +709,12 @@ test('v1.1 endless lanes: holes, the Kraken and the sky drop-off take the ball',
   const k = new GK.Sim({ rng: GK.makeRng(2), lane: { kraken: true, oil: 'house' }, rack: GK.padRack() });
   assert.strictEqual(k.tentacles.length, 6);
   assert.ok(k.tentacles.every(t => t.slams.length > 5), 'each tentacle slams again and again');
+  assert.ok(k.tentacles.every(t => t.reach > k.lhw), 'a downed tentacle reaches past the middle');
+  for (let t = 0; t < 150; t += 0.02) assert.ok(k.tentacles.some(tn => GK.tentacleState(tn, t).phase === 'down'), 'a tentacle is down at ' + t.toFixed(2));
+  for (let t = 0; t < 150; t += 0.05) k.tentacles.forEach(tn => { const s = GK.tentacleState(tn, t); assert.ok(['idle', 'wind', 'down', 'back'].includes(s.phase)); });
+  // different seeds give different patterns
+  const k3 = new GK.Sim({ rng: GK.makeRng(9), lane: { kraken: true, oil: 'house' }, rack: GK.padRack() });
+  assert.notDeepStrictEqual(k3.tentacles.map(t => t.slams.slice(0, 3)), k.tentacles.map(t => t.slams.slice(0, 3)));
   const wall = { side: -1, z: 150, reach: 30, ph: 0, slams: [0.2] };
   assert.strictEqual(GK.tentacleState(wall, 0).phase, 'wind');
   assert.strictEqual(GK.tentacleState(wall, 0.5).phase, 'down');

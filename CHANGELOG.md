@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.1.5
+
+### Changed
+- **The Kraken's tentacles reach past the middle of the lane** when they slam down, so there's no gap in the middle: the only way through is the far side.
+- **There is always at least one tentacle down.** The slams follow one shared random schedule where each new slam lands before the previous one lifts, so the lane is never fully clear.
+
 ## v1.1.4
 
 ### Changed

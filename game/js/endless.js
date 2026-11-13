@@ -8,7 +8,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   Object.assign(GK.BOSSES, {
     foreman: { name: 'The Demolition Foreman', desc: 'Knocks a new hole in the lane every frame. Balls that roll over a hole are gone.', endless: true },
     scrapper: { name: 'The Scrapper', desc: 'Every pin you knock down has a 1 in 3 chance to be hauled off before it scores.', endless: true },
-    kraken: { name: 'The Kraken', desc: 'Three tentacles on each side slam down across the lane at random, blocking it for a moment. Watch for their shadows and time your throw.', endless: true },
+    kraken: { name: 'The Kraken', desc: 'Three tentacles on each side take turns slamming down across the lane, reaching past the middle. At least one is always down. Watch the shadows and thread your ball through the gap on the far side.', endless: true },
     angler: { name: 'The Angler', desc: 'Pitch black. Only a wandering lure light shows part of the deck.', endless: true },
     poltergeist: { name: 'The Poltergeist', desc: 'After your first roll, the pins left standing are flung to new spots on the deck.', endless: true },
     banshee: { name: 'The Banshee', desc: 'Her scream scrambles the order of your charms every frame.', endless: true },
@@ -67,13 +67,22 @@ var GK = globalThis.GK = globalThis.GK || {};
   // A slam winds up (the tentacle rears back and its shadow darkens the lane), comes down and lies
   // across the lane as a wall for a moment, then pulls back into the gutter.
   GK.TENTACLE = { wind: 0.5, down: 1.5, back: 0.45, thick: 2.2 };
+  // One shared schedule: each slam lands before the one before it lifts, so there is never a
+  // moment with every tentacle up. Which tentacle slams next is random (never one that is still
+  // busy), and a downed tentacle reaches past the middle of the lane: the only way through is the
+  // far side.
   GK.makeTentacles = function (rng, lhw) {
-    const out = [];
-    [[-1, [90, 160, 230]], [1, [125, 195, 262]]].forEach(([side, zs]) => zs.forEach(z => {
-      const slams = []; let t = 1.2 + rng() * 3.5;
-      while (t < 120) { slams.push(+t.toFixed(2)); t += 2.8 + rng() * 3.6; }
-      out.push({ side, z, reach: lhw * (0.62 + rng() * 0.2), ph: rng() * 6.28, slams });
-    }));
+    const T = GK.TENTACLE, out = [];
+    [[-1, [90, 160, 230]], [1, [125, 195, 262]]].forEach(([side, zs]) => zs.forEach(z => out.push({ side, z, reach: lhw * (1.2 + rng() * 0.15), ph: rng() * 6.28, slams: [] })));
+    const busyUntil = out.map(() => -99);
+    let s = -0.6; // already down when the frame starts
+    while (s < 180) {
+      const free = out.map((tn, k) => k).filter(k => busyUntil[k] <= s - T.wind);
+      const k = free.length ? free[Math.floor(rng() * free.length)] : busyUntil.indexOf(Math.min(...busyUntil));
+      out[k].slams.push(+s.toFixed(2));
+      busyUntil[k] = s + T.down + T.back;
+      s += 0.6 + rng() * 0.7; // always sooner than T.down, so the next one lands before this one lifts
+    }
     return out;
   };
   // { phase: 'idle' | 'wind' | 'down' | 'back', k: 0..1 progress through that phase, since: seconds since impact }
