@@ -303,7 +303,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     for (let i = 0; i < 2 + (GK.flags(run).shopExtra || 0); i++) { const g = pickGood(run, rng, gx); gx.push(g.id); shop.items.push(g); }
     // endless shops sometimes sell a corrupted charm
     if (GK.isEndless(run)) shop.items.forEach(it => { if (it.kind === 'charm' && rng() < GK.CORRUPT_CHANCE) { it.corrupt = true; it.price = Math.max(1, Math.round(it.price * 0.75)); } });
-    if (run.alley > 0 || run.rush) shop.items.forEach(it => { if (it.kind === 'charm' && !it.corrupt && GK.HEX && GK.HEX[it.id] && rng() < GK.CURSE_CHANCE) it.curse = rng.pick(Object.keys(GK.CURSES)); });
+    if (run.alley > 0 || run.rush) { let hexed = false; shop.items.forEach(it => { if (!hexed && it.kind === 'charm' && !it.corrupt && GK.HEX && GK.HEX[it.id] && rng() < GK.CURSE_CHANCE) { it.curse = rng.pick(Object.keys(GK.CURSES)); hexed = true; } }); } // at most one hexed charm per shop
     // One membership offer per alley; it stays until bought.
     if (run.memberAlley !== run.alley) {
       const pool = Object.keys(GK.MEMBERSHIPS).filter(k => !run.members.includes(k));
