@@ -219,7 +219,8 @@ var GK = globalThis.GK = globalThis.GK || {};
     for (let k = 0; k < 6; k++) p(6 + k * 7, 6 + (k % 2) * 2, '#fff6c8'); // sparkles
     // the icon
     const id = (f.unlocks[0] || '').split(':')[1];
-    if (kind === 'ball') {
+    if (GK.drawFeatIcon && GK.drawFeatIcon(ctx, f.id, col)) { /* themed icon for this feat */ }
+    else if (kind === 'ball') {
       const b = GK.BALLS[id] || GK.BALLS.house;
       disc(24, 26, 10, '#0e0a10'); disc(24, 26, 9, GK.shade(b.col, -0.35)); disc(23, 25, 8, b.col); disc(21, 22, 4, GK.shade(b.col, 0.25)); p(20, 21, '#ffffff');
       disc(22, 25, 1, '#0e0a10'); disc(26, 25, 1, '#0e0a10'); disc(24, 29, 1, '#0e0a10');

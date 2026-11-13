@@ -238,8 +238,9 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (s.includes('{x}')) s = s.replace('{x}', d.show ? d.show(c) : '1');
     const E = GK.EVOLVE && GK.EVOLVE[c.id];
     if (c.corrupt) s = 'CORRUPTED: triggers twice every frame, but costs $1 a frame and sells for nothing. ' + s;
-    if (c.curse) s = GK.curseDesc(c) + s;
-    else if (c.blessed) s = 'Curse lifted: triggers twice every frame. ' + s;
+    if (c.curse) s = s + ' ' + GK.curseDesc(c);
+    else if (c.blessed && GK.hexOf(c)) s = 'Curse lifted (hexed from ' + GK.CHARMS[c.id].name + '). ' + s;
+    if (GK.hexOf && GK.hexOf(c)) return s;
     if (E && c.evolved) s = 'EVOLVED from ' + GK.CHARMS[c.id].name + '. ' + s;
     else if (E) s += ' Evolves into ' + E.name + ': ' + E.need + ' (' + Math.min(E.n, c.evo || 0) + '/' + E.n + ').';
     return s;
@@ -302,7 +303,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     for (let i = 0; i < 2 + (GK.flags(run).shopExtra || 0); i++) { const g = pickGood(run, rng, gx); gx.push(g.id); shop.items.push(g); }
     // endless shops sometimes sell a corrupted charm
     if (GK.isEndless(run)) shop.items.forEach(it => { if (it.kind === 'charm' && rng() < GK.CORRUPT_CHANCE) { it.corrupt = true; it.price = Math.max(1, Math.round(it.price * 0.75)); } });
-    if (run.alley > 0 || run.rush) shop.items.forEach(it => { if (it.kind === 'charm' && !it.corrupt && GK.CURSES && rng() < GK.CURSE_CHANCE) it.curse = rng.pick(Object.keys(GK.CURSES)); });
+    if (run.alley > 0 || run.rush) shop.items.forEach(it => { if (it.kind === 'charm' && !it.corrupt && GK.HEX && GK.HEX[it.id] && rng() < GK.CURSE_CHANCE) it.curse = rng.pick(Object.keys(GK.CURSES)); });
     // One membership offer per alley; it stays until bought.
     if (run.memberAlley !== run.alley) {
       const pool = Object.keys(GK.MEMBERSHIPS).filter(k => !run.members.includes(k));

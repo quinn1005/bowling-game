@@ -54,11 +54,11 @@ const must = (c, m) => { if (!c) throw new Error(m); };
   await page.waitForSelector('#layer .shop');
   must(await page.evaluate(() => GK.debug.run.alley === 1 && GK.debug.run.round === 2), 'rush did not move to the next boss');
   // a cursed charm in the shop: it can't be sold once bought
-  await page.evaluate(() => { const r = GK.debug.run; r.money = 99; r.charms = []; GK.CURSE_CHANCE = 1; GK.openShop(r); GK.debug.showShop(); });
+  await page.evaluate(() => { const r = GK.debug.run; r.money = 99; r.charms = []; GK.CURSE_CHANCE = 1; for (let i = 0; i < 60; i++) { GK.openShop(r); if (r.shop.items.some(it => it.curse)) break; } GK.debug.showShop(); });
   await page.waitForSelector('#layer .item.cursed');
   await snap('v12-cursed-shop');
   await page.click('#layer .item.cursed [data-buy]');
-  must(await page.evaluate(() => GK.debug.run.charms.some(c => c.curse)), 'cursed charm not bought');
+  must(await page.evaluate(() => GK.debug.run.charms.some(c => c.curse && GK.HEX[c.id] && GK.charmName(c) === GK.HEX[c.id].name)), 'cursed charm not bought in its hexed form');
   await page.click('#layerInner [data-charm="0"]');
   must(await page.$eval('#modal .btn.danger', b => b.disabled), 'cursed charm sell button not disabled');
   await page.click('#modal button:has-text("Close")');

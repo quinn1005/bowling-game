@@ -28,9 +28,9 @@ var GK = globalThis.GK = globalThis.GK || {};
   // Before each round you both draft from a shared pool of charms, balls and items, taking turns.
   // Difficulty and drafting smarts: Quinn (hardest), then Kaleb, then Levi.
   GK.H2H = {
-    quinn: { name: 'Quinn', ball: 'twohander', skill: 0.84, iq: 3, blurb: 'Two-handed up the outside. The best bowler and the sharpest drafter: builds real synergies, takes the picks you want, and saves items for the right moment.' },
-    kaleb: { name: 'Kaleb', ball: 'wideswing', skill: 0.82, iq: 2, blurb: 'Plays the whole lane, out wide and back hard. Drafts the strongest-looking picks and keeps his charms in a sensible order.' },
-    levi: { name: 'Levi', ball: 'loftduck', skill: 0.5, iq: 1, blurb: 'Lofts it way out with a THUD. Drafts on a hunch (he loves a fun ball) and uses items the moment he gets them.' }
+    quinn: { name: 'Quinn', ball: 'twohander', skill: 0.84, iq: 3, blurb: 'Two-handed up the outside. Drafts for real synergies, takes the picks you want, and saves items for the right moment.' },
+    kaleb: { name: 'Kaleb', ball: 'wideswing', skill: 0.82, iq: 2, blurb: 'Plays the whole lane, out wide and back hard. Drafts the strongest-looking picks and keeps the charm row in a sensible order.' },
+    levi: { name: 'Levi', ball: 'loftduck', skill: 0.5, iq: 1, blurb: 'Lofts it way out with a THUD. Drafts on a hunch (a fun ball is hard to pass up) and uses items the moment they come.' }
   };
   GK.H2H_FRAMES = 5;
   GK.H2H_ROUNDS = 3;
@@ -160,12 +160,12 @@ var GK = globalThis.GK = globalThis.GK || {};
   GK.aiPick = function (run, draft) {
     const A = run.h2h.ai, iq = GK.H2H[run.h2h.opp].iq, items = draft.items;
     const r = GK.stream(run.seed, 'aipick:' + run.h2h.round + ':' + draft.picks.ai);
-    if (iq === 1) { // Levi: on a hunch, and he loves a fun ball
+    if (iq === 1) { // Levi: on a hunch, with a soft spot for fun balls
       const w = items.map(it => it.kind === 'ball' ? 3 : 1), tot = w.reduce((a, b) => a + b, 0);
       let x = r() * tot; for (let i = 0; i < items.length; i++) { x -= w[i]; if (x <= 0) return i; } return 0;
     }
     if (iq === 2) { let bi = 0, bv = -1; items.forEach((it, i) => { const v = roughValue(it) * (0.9 + r() * 0.2); if (v > bv) { bv = v; bi = i; } }); return bi; }
-    // Quinn: real synergy with his build, and denies you a pick that's much better for you
+    // Quinn: real synergy with the build, and denies you a pick that's much better for you
     const left = GK.h2hLeft(run), mine = Object.assign(GK.aiRun(run), { _left: left }), yours = { levels: run.levels, charms: run.charms, money: run.money, rack: run.rack, bag: run.bag, trophies: [], _left: left };
     const youKinds = { strike: run.stats.strikes, spare: run.stats.spares, open: Math.max(0, run.stats.frames - run.stats.strikes - run.stats.spares) };
     let bi = 0, bv = -Infinity;
@@ -233,10 +233,70 @@ var GK = globalThis.GK = globalThis.GK || {};
   };
 
   // ---------- curses ----------
-  // Shops sometimes sell a cursed charm. It triggers twice every frame, but carries a curse
-  // until you meet its condition, and you can't sell it while it's cursed. Lift the curse and
-  // you keep the double trigger.
-  GK.CURSE_CHANCE = 0.12;
+  // Shops sometimes sell a cursed charm. The curse twists the charm into a hexed form of its own
+  // (a bigger upside with a drawback built in) and carries a curse until you meet its condition.
+  // You can't sell it while it's cursed. Lift the curse and the drawback goes, the upside stays.
+  const isStrike = k => GK.isStrikeKind(k), isSpare = k => GK.isSpareKind(k), isOpen = k => k === 'open' || k === 'gutter';
+  GK.HEX = {
+    strike_out: { name: 'Strike or Bust', up: '×2 Mult on any Strike, Double or Turkey.', down: '×0.5 Mult on anything else.',
+      u: (c, s) => isStrike(c.kind) && s.xmult(2), d: (c, s) => !isStrike(c.kind) && s.xmult(0.5) },
+    spare_parts: { name: 'Spare Hex', up: '+3 Mult for each pin your last roll knocks down on a Spare or Split conversion.', down: '-6 Mult on a Strike.',
+      u: (c, s) => isSpare(c.kind) && c.lastRollPins && s.mult(3 * c.lastRollPins), d: (c, s) => isStrike(c.kind) && s.mult(-6) },
+    open_mic: { name: 'Heckle Night', up: '×2.5 Mult on an Open frame.', down: '-5 Mult on a Spare.',
+      u: (c, s) => c.kind === 'open' && s.xmult(2.5), d: (c, s) => isSpare(c.kind) && s.mult(-5) },
+    league_jacket: { name: 'Straitjacket', up: '+2 Mult for every frame bowled so far this round, this one included.', down: 'Costs $1 on the last frame of each round.',
+      u: (c, s) => s.mult(2 * (c.frameIdx + 1)), d: (c, s) => c.lastFrame && s.money(-1) },
+    lucky_shoes: { name: 'Cursed Kicks', up: '+15 Points for every frame bowled so far this round, this one included.', down: '-40 Points on an Open or Gutter frame.',
+      u: (c, s) => s.chips(15 * (c.frameIdx + 1)), d: (c, s) => isOpen(c.kind) && s.chips(-40) },
+    chalk_bag: { name: 'Ash Bag', up: '+10 Points for every pin your first ball knocks down.', down: '-8 Points for every pin your later rolls knock down.',
+      u: (c, s) => c.rolls[0] && c.rolls[0].pins && s.chips(10 * c.rolls[0].pins), d: (c, s) => { const n = c.pins - (c.rolls[0] ? c.rolls[0].pins : 0); if (n > 0) s.chips(-8 * n); } },
+    corner_office: { name: 'Haunted Corner', up: '+90 Points for each corner pin (7 or 10) knocked down.', down: '-30 Points if neither corner pin falls.',
+      u: (c, s) => { const n = (c.down.has(7) ? 1 : 0) + (c.down.has(10) ? 1 : 0); if (n) s.chips(90 * n); }, d: (c, s) => !c.down.has(7) && !c.down.has(10) && s.chips(-30) },
+    headpin_hunter: { name: 'Head Case', up: '×1.5 Mult if the first pin your ball touches is the headpin.', down: '×0.8 Mult if it isn\'t.',
+      u: (c, s) => c.firstPin === 1 && s.xmult(1.5), d: (c, s) => c.firstPin !== 1 && s.xmult(0.8) },
+    domino: { name: 'Chain Reaction', up: '+1 Mult for every pin that knocks over another pin.', down: '-4 Points for every pin your ball hits itself.',
+      u: (c, s) => c.carry && s.mult(c.carry), d: (c, s) => { const n = c.pins - c.carry; if (n > 0) s.chips(-4 * n); } },
+    gutter_punk: { name: 'Gutter Ghoul', up: '×4 Mult on a Gutter frame, and +2 Mult for every pin that ends up in a gutter.', down: '-3 Mult on a Strike.',
+      u: (c, s) => { if (c.gutterPins) s.mult(2 * c.gutterPins); if (c.kind === 'gutter') s.xmult(4); }, d: (c, s) => isStrike(c.kind) && s.mult(-3) },
+    thunderclap: { name: 'Thunderhead', up: '+2 Mult for each pin that falls within half a second of first contact.', down: '-2 Mult for each pin that falls late.',
+      u: (c, s) => c.fast && s.mult(2 * c.fast), d: (c, s) => c.late && s.mult(-2 * c.late) },
+    moon_shot: { name: 'Black Hole', up: '×1.15 Mult for every pin that flies into the pit.', down: 'Costs $1 if no pin reaches the pit.',
+      u: (c, s) => c.pit && s.xmult(Math.pow(1.15, c.pit)), d: (c, s) => !c.pit && s.money(-1) },
+    late_bloomer: { name: 'Dead Man\'s Hand', up: '×1.2 Mult for each pin that wobbles and falls late.', down: '-4 Mult if no pin falls late.',
+      u: (c, s) => c.late && s.xmult(Math.pow(1.2, c.late)), d: (c, s) => !c.late && s.mult(-4) },
+    high_roller: { name: 'Loan Hex', up: '+1 Mult for every $2 you hold.', down: 'Costs $1 on an Open or Gutter frame.',
+      u: (c, s) => { const n = Math.floor(Math.max(0, c.run.money) / 2); if (n) s.mult(n); }, d: (c, s) => isOpen(c.kind) && s.money(-1) },
+    tenth_frame: { name: 'Final Hour', up: '×4 Mult on the last frame of each round.', down: '×0.75 Mult on the first frame of each round.',
+      u: (c, s) => c.lastFrame && s.xmult(4), d: (c, s) => c.frameIdx === 0 && !c.lastFrame && s.xmult(0.75) },
+    pyromaniac: { name: 'Arsonist', up: '×2.5 Mult if anything exploded this frame. +10 Points per pin blasted.', down: '×0.75 Mult if nothing exploded.',
+      u: (c, s) => { if (c.blasted) s.chips(10 * c.blasted); if (c.explosions) s.xmult(2.5); }, d: (c, s) => !c.explosions && s.xmult(0.75) },
+    sniper: { name: 'Dead Eye', up: '×3 Mult when you convert a spare by knocking down exactly one pin.', down: '-4 Mult on a Strike.',
+      u: (c, s) => isSpare(c.kind) && c.lastRollPins === 1 && s.xmult(3), d: (c, s) => isStrike(c.kind) && s.mult(-4) },
+    piggy_bank: { name: 'Piggy Heist', up: 'Earn $3 for every Strike.', down: 'Costs $1 on an Open or Gutter frame.',
+      u: (c, s) => isStrike(c.kind) && s.money(3), d: (c, s) => isOpen(c.kind) && s.money(-1) },
+    tip_jar: { name: 'Tip Thief', up: 'Earn $3 for every Spare or Split conversion.', down: 'The house takes $1 on every Strike.',
+      u: (c, s) => isSpare(c.kind) && s.money(3), d: (c, s) => isStrike(c.kind) && s.money(-1) },
+    lane_hog: { name: 'Road Hog', up: '+5 Points for every board your ball crosses.', down: '-30 Points if your ball crosses fewer than 8 boards.',
+      u: (c, s) => c.boards && s.chips(5 * c.boards), d: (c, s) => c.boards < 8 && s.chips(-30) },
+    late_night: { name: 'Witching Hour', up: '×2 Mult in the last 2 frames of a round.', down: '-4 Mult in every other frame.',
+      u: (c, s) => c.framesLeft <= 2 && s.xmult(2), d: (c, s) => c.framesLeft > 2 && s.mult(-4) },
+    hook_artist: { name: 'Hooked', up: '+3 Mult for every 10% of hook on the dial.', down: '-6 Mult if your biggest hook is under 30%.',
+      u: (c, s) => { const n = Math.floor(c.maxHook * 10); if (n) s.mult(3 * n); }, d: (c, s) => c.maxHook < 0.3 && s.mult(-6) },
+    straight_shooter: { name: 'Arrow Hex', up: '×2 Mult if every throw this frame had almost no hook.', down: '-4 Mult if any throw hooked.',
+      u: (c, s) => c.throws > 0 && c.maxHook < 0.1 && s.xmult(2), d: (c, s) => c.maxHook >= 0.1 && s.mult(-4) },
+    underdog: { name: 'Lone Wolf', up: '×1.5 Mult for every empty charm slot.', down: '-2 Mult for every other charm you hold.',
+      u: (c, s) => { const n = c.run.maxCharms - c.run.charms.length; if (n > 0) s.xmult(Math.pow(1.5, n)); }, d: (c, s) => { const n = c.run.charms.length - 1; if (n > 0) s.mult(-2 * n); } },
+    bowling_buddy: { name: 'Ball and Chain', up: '+6 Mult for every ball in your bag.', down: '-15 Points for every ball in your bag.',
+      u: (c, s) => s.mult(6 * c.run.bag.length), d: (c, s) => s.chips(-15 * c.run.bag.length) },
+    statue: { name: 'Medusa', up: '×2 Mult if no pin wobbled this frame.', down: '×0.8 Mult if any pin wobbled.',
+      u: (c, s) => !c.wobbles && s.xmult(2), d: (c, s) => c.wobbles && s.xmult(0.8) },
+    odd_pins: { name: 'Odd Hex', up: '×2 Mult if an odd number of pins fell this frame.', down: '×0.5 Mult if even.',
+      u: (c, s) => c.pins % 2 && s.xmult(2), d: (c, s) => !(c.pins % 2) && s.xmult(0.5) },
+    rack_attack: { name: 'Rack Hex', up: '+12 Points for every pin in your rack.', down: '-2 Mult on an Open or Gutter frame.',
+      u: (c, s) => s.chips(12 * GK.padRack(c.run.rack).filter(t => t !== 'none').length), d: (c, s) => isOpen(c.kind) && s.mult(-2) }
+  };
+  GK.hexOf = inst => (inst.curse || inst.blessed) && GK.HEX[inst.id] || null;
+  GK.CURSE_CHANCE = 0.3; // of the charms that have a hexed form
   GK.CURSES = {
     heavy: { name: 'Heavy Hands', desc: 'The PERFECT zone is 25% smaller.', lift: 'Throw 6 PERFECT throws', n: 6, count: c => c.perfects },
     leaky: { name: 'Leaky Pockets', desc: 'Lose $1 every frame.', lift: 'Roll 3 Strikes', n: 3, count: c => GK.isStrikeKind(c.kind) ? 1 : 0 },
@@ -245,7 +305,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     chains: { name: 'Chains', desc: 'No re-racks.', lift: 'Clear 2 rounds', n: 2, count: () => 0 }
   };
   GK.activeCurses = run => (run.charms || []).filter(c => c.curse).map(c => c.curse.id);
-  GK.curseDesc = c => { const C = GK.CURSES[c.curse.id]; return 'CURSED with ' + C.name + ' (' + C.desc + ') until you ' + C.lift.charAt(0).toLowerCase() + C.lift.slice(1) + ' (' + Math.min(C.n, c.curse.have) + '/' + C.n + '). Triggers twice every frame, even after the curse lifts. Can\'t be sold while cursed. '; };
+  GK.curseDesc = c => { const C = GK.CURSES[c.curse.id]; return 'Hexed ' + GK.CHARMS[c.id].name + '. Curse: ' + C.name + ', ' + C.desc.charAt(0).toLowerCase() + C.desc.slice(1, -1) + '. ' + C.lift + ' (' + Math.min(C.n, c.curse.have) + '/' + C.n + ') to lift it: the drawback goes, the upside stays. Can\'t be sold while cursed.'; };
   // Progress the curses after a frame (or a round, for Chains). Returns the curses just lifted.
   GK.progressCurses = function (run, ctx, roundWon) {
     const out = [];
@@ -253,7 +313,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (!c.curse) return;
       const C = GK.CURSES[c.curse.id];
       c.curse.have += roundWon ? (c.curse.id === 'chains' ? 1 : 0) : (C.count(ctx) || 0);
-      if (c.curse.have >= C.n) { out.push(GK.charmName(c) + ': ' + C.name + ' lifted!'); c.curse = null; c.blessed = true; }
+      if (c.curse.have >= C.n) { c.curse = null; c.blessed = true; out.push(GK.charmName(c) + ': ' + C.name + ' lifted! Its drawback is gone.'); }
     });
     return out;
   };

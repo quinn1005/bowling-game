@@ -170,7 +170,6 @@ var GK = globalThis.GK = globalThis.GK || {};
         def.score(ctxC, s, data);
         if (retrigger) def.score(ctxC, s, data);
         if (inst.corrupt) def.score(ctxC, s, data); // corrupted: triggers twice...
-        if (inst.curse || inst.blessed) def.score(ctxC, s, data); // cursed charms trigger twice too
       }
       if (inst.corrupt) s.money(-1, 'Corruption'); // ...and costs $1 a frame
       if (inst.curse && inst.curse.id === 'leaky') s.money(-1, 'Leaky Pockets (curse)');

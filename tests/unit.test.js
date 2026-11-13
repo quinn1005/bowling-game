@@ -916,17 +916,30 @@ test('v1.2 draft: item timing by tier', () => {
   assert.strictEqual(levi.h2h.ai.levels.strike, 1);
 });
 
-test('v1.2 curses: twice the effect, a drawback, no selling, lifted by its condition', () => {
+test('v1.2 curses: a hexed form per charm, a drawback, no selling, lifted by its condition', () => {
   const run = GK.newRun({ seed: 32 });
-  const c = GK.charmInst('league_jacket'); c.curse = { id: 'leaky', have: 0 }; run.charms = [c];
+  const c = GK.charmInst('strike_out'); c.curse = { id: 'leaky', have: 0 }; run.charms = [c];
+  assert.strictEqual(GK.charmName(c), 'Strike or Bust');
+  assert.ok(GK.charmDesc(c).includes('Drawback'));
   const f = { kind: 'strike', rolls: [roll({ down: pins(10), pins: 10 })] };
+  const open = { kind: 'open', rolls: [roll({ down: pins(4), pins: 4 }), roll({ down: [], pins: 0 })] };
+  const plain = GK.newRun({ seed: 32 });
   const r = GK.scoreFrame(f, run);
-  assert.strictEqual(r.mult, GK.scoreFrame(f, GK.newRun({ seed: 32 })).mult + 6, 'triggers twice');
+  assert.ok(Math.abs(r.score - GK.scoreFrame(f, plain).score * 2) <= 1, '×2 on a strike');
   assert.strictEqual(r.money, -1, 'Leaky Pockets');
+  assert.ok(GK.scoreFrame(open, run).score < GK.scoreFrame(open, plain).score, 'the drawback: ×0.5 on anything else');
+  // every hex has both halves and scores without errors
+  for (const id of Object.keys(GK.HEX)) {
+    assert.ok(GK.CHARMS[id], id); const h = GK.HEX[id]; assert.ok(h.name && h.up && h.down && h.u && h.d, id);
+    const rr = GK.newRun({ seed: 5 }), ci = GK.charmInst(id); ci.curse = { id: 'jinx', have: 0 }; rr.charms = [ci];
+    for (const fr of [f, open]) assert.ok(isFinite(GK.scoreFrame(fr, rr).score), id);
+  }
   const m = run.money; GK.sellCharm(run, 0); assert.strictEqual(run.charms.length, 1, 'can\'t sell'); assert.strictEqual(run.money, m);
   for (let i = 0; i < 3; i++) GK.progressCurses(run, { kind: 'strike' });
   assert.ok(!run.charms[0].curse && run.charms[0].blessed, 'lifted after 3 strikes');
   assert.strictEqual(GK.scoreFrame(f, run).money, 0);
+  assert.strictEqual(GK.scoreFrame(open, run).score, GK.scoreFrame(open, plain).score, 'drawback gone once lifted');
+  assert.ok(Math.abs(GK.scoreFrame(f, run).score - GK.scoreFrame(f, plain).score * 2) <= 1, 'upside kept');
   // Heavy Hands shrinks the zone; Chains takes the re-racks
   const h = GK.newRun({ seed: 33 }); const hc = GK.charmInst('lucky_shoes'); hc.curse = { id: 'heavy', have: 0 }; h.charms = [hc];
   assert.ok(Math.abs(GK.equipMods(h).zone - GK.equipMods(GK.newRun({ seed: 33 })).zone * 0.75) < 1e-9);

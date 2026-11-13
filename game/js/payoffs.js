@@ -111,6 +111,8 @@ var GK = globalThis.GK = globalThis.GK || {};
   // The charm definition to use for an instance (its evolved form once it has evolved).
   GK.charmDef = function (inst) {
     const d = GK.CHARMS[inst.id], E = inst.evolved && GK.EVOLVE[inst.id];
+    const X = GK.hexOf && GK.hexOf(inst);
+    if (X) return Object.assign({}, d, { name: X.name, desc: inst.curse ? X.up + ' Drawback: ' + X.down : X.up, score: (c, s, me) => { X.u(c, s, me); if (me.curse) X.d(c, s, me); } });
     if (!E) return d;
     return Object.assign({}, d, { name: E.name, desc: E.desc, score: E.score || d.score, after: E.after || d.after, show: E.show || d.show });
   };
@@ -120,7 +122,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     const out = [];
     (run.charms || []).forEach((inst, i) => {
       if (stolen === i) return;
-      const E = GK.EVOLVE[inst.id]; if (!E || inst.evolved) return;
+      const E = GK.EVOLVE[inst.id]; if (!E || inst.evolved || (GK.hexOf && GK.hexOf(inst))) return;
       inst.evo = (inst.evo || 0) + (E.when(ctx, inst) || 0);
       if (inst.evo >= E.n) { inst.evolved = true; out.push({ idx: i, from: GK.CHARMS[inst.id].name, to: E.name }); }
     });

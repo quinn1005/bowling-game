@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.2.1
+
+### Changed
+- **Cursed charms are now hexed, not doubled.** Corrupted charms already trigger twice, so curses do something different: each charm that can be cursed has its own **hexed form** with a new name and a twisted effect, a bigger upside with a drawback built in. A few examples:
+  - Strike Out becomes **Strike or Bust**: ×2 Mult on strikes, ×0.5 Mult on anything else.
+  - Chalk Bag becomes **Ash Bag**: +10 Points per pin your first ball knocks down, -8 Points per pin your later rolls knock down.
+  - Underdog becomes **Lone Wolf**: ×1.5 Mult per empty charm slot, -2 Mult for every other charm you hold.
+  - Statue becomes **Medusa**: ×2 Mult if no pin wobbled, ×0.8 Mult if any did.
+  - Gutter Punk becomes **Gutter Ghoul**: ×4 Mult on gutter frames and +2 Mult per pin in the gutter, -3 Mult on strikes.
+
+  There are 28 hexes in all. **Lift the curse and the drawback is gone for good, but the hexed upside stays.** Only charms with a hexed form show up cursed in shops, and a hexed charm doesn't evolve.
+- **Every achievement card has its own art** that matches its name: a roast turkey for Turkey Dinner, a snail with a bowling-ball shell for Slow Roller, a night owl for Night Owl, a wizard hat for Pinball Wizard, and so on for all 74 cards.
+- Head to Head: the opponent descriptions no longer rank the three of them.
+
 ## v1.2.0
 
 ### Daily Boss Rush
@@ -11,13 +25,13 @@
 - **Bowl against Quinn, Kaleb or Levi** on the same lane: you bowl a frame, then they bowl theirs, and you watch their throw.
 - **Three rounds of 5 frames, with a draft before each round.** You and your opponent take turns picking from one shared pool of 4 charms, 2 balls and 2 items, 3 picks each. Whatever you leave, they can take. Who picks first alternates each round. If your slots are full, you pick something to swap out.
 - **Tiered opponents, hardest first:**
-  - **Quinn** bowls the best and drafts the smartest: tests each charm in every slot of the build to find real synergies, takes picks that are much better for you, and saves items for the right moment (an Extra Frame once behind or in the last round, and a Loaded Ball only when the boost is worth the charm it destroys).
+  - **Quinn** drafts the smartest: tests each charm in every slot of the build to find real synergies, takes picks that are much better for you, and saves items for the right moment (an Extra Frame once behind or in the last round, and a Loaded Ball only when the boost is worth the charm it destroys).
   - **Kaleb** bowls a big wide swing, drafts the strongest-looking picks by rarity, keeps ×Mult charms at the end of the row, and saves items for the last round.
-  - **Levi** bowls straight down the middle, drafts on a hunch (he loves a fun ball) and uses items the moment he gets them.
+  - **Levi** bowls straight down the middle, drafts on a hunch (a fun ball is hard to pass up) and uses items the moment they come.
 - The end screen shows the score for each round and the opponent's final build. Your record against each of them is kept.
 
 ### Cursed charms
-- Shops sometimes sell a **cursed charm**. It triggers twice every frame, but you can't sell it and it carries a curse until you meet its condition: Heavy (smaller PERFECT zone, lifted by 6 PERFECTs), Leaky (-$1 a frame, lifted by 3 strikes), Dark (dark lane, lifted by 4 spares), Jinx (-3 Mult, lifted by a Turkey) or Chains (no re-racks, lifted by clearing 2 rounds). Lift it and it stays **blessed**, still triggering twice.
+- Shops sometimes sell a **cursed charm**. It triggers twice every frame, but you can't sell it and it carries a curse until you meet its condition: Heavy (smaller PERFECT zone, lifted by 6 PERFECTs), Leaky (-$1 a frame, lifted by 3 strikes), Dark (dark lane, lifted by 4 spares), Jinx (-3 Mult, lifted by a Turkey) or Chains (no re-racks, lifted by clearing 2 rounds). Lift it and it stays **blessed**.
 
 ### Ghost race
 - **Challenge links now carry your frames.** Open a friend's link and their ghost races you frame by frame: a pill in the HUD shows their score at the same point and whether you're ahead or behind.

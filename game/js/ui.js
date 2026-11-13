@@ -231,7 +231,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     UI.layer(`<div class="panel h2h">
       <div class="lbl">Head to Head · ${GK.H2H_ROUNDS} rounds of ${GK.H2H_FRAMES} frames</div>
       <h2>Pick your opponent</h2>
-      <p class="dim">Before each round you take turns drafting charms, balls and items from one shared pool. Then you bowl a frame, they bowl theirs, on the same lane. Highest total after ${GK.H2H_ROUNDS} rounds wins. Hardest first.</p>
+      <p class="dim">Before each round you take turns drafting charms, balls and items from one shared pool. Then you bowl a frame, they bowl theirs, on the same lane. Highest total after ${GK.H2H_ROUNDS} rounds wins.</p>
       <div class="choices">${Object.entries(GK.H2H).map(([id, o]) => `<button class="choice opp" data-o="${id}"><canvas width="${GK.PORTRAIT.W}" height="${GK.PORTRAIT.H}" data-who="${id}"></canvas><div><b>${esc(o.name)}</b><span>${esc(o.blurb)}</span><small>${rec[id] ? 'You ' + rec[id].w + ' · ' + o.name + ' ' + rec[id].l : 'Never played'}</small></div></button>`).join('')}</div>
       <button class="btn alt" data-a="back">Back</button>
     </div>`, r => {
