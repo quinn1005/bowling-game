@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.2.5
+
+### Changed
+- **The Regulars' cards use their own ball colours:** Up the Gutter shows Quinn's red ball, Lofted shows Levi's yellow ball, The Whole Lane shows Kaleb's green ball, and The Regulars card shows all three.
+
 ## v1.2.4
 
 ### Fixed

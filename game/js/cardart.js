@@ -76,6 +76,8 @@
     k.line(cx, cy, cx + Math.round(Math.cos(hand) * 7), cy + Math.round(Math.sin(hand) * 7), RED, 2); k.disc(cx, cy, 1, INK);
   };
   const lane = (k, x0, x1) => { k.r(x0 - 1, 10, x1 - x0 + 2, 32, INK); k.r(x0, 10, x1 - x0, 32, '#e0a860'); for (let x = x0 + 2; x < x1; x += 3) k.r(x, 10, 1, 32, '#c88a48'); k.r(x0, 10, x1 - x0, 1, '#f2c48a'); };
+  // a Regular's signature ball colour, brightened a little so it reads on the card
+  const sig = (id, fb) => { const b = GK.BALLS && GK.BALLS[id]; return b ? (id === 'twohander' ? '#d42a44' : b.col) : fb; };
   const tri = (k, cx, top, n, sz, c) => { for (let row = 0; row < n; row++) for (let i = 0; i <= row; i++) k.disc(cx - row * sz / 2 + i * sz, top + row * sz * 0.85, Math.max(1, Math.round(sz / 3)), c); };
 
   // Each feat's icon. k is the drawing kit, col the card's own two colours.
@@ -254,13 +256,13 @@
       let prev = null; for (let t = 0; t < 12; t += 0.4) { const rr = 11 - t * 0.85, x = 24 + Math.cos(t) * rr, y = 26 + Math.sin(t) * rr; if (prev) k.line(prev[0], prev[1], Math.round(x), Math.round(y), BLUE); prev = [Math.round(x), Math.round(y)]; }
     },
     champion: k => { crown(k, 24, 14, 1.5); k.sparkle(10, 12); k.sparkle(38, 12); },
-    quinn: k => { lane(k, 14, 34); k.r(14, 10, 2, 32, '#4a3a2a'); k.r(32, 10, 2, 32, '#4a3a2a'); for (let y = 38; y > 13; y -= 3) k.p(30, y, WHITE); k.ball(30, 38, 3, '#e8c040'); tri(k, 24, 12, 3, 4, PIN); },
+    quinn: k => { lane(k, 14, 34); k.r(14, 10, 2, 32, '#4a3a2a'); k.r(32, 10, 2, 32, '#4a3a2a'); for (let y = 38; y > 13; y -= 3) k.p(30, y, WHITE); k.ball(29, 37, 4, sig('twohander', '#c8344e')); tri(k, 24, 12, 3, 4, PIN); },
     levi: k => { // a lofted ball high over the lane, with a THUD below
       k.ell(24, 39, 10, 2, '#00000066'); let prev = null; for (let t = 0; t <= 1; t += 0.1) { const x = 10 + t * 28, y = 38 - Math.sin(t * Math.PI) * 26; if (prev) k.line(prev[0], prev[1], Math.round(x), Math.round(y), WHITE); prev = [Math.round(x), Math.round(y)]; }
-      k.ball(24, 14, 5, '#c84a4a'); k.line(36, 34, 40, 31, GOLD); k.line(37, 38, 41, 38, GOLD); k.line(34, 40, 36, 43, GOLD);
+      k.ball(24, 14, 5, sig('loftduck', '#ffd23a')); k.line(36, 34, 40, 31, GOLD); k.line(37, 38, 41, 38, GOLD); k.line(34, 40, 36, 43, GOLD);
     },
-    kaleb: k => { lane(k, 10, 38); let prev = null; for (let t = 0; t <= 1.001; t += 0.08) { const x = 34 - 26 * Math.sin(t * Math.PI * 0.8) + 4 * t, y = 40 - 27 * t; if (prev) k.line(prev[0], prev[1], Math.round(x), Math.round(y), WHITE); prev = [Math.round(x), Math.round(y)]; } k.ball(34, 38, 3, '#3a9a4a'); tri(k, 24, 12, 3, 4, PIN); },
-    regulars: k => { k.ball(13, 31, 6, '#e8c040'); k.ball(35, 31, 6, '#3a9a4a'); k.ball(24, 19, 6, '#c84a4a'); },
+    kaleb: k => { lane(k, 10, 38); let prev = null; for (let t = 0; t <= 1.001; t += 0.08) { const x = 34 - 26 * Math.sin(t * Math.PI * 0.8) + 4 * t, y = 40 - 27 * t; if (prev) k.line(prev[0], prev[1], Math.round(x), Math.round(y), WHITE); prev = [Math.round(x), Math.round(y)]; } k.ball(33, 37, 4, sig('wideswing', '#7fae84')); tri(k, 24, 12, 3, 4, PIN); },
+    regulars: k => { k.ball(13, 31, 6, sig('loftduck', '#ffd23a')); k.ball(35, 31, 6, sig('wideswing', '#7fae84')); k.ball(24, 19, 6, sig('twohander', '#c8344e')); },
     glass_jaw: k => { // a shield: no open frames got through
       k.poly([[24, 9], [37, 14], [36, 28], [24, 42], [12, 28], [11, 14]], GREY); k.poly([[24, 12], [34, 16], [33, 27], [24, 38]], '#c8c8d8', false); k.X(18, 20, 30, 32, RED, 2);
     },
