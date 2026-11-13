@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.2.4
+
+### Fixed
+- **The card gallery scrolls when you swipe on a card.** Before, only the gaps between cards scrolled. The same fix applies to the Wall of Fame, opponent portraits and every other picture in a menu. Aiming on the lane is unchanged.
+
 ## v1.2.3
 
 ### Changed

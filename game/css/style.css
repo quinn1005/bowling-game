@@ -416,3 +416,6 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
 .draft .builds { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
 .draft .builds .row { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
 .draft .builds .chip { cursor: default; padding: 3px 8px; font-size: 11px; }
+/* canvases inside menus (cards, portraits, the Wall of Fame) are pictures: let swipes scroll past them */
+.panel canvas, .shop canvas, #modal canvas, #layer canvas { touch-action: pan-x pan-y; cursor: default; }
+.choice canvas, button canvas { cursor: pointer; }

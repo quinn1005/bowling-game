@@ -2,7 +2,7 @@
 const http = require('http'), fs = require('fs'), path = require('path');
 const root = path.join(__dirname, '..', 'game');
 const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
-exports.open = async function (viewport = { width: 390, height: 800 }) {
+exports.open = async function (viewport = { width: 390, height: 800 }, pageOpts = {}) {
   const { chromium } = require('playwright');
   const server = http.createServer((q, s) => {
     const u = decodeURIComponent(q.url.split('?')[0]);
@@ -12,7 +12,7 @@ exports.open = async function (viewport = { width: 390, height: 800 }) {
   });
   await new Promise(r => server.listen(0, r));
   const browser = await chromium.launch();
-  const page = await browser.newPage({ viewport, deviceScaleFactor: 2 });
+  const page = await browser.newPage(Object.assign({ viewport, deviceScaleFactor: 2 }, pageOpts));
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => { if (m.type() === 'error' && !/fonts\.(googleapis|gstatic)|ERR_/.test(m.text())) errors.push(m.text()); });
