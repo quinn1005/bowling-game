@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.2.3
+
+### Changed
+- **Hexed charms are a bit more common again:** about 1 shop in 10 offers one (it was 1 in 20), still at most one per shop and never before the second alley.
+
 ## v1.2.2
 
 ### Changed

@@ -296,7 +296,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       u: (c, s) => s.chips(12 * GK.padRack(c.run.rack).filter(t => t !== 'none').length), d: (c, s) => isOpen(c.kind) && s.mult(-2) }
   };
   GK.hexOf = inst => (inst.curse || inst.blessed) && GK.HEX[inst.id] || null;
-  GK.CURSE_CHANCE = 0.06; // of the charms that have a hexed form: kept rare
+  GK.CURSE_CHANCE = 0.12; // of the charms that have a hexed form: kept rare
   GK.CURSES = {
     heavy: { name: 'Heavy Hands', desc: 'The PERFECT zone is 25% smaller.', lift: 'Throw 6 PERFECT throws', n: 6, count: c => c.perfects },
     leaky: { name: 'Leaky Pockets', desc: 'Lose $1 every frame.', lift: 'Roll 3 Strikes', n: 3, count: c => GK.isStrikeKind(c.kind) ? 1 : 0 },
