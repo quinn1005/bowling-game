@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.3.1
+
+### Changed
+- **Every pair of balls now fuses into something different: 1,892 fusions in all.** Fusing used to turn a ball into the same upgrade whatever you melted into it. Now:
+  - **The ball you keep decides what counts** on its roll (Ghost: each of its first 3 pins; Snowball: every frame bowled this round; Glass: 3 times on a PERFECT throw).
+  - **The ball you melt decides what each count is worth** (Bomb: ×1.06 Mult; Wrecking: +40 Points; Golden: $1 for every 3).
+  - **The name combines the two:** Ghost + Bomb is the *Spectral Blast*, but Bomb + Ghost is the *Volatile Phantom*. Order matters.
+  - The kept ball still rolls the way it always did.
+- **The Fusion Lab shows every possible result** before you choose, and marks fusions you've never made as NEW.
+- **The Fusion Book** in the Collection lists every fusion you've made, out of 1,892.
+- Multiplier payoffs stop at 6 times a roll (others at 12), so no single roll goes completely off the charts.
+
 ## v1.3.0
 
 ### Ball fusion

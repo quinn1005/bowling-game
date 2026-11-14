@@ -140,7 +140,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       }
       // ball
       const bs = mk('ball', ri), bname = GK.BALLS[bt] ? GK.BALLS[bt].full : bt;
-      if (r.fused && GK.FUSION && GK.FUSION[bt]) { const F = GK.FUSION[bt], n0 = steps.length; F[2](r, mk('ball', ri), ctx); for (let k = n0; k < steps.length; k++) if (!steps[k].label) steps[k].label = 'Fused: ' + F[0]; }
+      if (r.fused && GK.fusionOf) { const F = GK.fusionOf(bt, r.donor || 'house'); if (F) F.score(r, mk('ball', ri), ctx, ri); }
       if (bt === 'feather' && r.carry) bs.mult(r.carry, bname + ': ' + r.carry + ' carry');
       if (bt === 'bouncer' && r.ballBounces) bs.chips(6 * r.ballBounces, bname + ': ' + r.ballBounces + ' bounce');
       if (bt === 'golden' && r.pins) bs.money(r.pins, bname);

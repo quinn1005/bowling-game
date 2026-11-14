@@ -66,7 +66,8 @@ const must = (c, m) => { if (!c) throw new Error(m); };
   await page.waitForTimeout(400);
   const fused = await page.evaluate(() => GK.debug.run.bag.map(b => (b.fused ? 'F:' : '') + b.type + ':' + b.ed).join(','));
   must(fused === 'F:wrecking:holo', 'fusion failed: ' + fused);
-  must((await page.$eval('#layerInner', e => e.textContent)).includes('Demolisher'), 'fused name not shown in the shop');
+  must((await page.$eval('#layerInner', e => e.textContent)).includes(await page.evaluate(() => GK.fusionOf('wrecking', 'glass').name)), 'fused name not shown in the shop');
+  must(await page.evaluate(() => !!(GK.meta().fusions || {})['wrecking+glass']), 'fusion not recorded in the Fusion Book');
   await snap('v13-fusion-shop');
 
   // 5) run stats on the end screen

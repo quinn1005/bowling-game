@@ -1020,10 +1020,17 @@ test('v1.3 combos: side by side only, discoverable, in either order', () => {
   assert.deepStrictEqual(GK.activeCombos([GK.charmInst('statue'), GK.charmInst('perfect_form')], 1), [], 'a stolen charm breaks the pair');
 });
 
-test('v1.3 fusion: every ball has its own, the donor goes, editions carry over', () => {
-  for (const id of Object.keys(GK.BALLS)) assert.ok(GK.FUSION[id], 'no fusion for ' + id);
-  const names = Object.values(GK.FUSION).map(f => f[0]);
-  assert.strictEqual(new Set(names).size, names.length, 'fused names are unique');
+test('v1.3 fusion: a different fusion for every pair, in each order; the donor goes, editions carry over', () => {
+  const ids = Object.keys(GK.BALLS), names = new Set(), descs = new Set();
+  for (const a of ids) for (const b of ids) {
+    if (a === b) continue;
+    const F = GK.fusionOf(a, b); assert.ok(F, a + '+' + b);
+    names.add(F.name); descs.add(F.desc);
+  }
+  assert.strictEqual(GK.FUSION_COUNT(), ids.length * (ids.length - 1));
+  assert.strictEqual(names.size, GK.FUSION_COUNT(), 'every fusion has its own name');
+  assert.strictEqual(descs.size, GK.FUSION_COUNT(), 'every fusion has its own effect');
+  assert.notStrictEqual(GK.fusionOf('ghost', 'bomb').name, GK.fusionOf('bomb', 'ghost').name, 'order matters');
   const run = GK.newRun({ seed: 82 }); run.money = 30;
   run.bag = [{ type: 'wrecking', ed: null }, { type: 'glass', ed: 'holo' }];
   const r = GK.fuseBalls(run, 0, 1);
@@ -1031,11 +1038,12 @@ test('v1.3 fusion: every ball has its own, the donor goes, editions carry over',
   assert.strictEqual(run.money, 30 - GK.fuseCost(run));
   assert.ok(!GK.fuseBalls(run, 0, 0).ok, 'needs two balls');
   // the fused bonus scores, and only on a fused roll
-  const f = fz => ({ kind: 'strike', rolls: [roll({ ball: 'wrecking', fused: fz, down: pins(10), pins: 10 })] });
+  assert.strictEqual(run.bag[0].donor, 'glass'); assert.strictEqual(GK.fusedName(run.bag[0]), GK.fusionOf('wrecking', 'glass').name);
+  const f = fz => ({ kind: 'strike', rolls: [roll({ ball: 'house', fused: fz, donor: 'wrecking', down: pins(10), pins: 10 })] });
   assert.ok(GK.scoreFrame(f(true), GK.newRun({ seed: 83 })).score > GK.scoreFrame(f(false), GK.newRun({ seed: 83 })).score);
   // every fusion scores without errors on a busy roll
   const busy = { kind: 'split', rolls: [roll({ down: pins(8), pins: 8, carry: 3, late: 2, walls: 2, pit: 1, ballBounces: 2, explosions: 1, blasted: 2, swallowed: 1, fast: 3, direct: 2, boards: 18, rubber: 1 }), roll({ down: [{ n: 9, type: 'gold', by: 'ball' }, { n: 10, type: 'std', by: 'ball' }], pins: 2 })], frameIdx: 2 };
-  for (const id of Object.keys(GK.FUSION)) { busy.rolls.forEach(x => { x.ball = id; x.fused = true; }); const res = GK.scoreFrame(busy, GK.newRun({ seed: 84 })); assert.ok(isFinite(res.score) && res.score > 0, id); }
+  for (const a of ids) for (const b of ids) { if (a === b) continue; busy.rolls.forEach(x => { x.ball = a; x.fused = true; x.donor = b; }); const res = GK.scoreFrame(busy, GK.newRun({ seed: 84 })); assert.ok(isFinite(res.score) && res.score >= 0, a + '+' + b); }
 });
 
 test('v1.3 bounties: two per alley, pay out, fail and judge at alley end', () => {

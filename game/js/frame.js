@@ -163,7 +163,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       rs.burned = rs.burned || [];
       if (!rs.burned.includes(cur.ballIdx)) { rs.burned.push(cur.ballIdx); notes.push({ t: 'stuck', text: GK.BALLS[cur.ball.type].full + ' fell in the lava! It\'s gone for the rest of the round.', idx: cur.ballIdx }); }
     }
-    rec.ball = cur.ball.type; rec.edition = cur.ball.ed; rec.perfect = cur.perfect; rec.power = cur.power; rec.fused = !!cur.ball.fused;
+    rec.ball = cur.ball.type; rec.edition = cur.ball.ed; rec.perfect = cur.perfect; rec.power = cur.power; rec.fused = !!cur.ball.fused; rec.donor = cur.ball.donor || null;
     run.stats.balls = run.stats.balls || {}; run.stats.balls[rec.ball] = (run.stats.balls[rec.ball] || 0) + 1;
     run.stats.pins += rec.pins;
     // Groove: consecutive PERFECT throws this round.

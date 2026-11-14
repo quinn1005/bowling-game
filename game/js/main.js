@@ -799,14 +799,14 @@
   }
   // Fusion: pick the ball to keep, then the one to melt into it.
   function fuseFlow(free, after) {
-    const opts = run.bag.map((b, i) => ({ b, i })).filter(x => !x.b.fused && GK.FUSION[x.b.type]);
-    UI.choicePicker('Fusion Lab: the ball to keep', 'It keeps how it rolls and becomes its fused form.', opts.map(x => ({ id: String(x.i), name: GK.BALLS[x.b.type].full + ' → ' + GK.FUSION[x.b.type][0], desc: GK.FUSION[x.b.type][1] })), v => {
-      const base = +v;
+    const opts = run.bag.map((b, i) => ({ b, i })).filter(x => !x.b.fused && GK.FUSE_TRIGGER[x.b.type]);
+    UI.choicePicker('Fusion Lab: the ball to keep', 'It keeps how it rolls. What it counts comes from this ball; what each count is worth comes from the ball you melt into it.', opts.map(x => ({ id: String(x.i), name: GK.BALLS[x.b.type].full + (x.b.ed ? ' · ' + GK.EDITIONS[x.b.ed].name : ''), desc: 'Counts: ' + GK.FUSE_TRIGGER[x.b.type][1].toLowerCase() + '.' })), v => {
+      const base = +v, kept = run.bag[base];
       const donors = run.bag.map((b, i) => ({ b, i })).filter(x => x.i !== base);
-      UI.choicePicker('Melt which ball into it?', 'This ball is gone for good' + (free ? '.' : '. Costs $' + GK.fuseCost(run) + '.'), donors.map(x => ({ id: String(x.i), name: (GK.fusedName(x.b) || GK.BALLS[x.b.type].full) + (x.b.ed ? ' · ' + GK.EDITIONS[x.b.ed].name : ''), desc: x.b.ed && !run.bag[base].ed ? 'Its ' + GK.EDITIONS[x.b.ed].name + ' edition carries over.' : '' })), d => {
+      UI.choicePicker('Melt which ball into it?', 'The melted ball is gone for good' + (free ? '.' : '. Costs $' + GK.fuseCost(run) + '.') + ' Each one makes a different fusion:', donors.map(x => { const F = GK.fusionOf(kept.type, x.b.type); return { id: String(x.i), name: GK.BALLS[x.b.type].name + ' → ' + F.name + (meta.fusions && meta.fusions[kept.type + '+' + x.b.type] ? '' : ' · NEW'), desc: F.desc + (x.b.ed && !kept.ed ? ' Its ' + GK.EDITIONS[x.b.ed].name + ' edition carries over.' : '') }; }), d => {
         UI.hideModal();
         const r = free ? GK.takeEvent(run, run.event || { id: 'fusion_lab' }, { base, donor: +d }) : GK.fuseBalls(run, base, +d);
-        if (r.ok) { R.confetti(30); sfx.levelUp(); }
+        if (r.ok) { R.confetti(30); sfx.levelUp(); if (r.fusion && !run.practice) { meta.fusions = meta.fusions || {}; meta.fusions[r.fusion] = 1; GK.saveMeta(meta); } }
         after(r);
       }, UI.hideModal);
     }, UI.hideModal);

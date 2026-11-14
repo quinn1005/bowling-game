@@ -55,7 +55,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       const d = inst ? GK.charmDef(inst) : GK.CHARMS[id];
       return { name: d.name, k: GK.RARITY[d.rarity].name + ' charm', desc: inst ? GK.charmDesc(inst) : GK.charmDesc(GK.charmInst(id)), col: GK.RARITY[d.rarity].col, glyph: GK.TAG_GLYPH[d.tag], ed };
     }
-    if (kind === 'ball') { const b = GK.BALLS[id], dr = inst && inst.drill && inst.drill !== 'stock' ? GK.DRILLS[inst.drill] : null, F = inst && inst.fused && GK.FUSION ? GK.FUSION[id] : null; return { name: F ? F[0] : b.full, k: F ? 'Fused ball' : 'Ball', desc: (F ? 'FUSED ' + b.full + (inst.donor && GK.BALLS[inst.donor] ? ' (with ' + GK.BALLS[inst.donor].name + ')' : '') + ': ' + F[1] + ' Rolls like a ' + b.name + ': ' : '') + b.desc + (dr ? ' Drilled: ' + dr.name + ' (' + dr.desc + ')' : ''), col: b.col, ed }; }
+    if (kind === 'ball') { const b = GK.BALLS[id], dr = inst && inst.drill && inst.drill !== 'stock' ? GK.DRILLS[inst.drill] : null, F = inst && inst.fused && GK.fusionOf ? GK.fusionOf(id, inst.donor || 'house') : null; return { name: F ? F.name : b.full, k: F ? 'Fused ball' : 'Ball', desc: (F ? 'FUSED ' + b.name + ' + ' + (GK.BALLS[inst.donor] ? GK.BALLS[inst.donor].name : 'House') + '. ' + F.desc + ' Rolls like a ' + b.name + ': ' : '') + b.desc + (dr ? ' Drilled: ' + dr.name + ' (' + dr.desc + ')' : ''), col: b.col, ed }; }
     if (kind === 'cons') { const c = GK.CONS[id]; return { name: c.name, k: GK.CONS_KIND[c.kind].name, desc: c.desc, col: GK.CONS_KIND[c.kind].col }; }
     if (kind === 'equip') { const e = GK.EQUIP[id]; return { name: e.name, k: 'Equipment · ' + e.slot, desc: e.desc + ' Replaces your current ' + e.slot + '.', col: '#c88f6a' }; }
     if (kind === 'member') { const m = GK.MEMBERSHIPS[id]; return { name: m.name, k: 'Alley Membership', desc: m.desc, col: '#f2c94c' }; }
@@ -293,6 +293,16 @@ var GK = globalThis.GK = globalThis.GK || {};
         <div><div class="lbl">${esc(O.name)}'s build</div>${build(A.charms, A.bag, A.cons)}</div></div>
     </div>`, r => UI.on(r, '[data-pick]', el => onPick(+el.dataset.pick)));
   };
+  // The Fusion Book: every fusion you've made. Each pair of balls (in each order) makes its own.
+  UI.fusionBook = function (meta) {
+    const got = Object.keys(meta.fusions || {}).sort();
+    UI.modal(`<div class="panel combos">
+      <h2>Fusion book</h2>
+      <p class="dim">${got.length} of ${GK.FUSION_COUNT()} fusions made. Every pair of balls fuses into something different, and order matters: the ball you keep decides what counts, the ball you melt decides what it's worth.</p>
+      <div class="lines">${got.length ? got.map(k => { const [a, b] = k.split('+'), F = GK.fusionOf(a, b); return F ? `<div class="combo-row"><b>${esc(F.name)}</b><span>${esc(GK.BALLS[a].name)} + ${esc(GK.BALLS[b].name)}: ${esc(F.desc)}</span></div>` : ''; }).join('') : '<p class="dim">Nothing yet. Find the Fusion Lab in the Pro Shop.</p>'}</div>
+      <button class="btn" data-a="ok">Close</button>
+    </div>`, r => UI.on(r, '[data-a=ok]', UI.hideModal));
+  };
   // The Tape Shelf: your 10 best frames, kept as replays.
   UI.tapeShelf = function () {
     const list = GK.loadTapes ? GK.loadTapes() : [];
@@ -428,6 +438,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       <h2>Feats &amp; unlocks</h2>
       <button class="btn alt small" data-a="cards">Card gallery</button>
       <button class="btn alt small" data-a="combos">Combo book · ${Object.keys(meta.combos || {}).length}/${GK.COMBOS.length}</button>
+      <button class="btn alt small" data-a="fusions">Fusion book · ${Object.keys(meta.fusions || {}).length}/${GK.FUSION_COUNT()}</button>
       <button class="btn alt small" data-a="tapes">Tape shelf · ${GK.loadTapes ? GK.loadTapes().length : 0}/${GK.TAPE_MAX}</button>
       <p class="dim">Most balls, charms, equipment, Lane Tricks and Black Market items start locked. Each feat unlocks the items that match its theme for future runs.</p>
       <div class="bar unlockbar"><i style="width:${pct}%"></i></div>
@@ -439,7 +450,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       <h3>Your daily runs</h3>
       ${log.length ? '<div class="story">' + log.map(x => `<div><span>${esc(x.date)}</span><b>${esc(x.label)} · best frame ${fmt(x.best || 0)}</b></div>`).join('') + '</div>' : '<p class="dim">No daily runs yet.</p>'}
       <button class="btn" data-a="ok">Close</button>
-    </div>`, r => { UI.on(r, '[data-a=ok]', UI.hideModal); UI.on(r, '[data-a=cards]', () => UI.cards(meta)); UI.on(r, '[data-a=combos]', () => UI.comboBook(meta)); UI.on(r, '[data-a=tapes]', () => UI.tapeShelf()); UI.on(r, '[data-a=wall]', () => { UI.hideModal(); UI.wallOfFame(null, UI.hideLayer, 'Back'); }); });
+    </div>`, r => { UI.on(r, '[data-a=ok]', UI.hideModal); UI.on(r, '[data-a=cards]', () => UI.cards(meta)); UI.on(r, '[data-a=combos]', () => UI.comboBook(meta)); UI.on(r, '[data-a=tapes]', () => UI.tapeShelf()); UI.on(r, '[data-a=fusions]', () => UI.fusionBook(meta)); UI.on(r, '[data-a=wall]', () => { UI.hideModal(); UI.wallOfFame(null, UI.hideLayer, 'Back'); }); });
   };
 
   UI.how = function (onBack) {
@@ -727,7 +738,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   UI.ballPicker = function (run, title, desc, onDone, onCancel) {
     UI.modal(`<div class="panel">
       <h2>${esc(title)}</h2><p class="dim">${esc(desc)}</p>
-      <div class="choices">${run.bag.map((b, i) => `<button class="choice" data-b="${i}"><b><i class="sw" style="display:inline-block;vertical-align:-2px;background:${GK.BALLS[b.type].col}"></i> ${esc(GK.fusedName(b) || GK.BALLS[b.type].full)}${b.ed ? ' · ' + GK.EDITIONS[b.ed].name : ''}</b><span>${esc(b.fused && GK.FUSION[b.type] ? GK.FUSION[b.type][1] : GK.BALLS[b.type].desc)}${b.drill && b.drill !== 'stock' ? ' · ' + esc(GK.DRILLS[b.drill].name) : ''}</span></button>`).join('')}</div>
+      <div class="choices">${run.bag.map((b, i) => `<button class="choice" data-b="${i}"><b><i class="sw" style="display:inline-block;vertical-align:-2px;background:${GK.BALLS[b.type].col}"></i> ${esc(GK.fusedName(b) || GK.BALLS[b.type].full)}${b.ed ? ' · ' + GK.EDITIONS[b.ed].name : ''}</b><span>${esc(GK.fusedDesc(b) || GK.BALLS[b.type].desc)}${b.drill && b.drill !== 'stock' ? ' · ' + esc(GK.DRILLS[b.drill].name) : ''}</span></button>`).join('')}</div>
       <button class="btn alt" data-a="no">Cancel</button>
     </div>`, r => { UI.on(r, '[data-b]', el => onDone(+el.dataset.b)); UI.on(r, '[data-a=no]', onCancel); });
   };
