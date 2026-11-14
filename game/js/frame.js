@@ -163,7 +163,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       rs.burned = rs.burned || [];
       if (!rs.burned.includes(cur.ballIdx)) { rs.burned.push(cur.ballIdx); notes.push({ t: 'stuck', text: GK.BALLS[cur.ball.type].full + ' fell in the lava! It\'s gone for the rest of the round.', idx: cur.ballIdx }); }
     }
-    rec.ball = cur.ball.type; rec.edition = cur.ball.ed; rec.perfect = cur.perfect; rec.power = cur.power;
+    rec.ball = cur.ball.type; rec.edition = cur.ball.ed; rec.perfect = cur.perfect; rec.power = cur.power; rec.fused = !!cur.ball.fused;
+    run.stats.balls = run.stats.balls || {}; run.stats.balls[rec.ball] = (run.stats.balls[rec.ball] || 0) + 1;
     run.stats.pins += rec.pins;
     // Groove: consecutive PERFECT throws this round.
     if (cur.perfect === true) {
@@ -190,7 +191,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       cur.pinState = GK.capturePins(sim);
       return { next: 'aim', notes, rec };
     }
-    if (GK.BALLS[cur.ball.type].glass) {
+    if (GK.BALLS[cur.ball.type].glass && !cur.ball.fused) {
       const rng = GK.stream(run.seed, 'glass:' + run.stats.throws);
       if (rng() < 0.25) {
         const i = cur.ballIdx;
@@ -256,6 +257,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       const nums = standing.map(p => p.n).sort((a, b) => a - b);
       cur.leave710 = nums.length === 2 && nums[0] === 7 && nums[1] === 10;
       if (cur.splitLeave) notes.push({ t: 'split', text: cur.leave710 ? 'The 7-10! Convert it for ×5' : 'Split leave · convert it for ×5' });
+      const lname = GK.leaveName(nums);
+      if (lname && nums.every(n => n <= 10)) notes.push({ t: 'leave', name: lname, nums });
       sim.sweep();
       if (rs.boss === 'poltergeist' && sim.standing().length) {
         // the pins left standing are flung to new spots on the deck
@@ -354,6 +357,32 @@ var GK = globalThis.GK = globalThis.GK || {};
   };
 
   // Apply a scored frame. Returns 'won' | 'lost' | 'next' and any notes.
+  // Famous leaves, by the pins left standing after the first ball (back-row pins ignored).
+  const LEAVES = {
+    '7,10': 'BEDPOSTS', '4,6': 'BIG EARS', '4,6,7,10': 'BIG FOUR', '4,6,7,9,10': 'GREEK CHURCH', '4,6,7,8,10': 'GREEK CHURCH',
+    '5,7,10': 'SOUR APPLE', '2,7': 'BABY SPLIT', '3,10': 'BABY SPLIT', '5,10': 'DIME STORE', '5,7': 'WOOLWORTH',
+    '8,10': 'CINCINNATI', '7,9': 'CINCINNATI', '2,7,10': 'CHRISTMAS TREE', '3,7,10': 'CHRISTMAS TREE',
+    '1,2,10': 'WASHOUT', '1,2,4,10': 'WASHOUT', '1,3,7': 'WASHOUT', '1,3,6,7': 'WASHOUT',
+    '2,4,5,8': 'THE BUCKET', '3,5,6,9': 'THE BUCKET', '4,7,10': 'LILY', '6,7,10': 'LILY', '10': 'THE 10-PIN', '7': 'THE 7-PIN',
+    '2,10': 'MURDERER', '3,7': 'MURDERER', '4,10': 'FIT TO BE TIED', '6,7': 'FIT TO BE TIED'
+  };
+  // End-of-run numbers: percentages, favourites and the biggest frame.
+  GK.runStats = function (run) {
+    const s = run.stats, frames = s.frames || 0, pct = (a, b) => b ? Math.round(100 * a / b) + '%' : '–';
+    const top = o => { const e = Object.entries(o || {}).sort((a, b) => b[1] - a[1])[0]; return e || null; };
+    const ch = top(s.charmHits), bl = top(s.balls);
+    return [
+      ['Strike rate', pct(s.strikes, frames), frames ? s.strikes + ' of ' + frames + ' frame' + (frames === 1 ? '' : 's') : ''],
+      ['Spare rate', pct(s.spares + s.splits, frames - s.strikes), 'of frames that weren\'t strikes'],
+      ['PERFECT rate', pct(s.perfects || 0, s.throws || 0), (s.perfects || 0) + ' of ' + (s.throws || 0) + ' throws'],
+      ['Biggest frame', GK.fmt(s.bestFrame || 0), run.best ? GK.SHOTS[run.best.kind].name : ''],
+      ['Favourite charm', ch && GK.CHARMS[ch[0]] ? GK.CHARMS[ch[0]].name : 'none', ch ? 'scored in ' + ch[1] + ' frame' + (ch[1] === 1 ? '' : 's') : 'no charm ever scored'],
+      ['Favourite ball', bl && GK.BALLS[bl[0]] ? GK.BALLS[bl[0]].name : '–', bl ? bl[1] + ' throw' + (bl[1] === 1 ? '' : 's') : ''],
+      ['Gutter frames', String(s.gutters || 0), s.gutters ? 'we saw those' : 'not a single one'],
+      ['Best strike streak', String(s.bestSStreak || 0), 'in a row']
+    ];
+  };
+  GK.leaveName = nums => LEAVES[nums.filter(n => n <= 10).sort((a, b) => a - b).join(',')] || null;
   GK.commitFrame = function (run, kind, res) {
     const rs = run.rs, cur = rs.cur, notes = [];
     rs.total += res.score;
@@ -367,6 +396,9 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (kind === 'gutter') st.gutters++;
     st.sstreak = GK.isStrikeKind(kind) ? (st.sstreak || 0) + 1 : 0; st.bestSStreak = Math.max(st.bestSStreak || 0, st.sstreak);
     st.maxCharms = Math.max(st.maxCharms || 0, run.charms.length);
+    // which charms did the work (for the run stats): each frame a charm scores counts once
+    st.charmHits = st.charmHits || {};
+    new Set((res.steps || []).filter(x => x.src === 'charm' && x.op !== 'note' && run.charms[x.idx]).map(x => run.charms[x.idx].id)).forEach(id => { st.charmHits[id] = (st.charmHits[id] || 0) + 1; });
     // what the first ball left standing (for the split and single-pin feats)
     const r0 = cur.rolls[0];
     if (r0) {
@@ -383,6 +415,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     rs.bestFrame = Math.max(rs.bestFrame || 0, res.score);
     GK.logFrame(run, res.score);
     GK.progressCurses(run, res.ctx).forEach(t => notes.push({ t: 'evolve', idx: -1, text: t }));
+    if (GK.progressBounties) GK.progressBounties(run, res.ctx, kind, res).forEach(n => notes.push(n));
     if (cur.rolls.some(r => r.down.some(d => d.type === 'jackpot'))) { const sp = GK.jackpotSpin(run); notes.push({ t: 'jackpot', reels: sp.reels, text: sp.text }); }
     if (run.dare && rs.frameIdx === 0 && !run.practice) { const d = GK.settleDare(run, kind); if (d) notes.push(d); }
     res.breaks.forEach(n => { if (run.rack[n - 1] === 'glass') { run.rack[n - 1] = 'std'; notes.push({ t: 'break', text: 'Glass pin ' + n + ' broke' }); } });

@@ -128,6 +128,7 @@ var GK = globalThis.GK = globalThis.GK || {};
 
   // ---------- rounds ----------
   GK.startRound = function (run) {
+    if (GK.rollBounties) GK.rollBounties(run);
     const boss = GK.bossId(run);
     const stolen = (boss === 'king' || boss === 'champion') ? GK.mostValuableCharm(run) : -1;
     const fl = GK.flags(run, stolen);

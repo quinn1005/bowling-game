@@ -1,5 +1,35 @@
 # Changelog
 
+## v1.3.0
+
+### Ball fusion
+- **The Fusion Lab** is a new Pro Shop service ($8): melt one ball into another. The second ball is gone; the first keeps how it rolls and becomes its **fused form**, with a new name and a bonus of its own. A donor's Foil, Holo or Neon edition carries over.
+- **Every one of the 44 balls has its own fusion.** A few: House becomes **Pro Stock** (+40 Points and +4 Mult), Wrecking becomes **Demolisher** (×2 Mult on strikes), Glass becomes **Crystal** (never shatters, ×1.5 Mult more), Snowball becomes **Avalanche** (more Points every frame of the round), Lead becomes **Tungsten** (×2 Mult, which beats its ×0.5 Points), and the Regulars' balls become **Two-Hander Prime**, **Golden Goose** and **Haymaker**.
+- **The Mad Scientist** sometimes turns up between rounds and fuses two balls for free.
+
+### Combo charms
+- **22 pairs of charms unlock a hidden bonus when they sit next to each other** in your charm row, in either order. For example Strike Out beside Hot Streak is **Strike Engine** (×1.5 Mult on strikes), Hook Artist beside Straight Shooter is **Mixed Signals** (+10 Mult every frame, nobody knows why), and Underdog beside Glass Cannon is **Nothing to Lose** (×2 Mult).
+- A live pair glows gold in your charm row, and the bonus shows up as its own step when a frame scores.
+- **The Combo Book** in the Collection tracks every combo you've found. Undiscovered ones give you a hint.
+
+### Bounties
+- **Every alley posts 2 bounties:** optional goals like "Convert a split", "Roll 4 strikes", "Win a round with 2 or more frames to spare" or "Finish the alley without a single gutter ball". Each pays cash or a free Trick card.
+- They're on the round intro and in Run info, with your progress.
+
+### The Tape Shelf
+- **Your 10 best frames are recorded automatically** and kept on the Tape Shelf in the Collection. Watch any of them again, any time. A better frame pushes the weakest tape off the shelf.
+
+### Head to Head
+- **Ranks:** each of the Regulars now has **Bronze**, **Silver** and **Gold**. Silver bowls better and starts with a charm. Gold bowls even better, starts with a rare charm and takes 4 picks per draft to your 3. Beat a rank to unlock the next. Higher ranks pay more XP.
+- **Trash talk:** Quinn, Kaleb and Levi talk during the match, in a speech bubble with their portrait. They have something to say about your strikes, your gutter balls, their own throws, the scoreboard and your draft picks. None of it is nice.
+
+### Smaller things
+- **Named leaves on the lane TV:** leave a famous split or spare and the TV names it: BIG FOUR, GREEK CHURCH, BEDPOSTS, SOUR APPLE, BABY SPLIT, WASHOUT, THE BUCKET, CHRISTMAS TREE and more, with the standing pins blinking on a little deck map.
+- **Run stats** at the end of every run: strike rate, spare rate, PERFECT rate, biggest frame, favourite charm, favourite ball, gutter frames and best strike streak.
+- **Title-screen tips**, now with attitude: "Pro tip: aim for the pins." "Re-racks are free. Your dignity isn't." Tips aimed at things you haven't done yet come up most. Tap a tip for another.
+- **Gutter balls get sadder** the more you throw in a row: lower, longer, then a sad trombone, then a sigh. The pop-up text gets increasingly concerned.
+- **Every family of balls feels different** when you throw it and when it hits the pins (heavy balls thud, glass ones tick, metal ones clank), on phones that support vibration.
+
 ## v1.2.6
 
 ### 26 new hard feats

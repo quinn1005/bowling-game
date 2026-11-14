@@ -85,6 +85,19 @@
     const reached = won ? 'beat the Gutter King' : 'reached ' + (GK.isChamp(run) ? 'the Championship' : 'Alley ' + (run.alley + 1) + ', ' + GK.roundName(run));
     return 'I ' + reached + ' in Gutter Kings with a best frame of ' + fmt(run.stats.bestFrame) + '. Same lanes, same shops: seed ' + code + '. Race my ghost: ' + url;
   };
+  // The Tape Shelf lives in its own storage slot so it never bloats your save.
+  function loadTapes() { try { return JSON.parse(localStorage.getItem('gk-tapes') || '[]'); } catch (e) { return []; } }
+  function saveTapes(list) { try { localStorage.setItem('gk-tapes', JSON.stringify(list)); } catch (e) { /* storage full: keep playing */ } }
+  GK.loadTapes = loadTapes;
+  GK.playTape = function (i) {
+    const t = loadTapes()[i], rec = t && GK.decodeTape(t);
+    if (!rec) return;
+    rec.dark = t.dark;
+    UI.hideModal(); UI.hideLayer();
+    if (!run) R.setTheme(GK.ALLEYS[0], C.LHW, C.GUT);
+    const back = run ? null : title;
+    playReplay(rec, GK.SHOTS[t.kind].name.toUpperCase() + ' · ' + fmt(t.score), { speed: 0.5, fromStart: true }).then(() => { if (back) back(); });
+  };
   function title() {
     phase = 'menu'; run = null; sim = null; replay = null; bonus = null; coach(null);
     GK._allUnlocked = false;
@@ -95,7 +108,7 @@
       new: newRunScreen,
       daily: () => startRun({ bag: 'classic', seed: GK.dailySeed(), daily: true }),
       rush: () => startRush(),
-      h2h: () => UI.h2hPick(meta, opp => startH2H(opp), title),
+      h2h: () => UI.h2hPick(meta, (opp, rank) => startH2H(opp, rank), title),
       cards: () => UI.cards(meta),
       how: () => UI.how(),
       collection: () => UI.collection(meta),
@@ -116,12 +129,22 @@
     toIntro();
   }
   // Head to Head against one of the Regulars.
-  function startH2H(opp) {
+  function startH2H(opp, rank) {
     sfx.init();
-    run = GK.newH2HRun(opp, (Date.now() ^ (Math.random() * 1e9)) >>> 0);
+    run = GK.newH2HRun(opp, (Date.now() ^ (Math.random() * 1e9)) >>> 0, rank);
+    setTimeout(() => talk('start', true), 900);
     GK._allUnlocked = false;
     sel = 0; bestReplay = null; highlights = []; lastXP = null;
     h2hDraft();
+  }
+  // The opponent says something. force: always (otherwise about 60% of the time, so it doesn't get old).
+  let lastTalk = 0;
+  function talk(cat, force) {
+    if (!run || !run.h2h) return;
+    const now = performance.now();
+    if (!force && (now - lastTalk < 2500 || Math.random() > 0.6)) return;
+    const line = GK.trash(run.h2h.opp, cat); if (!line) return;
+    lastTalk = now; UI.speech(run.h2h.opp, GK.H2H[run.h2h.opp].name, line);
   }
   // The draft before each Head to Head round: you and the opponent take turns picking from one pool.
   function h2hDraft() {
@@ -148,7 +171,7 @@
         if (tk !== busyToken) return;
         const i = GK.aiPick(run, d), it = d.items[i];
         GK.takeDraft(run, d, i, 'ai');
-        UI.toast(O.name + ' takes ' + UI.info(it.kind, it.id).name, 1600);
+        UI.toast(O.name + ' takes ' + UI.info(it.kind, it.id).name, 1600); talk('draft');
         step();
       }, 1200);
     };
@@ -278,12 +301,12 @@
     sfx.init();
     const b = run.bag[sel];
     if (b.type === 'snake' && !prm.path) prm.path = GK.snakePath(prm.aimX, prm.aim, laneOf().lhw || C.LHW);
-    sfx.rollStyle(GK.rollSound(b.type));
+    sfx.rollStyle(GK.rollSound(b.type)); ballFeel = GK.rollSound(b.type); GK.haptic.pattern('launch_' + ballFeel);
     if (bonus) GK.bonusLaunch(run, sim, sel, prm);
     else { GK.launch(run, sim, sel, prm); GK.save(run); }
     curPath = [];
     hitStop = 0; step = 'pos'; posT0 = performance.now(); recFrames = [];
-    UI.shot(GK.BALLS[b.type].full + ' away');
+    UI.shot((GK.fusedName(b) || GK.BALLS[b.type].full) + ' away');
     setPhase('rolling');
   }
 
@@ -293,7 +316,7 @@
       case 'first': {
         const pocket = e.n === 1 && Math.abs(e.off || 0) > 1.5 && Math.abs(e.off || 0) < 5.5 && (e.v || 0) > 250;
         if (pocket) { hitStop = 0.16; R.shake = Math.min(7, R.shake + 5); R.flash = Math.max(R.flash, 0.18); sfx.thump(); GK.haptic('heavy'); }
-        else { hitStop = 0.07; R.shake = Math.min(4, R.shake + 2); GK.haptic('light'); }
+        else { hitStop = 0.07; R.shake = Math.min(4, R.shake + 2); GK.haptic.pattern('hit_' + ballFeel); }
         break;
       }
       case 'down':
@@ -303,7 +326,11 @@
         if (e.type === 'glass') sfx.shatter();
         if (run && sim.roll && sim.roll.ball === 'feather' && e.by === 'pin') R.pop(e.x + 3, e.z, 26, '+2 mult', '#ff5a6e');
         break;
-      case 'gutter': if (e.main) { sfx.gutter(); GK.haptic('medium'); if (e.early) R.pop(e.x, e.z, 10, 'GUTTER', '#ff5a6e'); } break;
+      case 'gutter': if (e.main) {
+        const n = run ? (run.gutterRun = (run.gutterRun || 0) + 1) : 1;
+        sfx.gutter(n); GK.haptic('medium');
+        if (e.early || n > 1) R.pop(e.x, e.z, 10, ['GUTTER', 'GUTTER AGAIN', 'GUTTER... AGAIN', 'ARE YOU OK?', 'PLEASE STOP', 'WE\'RE CONCERNED'][Math.min(n, 6) - 1], '#ff5a6e');
+      } break;
       case 'explode': sfx.boom(); GK.haptic('heavy'); R.shake = 7; R.flash = 0.6; R.burst(e.x, e.z, '#ffd447', 14, 70); break;
       case 'ghost': sfx.ghost(); R.pop(e.x, e.z, 22, 'boo', '#e8f0ff'); break;
       case 'swallow': sfx.swallow(); R.burst(e.x, e.z, '#b06bff', 6, 30); break;
@@ -339,12 +366,14 @@
       if (n.t === 'shatter') { sfx.shatter(); sel = Math.min(sel, run.bag.length - 1); }
       if (n.t === 'mechanic') { R.pop(0, C.ZH + 12, 30, 'THE MECHANIC RESETS ' + n.pins.length, '#ff5a6e'); sfx.crack(); }
       if (n.t === 'split') UI.shot(n.text);
+      if (n.t === 'leave') { tv = { kind: 'leave', t: 0, v: 0, leave: n }; lastTv = { kind: 'leave', v: 0, leave: n }; }
       if (n.t === 'pay') sfx.coin();
       if (n.t === 'stuck') { sfx.nope(); GK.haptic('medium'); hint('stuck'); R.pop(12, -20, 20, 'JAMMED!', '#ff5a6e'); }
       if (n.t === 'unstuck') sfx.tick(660);
       if (n.t === 'respot') { sfx.crack(); hint('respot'); R.pop(0, C.ZH + 10, 34, 'PINSETTER FUMBLE!', '#ffd447'); R.shake = 3; }
     }
     if (out.rec.gutterBall) cheer('groan');
+    if (out.rec && out.rec.pins > 0) run.gutterRun = 0;
     feats({ t: 'roll', notes: out.notes, rec: out.rec, run });
     if (out.next === 'aim') {
       await sleep(650);
@@ -392,7 +421,7 @@
     const rng = GK.stream(run.seed, 'oppthrow:' + key), frames = [], rolls = [];
     let split = false;
     for (let ri = 0; ri < 2; ri++) {
-      s2.launch({ type: GK.h2hBall(opp, ri, run) }, GK.h2hThrow(opp, s2, rng, ri), {});
+      s2.launch({ type: GK.h2hBall(opp, ri, run) }, GK.h2hThrow(opp, s2, rng, ri, run.h2h.rank), {});
       let n = 0;
       while (s2.rolling && n < 240 * 12) { s2.step(GK.DT); if (n % 4 === 0 && frames.length < 900) frames.push(snapSim(s2)); n++; }
       const rec = s2.summarize(); rolls.push(rec);
@@ -406,6 +435,7 @@
     if (!run || !run.h2h) return;
     if (GK.isStrikeKind(r.kind)) { sfx.strike(); cheer('cheer'); } else if (GK.isSpareKind(r.kind)) sfx.spare();
     UI.banner(O.name + ': ' + GK.SHOTS[r.kind].name.toUpperCase(), fmt(r.score) + ' · ' + fmt(run.h2h.total) + ' vs your ' + fmt(run.h2h.myTotal + run.rs.total), 1200);
+    { const lead = run.h2h.total - (run.h2h.myTotal + run.rs.total); talk(GK.isStrikeKind(r.kind) ? 'theirStrike' : r.kind === 'open' || r.kind === 'gutter' ? 'theirMiss' : lead > 0 ? 'ahead' : 'behind'); }
     await sleep(1300);
   }
   async function playHighlights() {
@@ -471,7 +501,7 @@
 
   function cheer(mood) { crowd = { mood, t: 0 }; }
   // Big TV: replays the latest cartoon on a loop (or the idle channel).
-  let tvBig = null, lastTv = null;
+  let tvBig = null, lastTv = null, ballFeel = 'normal';
   function openTV() {
     sfx.tick(600);
     tvBig = { t: 0 };
@@ -502,6 +532,11 @@
       if (streakN >= 3) R.confetti(Math.min(90, 30 + streakN * 10));
     } else if (GK.isSpareKind(kind)) sfx.spare();
     tvShow(kind, res.ctx.leave710);
+    if (!run.h2h && !run.practice && res.combos && res.combos.length) {
+      meta.combos = meta.combos || {};
+      const fresh = res.combos.filter(id => !meta.combos[id]);
+      if (fresh.length) { fresh.forEach(id => { meta.combos[id] = true; }); GK.saveMeta(meta); fresh.forEach((id, i) => setTimeout(() => { UI.toast('Combo discovered: ' + GK.COMBO[id].name + '! ' + GK.COMBO[id].desc, 3200); sfx.levelUp(); }, 400 + i * 3300)); }
+    }
     const pinsSum = rs.cur.rolls.reduce((a, r) => a + r.pins, 0);
     if (streakN >= 2) UI.banner(GK.streakName(streakN), streakN >= 4 ? streakN + ' strikes in a row' : '', 0, Math.min(5, streakN - 1));
     else UI.banner(s.name.toUpperCase(), kind === 'open' ? pinsSum + ' pins' : '');
@@ -515,6 +550,7 @@
       const txt = stepText(st);
       UI.shot(st.label + (txt ? ' · ' + txt : ''));
       if (st.src === 'charm') UI.fireCharm(st.idx, txt || st.label, stepCol(st));
+      if (st.src === 'combo') { UI.fireCharm(st.idx, 'COMBO', '#ffd447'); UI.fireCharm(st.idx + 1, txt, stepCol(st)); }
       if (st.op === 'chips') { UI.bump($('chipsBox')); sfx.chip(n); }
       else if (st.op === 'mult') { UI.bump($('multBox')); sfx.mult(n); }
       else if (st.op === 'xmult') { UI.bump($('multBox')); UI.jolt(); sfx.xmult(); R.shake = Math.max(R.shake, 3); }
@@ -529,6 +565,14 @@
     const start = rs.total;
     const out = GK.commitFrame(run, kind, res);
     if (run.best && run.best.score === res.score && run.best.frame === rs.frameIdx - 1) bestReplay = lastRec;
+    if (lastRec && lastRec.frames && lastRec.frames.length > 4 && !run.practice && !run.h2h) {
+      const shelf = loadTapes();
+      if (GK.tapeWorthy(shelf, res.score)) {
+        const d = new Date();
+        const tape = GK.encodeTape(lastRec.frames, { score: res.score, kind, ball: lastRec.preview ? lastRec.preview.type : 'house', ed: lastRec.preview ? lastRec.preview.ed : null, where: GK.roundName(run) + ' · ' + GK.alleyDef(run).name, date: d.toISOString().slice(0, 10), dark: !!lastRec.dark });
+        if (tape) { saveTapes(GK.shelveTape(shelf, tape)); setTimeout(() => UI.toast('New tape on your Tape Shelf: ' + GK.SHOTS[kind].name + ', ' + fmt(res.score), 2200), 2400); }
+      }
+    }
     if (lastRec && lastRec.frames && lastRec.frames.length > 4 && !run.practice) {
       highlights.push({ score: res.score, rec: lastRec, kind });
       highlights.sort((a, b) => b.score - a.score); highlights = highlights.slice(0, 3);
@@ -546,10 +590,13 @@
     for (let i = 1; i <= 8; i++) { $('score').firstChild.textContent = fmt(start + res.score * i / 8); await wait(30); if (!live()) return; }
     if (res.score > meta.bestFrame && !run.h2h) { meta.bestFrame = res.score; GK.saveMeta(meta); }
     refresh();
+    if (run.h2h) talk(GK.isStrikeKind(kind) ? 'myStrike' : GK.isSpareKind(kind) ? 'mySpare' : kind === 'gutter' ? 'myGutter' : 'myOpen', kind === 'gutter');
     if (run.h2h && run.h2h.ai.frameIdx < run.h2h.ai.framesMax) { await opponentFrame(); if (!live()) return; }
     for (const nt of out.notes) {
       UI.toast(nt.text, nt.t === 'evolve' ? 2600 : 1800);
       if (nt.t === 'evolve') { sfx.levelUp(); UI.fireCharm(nt.idx, 'EVOLVED!', '#ffd447'); R.confetti(25); }
+      if (nt.t === 'bounty') { sfx.coin(); R.confetti(20); UI.hud(run); }
+      if (nt.t === 'bountyfail') sfx.nope();
       if (nt.t === 'jackpot') { tv = { kind: 'jackpot', t: 0, v: 0, reels: nt.reels }; lastTv = { kind: 'jackpot', v: 0, reels: nt.reels }; for (let i = 0; i < 14; i++) setTimeout(() => sfx.slot(), i * 70); setTimeout(() => { sfx.win(); R.confetti(50); }, 1100); UI.banner('JACKPOT PIN!', nt.text, 1800, 4); }
       if (nt.t === 'dare') { tv = { kind: nt.who, t: 0, v: 0 }; lastTv = { kind: nt.who, v: 0 }; if (nt.won) { sfx.coin(); R.confetti(25); } else sfx.taunt(); }
     }
@@ -579,13 +626,18 @@
     meta.h2h = meta.h2h || {};
     const rec = meta.h2h[H.opp] = meta.h2h[H.opp] || { w: 0, l: 0 };
     if (won) rec.w++; else rec.l++;
-    const xp = GK.addXP(meta, won ? 60 : 20);
+    meta.h2hRank = meta.h2hRank || {};
+    let rankUp = null;
+    if (won && (H.rank | 0) < 2 && (meta.h2hRank[H.opp] || 0) <= (H.rank | 0)) { meta.h2hRank[H.opp] = (H.rank | 0) + 1; rankUp = GK.H2H_RANKS[(H.rank | 0) + 1].name; }
+    const xp = GK.addXP(meta, (won ? 60 : 20) * ((H.rank | 0) + 1));
+    talk(won ? 'lose' : 'win', true);
+    if (rankUp) setTimeout(() => UI.toast(O.name + ' at ' + rankUp + ' unlocked!', 3000), 2600);
     feats({ t: 'h2h', won, run });
     GK.saveMeta(meta); GK.clearSave();
     if (won) { sfx.win(); R.confetti(60); } else sfx.lose();
     setPhase('menu');
     const tk = busyToken, r0 = run;
-    setTimeout(() => tk === busyToken && UI.h2hEnd(r0, meta, xp, { again: () => startH2H(H.opp), title }), 1100);
+    setTimeout(() => tk === busyToken && UI.h2hEnd(r0, meta, xp, { again: () => startH2H(H.opp, H.rank), title }), 1100);
   }
   function bumpMeta() {
     if (run && (run.practice || run.h2h)) return;
@@ -658,6 +710,8 @@
     GK.applyPayout(run, lines);
     const payRun = JSON.parse(JSON.stringify(run));
     if (!run.practice) { const used = (run.rs.reracksStart || 0) - (run.rs.reracks || 0); run.alleyClean = (run.round === 0 || run.alleyClean === true) && used <= 0; }
+    const bountyDone = GK.bountyRound ? GK.bountyRound(run) : [];
+    bountyDone.forEach((t, i) => setTimeout(() => { UI.toast(t, 2600); sfx.coin(); }, 600 + i * 1200));
     feats({ t: 'round', boss: run.rs.boss, run });
     const beatBoss = !run.practice && run.rs.boss && run.rs.boss !== 'champion' ? GK.bossFor(run) : null;
     const nxt = GK.advance(run);
@@ -718,6 +772,7 @@
     UI.eventScreen(run, ev, {
       take: () => {
         if (ev.id === 'lane_mech') return drillFlow(true, r => done(r));
+        if (ev.id === 'fusion_lab') return fuseFlow(true, r => done(r));
         if (ev.id === 'lost_bowler') return UI.ballPicker(run, 'Trade a ball', 'Pick the ball you\'ll give the stranger. You find out what you get after.', i => done(GK.takeEvent(run, ev, i)), UI.hideModal);
         if (ev.id === 'card_game') return UI.choicePicker('Stake a charm', 'Heads: you win a copy. Tails: it\'s gone.', run.charms.map((c, i) => ({ id: String(i), name: GK.charmName(c), desc: GK.charmDesc(c) })), v => done(GK.takeEvent(run, ev, +v)), UI.hideModal);
         const r = GK.takeEvent(run, ev);
@@ -741,6 +796,20 @@
         ]);
       }
     });
+  }
+  // Fusion: pick the ball to keep, then the one to melt into it.
+  function fuseFlow(free, after) {
+    const opts = run.bag.map((b, i) => ({ b, i })).filter(x => !x.b.fused && GK.FUSION[x.b.type]);
+    UI.choicePicker('Fusion Lab: the ball to keep', 'It keeps how it rolls and becomes its fused form.', opts.map(x => ({ id: String(x.i), name: GK.BALLS[x.b.type].full + ' → ' + GK.FUSION[x.b.type][0], desc: GK.FUSION[x.b.type][1] })), v => {
+      const base = +v;
+      const donors = run.bag.map((b, i) => ({ b, i })).filter(x => x.i !== base);
+      UI.choicePicker('Melt which ball into it?', 'This ball is gone for good' + (free ? '.' : '. Costs $' + GK.fuseCost(run) + '.'), donors.map(x => ({ id: String(x.i), name: (GK.fusedName(x.b) || GK.BALLS[x.b.type].full) + (x.b.ed ? ' · ' + GK.EDITIONS[x.b.ed].name : ''), desc: x.b.ed && !run.bag[base].ed ? 'Its ' + GK.EDITIONS[x.b.ed].name + ' edition carries over.' : '' })), d => {
+        UI.hideModal();
+        const r = free ? GK.takeEvent(run, run.event || { id: 'fusion_lab' }, { base, donor: +d }) : GK.fuseBalls(run, base, +d);
+        if (r.ok) { R.confetti(30); sfx.levelUp(); }
+        after(r);
+      }, UI.hideModal);
+    }, UI.hideModal);
   }
   // Pick a ball, then a layout. free = the lane mechanic's favour.
   function drillFlow(free, after) {
@@ -792,6 +861,7 @@
       },
       member: () => after(GK.buyMember(run)),
       drill: () => drillFlow(false, r => after(r)),
+      fuse: () => fuseFlow(false, r => after(r)),
       reroll: () => after(GK.reroll(run)),
       info: () => UI.runInfo(run),
       next: () => { UI.hideLayer(); run.phase = 'intro'; toIntro(); },
@@ -1124,7 +1194,7 @@
     if (tvBig) {
       tvBig.t += realDt;
       const c = document.getElementById('tvBig');
-      if (c) { const g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height); GK.drawTVScene(g, c.width, c.height, lastTv && lastTv.kind, lastTv ? tvBig.t % 3.4 : 0, lastTv && lastTv.v, R.theme); }
+      if (c) { const g = c.getContext('2d'); g.clearRect(0, 0, c.width, c.height); GK.drawTVScene(g, c.width, c.height, lastTv && lastTv.kind, lastTv ? tvBig.t % 3.4 : 0, lastTv && lastTv.v, R.theme, { tvLeave: lastTv && lastTv.leave }); }
       else tvBig = null;
     }
     R.tick(realDt);

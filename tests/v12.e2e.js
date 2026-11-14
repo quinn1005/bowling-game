@@ -78,9 +78,9 @@ const must = (c, m) => { if (!c) throw new Error(m); };
     let snapped = false;
     for (let i = 0; i < 80; i++) {
       if (!(await page.$('#layer .draft'))) break;
-      if (await page.$('#modal [data-o]')) { await page.click('#modal [data-o]'); continue; }
+      if (await page.$('#modal [data-o]')) { await page.click('#modal [data-o]', { timeout: 2000 }).catch(() => {}); continue; }
       const b = await page.$('#layer .draft [data-pick]:not([disabled])');
-      if (b) { if (shot && !snapped) { await snap(shot); snapped = true; } await b.click(); }
+      if (b) { if (shot && !snapped) { await snap(shot); snapped = true; } await b.click({ timeout: 2000 }).catch(() => {}); } // the draft re-renders after each pick, so a found button can go stale
       await page.waitForTimeout(250);
     }
     await page.waitForSelector('#layer [data-a=go]');

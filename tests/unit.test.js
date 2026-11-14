@@ -992,3 +992,93 @@ test('v1.2.6 hard feats: no unlocks, and their conditions', () => {
   const hw = got({ t: 'h2h', won: true, run: h });
   assert.ok(hw.includes('upset') && hw.includes('clean_sweep'));
 });
+
+test('v1.3 named leaves, run stats and title tips', () => {
+  assert.strictEqual(GK.leaveName([10, 7, 6, 4]), 'BIG FOUR');
+  assert.strictEqual(GK.leaveName([7, 10]), 'BEDPOSTS');
+  assert.strictEqual(GK.leaveName([2, 3]), null);
+  const run = GK.newRun({ seed: 80 });
+  Object.assign(run.stats, { frames: 10, strikes: 4, spares: 3, splits: 1, throws: 16, perfects: 8, charmHits: { strike_out: 5, chalk_bag: 2 }, balls: { house: 9, ghost: 7 } });
+  const st = Object.fromEntries(GK.runStats(run).map(r => [r[0], r[1]]));
+  assert.strictEqual(st['Strike rate'], '40%'); assert.strictEqual(st['Spare rate'], '67%'); assert.strictEqual(st['PERFECT rate'], '50%');
+  assert.strictEqual(st['Favourite charm'], GK.CHARMS.strike_out.name); assert.strictEqual(st['Favourite ball'], GK.BALLS.house.name);
+  const meta = { runs: 9, wins: 0, feats: {}, xp: 0 };
+  for (let i = 0; i < 40; i++) { const t = GK.pickTip(meta); assert.ok(typeof t === 'string' && t.length > 5 && !/undefined|NaN/.test(t), t); }
+  assert.ok(GK.TIPS.length >= 30);
+});
+
+test('v1.3 combos: side by side only, discoverable, in either order', () => {
+  const run = GK.newRun({ seed: 81 }), f = { kind: 'strike', rolls: [roll({ down: pins(10), pins: 10 })] };
+  for (const c of GK.COMBOS) { assert.ok(GK.CHARMS[c.a] && GK.CHARMS[c.b], c.id); }
+  assert.strictEqual(new Set(GK.COMBOS.map(c => c.a + c.b)).size, GK.COMBOS.length);
+  run.charms = [GK.charmInst('hot_streak'), GK.charmInst('strike_out')];
+  const on = GK.scoreFrame(f, run);
+  assert.deepStrictEqual(on.combos, ['strike_engine']);
+  assert.ok(on.steps.some(s => s.src === 'combo' && /Strike Engine/.test(s.label)));
+  run.charms = [GK.charmInst('hot_streak'), GK.charmInst('chalk_bag'), GK.charmInst('strike_out')];
+  assert.deepStrictEqual(GK.scoreFrame(f, run).combos, []);
+  assert.deepStrictEqual(GK.activeCombos([GK.charmInst('statue'), GK.charmInst('perfect_form')], 1), [], 'a stolen charm breaks the pair');
+});
+
+test('v1.3 fusion: every ball has its own, the donor goes, editions carry over', () => {
+  for (const id of Object.keys(GK.BALLS)) assert.ok(GK.FUSION[id], 'no fusion for ' + id);
+  const names = Object.values(GK.FUSION).map(f => f[0]);
+  assert.strictEqual(new Set(names).size, names.length, 'fused names are unique');
+  const run = GK.newRun({ seed: 82 }); run.money = 30;
+  run.bag = [{ type: 'wrecking', ed: null }, { type: 'glass', ed: 'holo' }];
+  const r = GK.fuseBalls(run, 0, 1);
+  assert.ok(r.ok); assert.strictEqual(run.bag.length, 1); assert.ok(run.bag[0].fused); assert.strictEqual(run.bag[0].ed, 'holo');
+  assert.strictEqual(run.money, 30 - GK.fuseCost(run));
+  assert.ok(!GK.fuseBalls(run, 0, 0).ok, 'needs two balls');
+  // the fused bonus scores, and only on a fused roll
+  const f = fz => ({ kind: 'strike', rolls: [roll({ ball: 'wrecking', fused: fz, down: pins(10), pins: 10 })] });
+  assert.ok(GK.scoreFrame(f(true), GK.newRun({ seed: 83 })).score > GK.scoreFrame(f(false), GK.newRun({ seed: 83 })).score);
+  // every fusion scores without errors on a busy roll
+  const busy = { kind: 'split', rolls: [roll({ down: pins(8), pins: 8, carry: 3, late: 2, walls: 2, pit: 1, ballBounces: 2, explosions: 1, blasted: 2, swallowed: 1, fast: 3, direct: 2, boards: 18, rubber: 1 }), roll({ down: [{ n: 9, type: 'gold', by: 'ball' }, { n: 10, type: 'std', by: 'ball' }], pins: 2 })], frameIdx: 2 };
+  for (const id of Object.keys(GK.FUSION)) { busy.rolls.forEach(x => { x.ball = id; x.fused = true; }); const res = GK.scoreFrame(busy, GK.newRun({ seed: 84 })); assert.ok(isFinite(res.score) && res.score > 0, id); }
+});
+
+test('v1.3 bounties: two per alley, pay out, fail and judge at alley end', () => {
+  const run = GK.newRun({ seed: 85 }); GK.startRound(run);
+  assert.strictEqual(run.bounty.list.length, 2); assert.strictEqual(run.bounty.alley, 0);
+  run.bounty.list = [{ id: 'strikes', n: 2, have: 0, done: false, failed: false, reward: 'cash', big: 500 }, { id: 'clean', n: 1, have: 0, done: false, failed: false, reward: 'cash', big: 500 }];
+  const m0 = run.money;
+  assert.strictEqual(GK.progressBounties(run, {}, 'strike', { score: 10 }).length, 0);
+  const n = GK.progressBounties(run, {}, 'double', { score: 10 });
+  assert.strictEqual(n.length, 1); assert.strictEqual(run.money, m0 + GK.BOUNTIES.strikes.pay);
+  assert.strictEqual(GK.progressBounties(run, { gutterBall: true }, 'open', { score: 1 })[0].t, 'bountyfail');
+  run.round = 2; GK.startRound(run); assert.strictEqual(GK.bountyRound(run).length, 0, 'failed bounties never pay');
+  // a clean alley pays when the last round is won
+  const r2 = GK.newRun({ seed: 86 }); GK.startRound(r2); r2.bounty.list = [{ id: 'clean', n: 1, have: 0, done: false, failed: false, reward: 'cash', big: 1 }];
+  r2.round = 1; assert.strictEqual(GK.bountyRound(r2).length, 0); r2.round = 2; assert.strictEqual(GK.bountyRound(r2).length, 1);
+  // practice and Head to Head have none
+  assert.strictEqual(GK.rollBounties(GK.newH2HRun('levi', 3)), null);
+});
+
+test('v1.3 tapes: encode small, decode smooth, keep the best 10', () => {
+  const sim = new GK.Sim({ rng: GK.makeRng(4), lane: {}, rack: GK.padRack() });
+  sim.launch({ type: 'house' }, { aimX: 3, aim: 0, speed: 400, spin: 0.2 });
+  const frames = []; let k = 0;
+  const snap = s => ({ time: s.time, pins: s.pins.map(p => Object.assign({}, p)), balls: s.balls.map(b => Object.assign({}, b)), posts: s.posts.map(o => ({ x: o.x, z: o.z, r: o.r })), fx: [] });
+  while (sim.rolling && k++ < 240 * 10) { sim.step(GK.DT); if (k % 4 === 0) frames.push(snap(sim)); }
+  const tape = GK.encodeTape(frames, { score: 500, kind: 'strike' });
+  assert.ok(JSON.stringify(tape).length < 120000, 'tape size ' + JSON.stringify(tape).length);
+  const back = GK.decodeTape(JSON.parse(JSON.stringify(tape)));
+  assert.ok(back.frames.length > tape.f.length * 1.8, 'in-between frames added');
+  assert.ok(back.frames.every(f => f.pins.length === frames[0].pins.length));
+  assert.ok(back.frames[0].pins.every(p => typeof p.x === 'number' && typeof p.standing === 'boolean'));
+  let shelf = [];
+  for (let i = 1; i <= 14; i++) shelf = GK.shelveTape(shelf, { score: i * 10 });
+  assert.strictEqual(shelf.length, 10); assert.strictEqual(shelf[0].score, 140); assert.strictEqual(shelf[9].score, 50);
+  assert.ok(!GK.tapeWorthy(shelf, 40) && GK.tapeWorthy(shelf, 60));
+});
+
+test('v1.3 Head to Head ranks and trash talk', () => {
+  const b = GK.newH2HRun('kaleb', 90, 0), g = GK.newH2HRun('kaleb', 90, 2);
+  assert.strictEqual(b.h2h.ai.charms.length, 0); assert.strictEqual(g.h2h.ai.charms.length, 1);
+  assert.strictEqual(GK.CHARMS[g.h2h.ai.charms[0].id].rarity, 'rare');
+  g.h2h.round = 1; const d = GK.draftPool(g); assert.strictEqual(d.perAi, 4);
+  let n = 0; while (d.turn !== 'done' && n++ < 12) { if (d.turn === 'ai') GK.takeDraft(g, d, GK.aiPick(g, d), 'ai'); else GK.takeDraft(g, d, 0, 'me'); }
+  assert.deepStrictEqual(d.picks, { me: 3, ai: 4 });
+  for (const opp of Object.keys(GK.H2H)) for (const cat of ['start', 'myStrike', 'mySpare', 'myOpen', 'myGutter', 'theirStrike', 'theirMiss', 'ahead', 'behind', 'draft', 'win', 'lose']) assert.ok(GK.trash(opp, cat), opp + ' ' + cat);
+});

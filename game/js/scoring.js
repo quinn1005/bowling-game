@@ -140,6 +140,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       }
       // ball
       const bs = mk('ball', ri), bname = GK.BALLS[bt] ? GK.BALLS[bt].full : bt;
+      if (r.fused && GK.FUSION && GK.FUSION[bt]) { const F = GK.FUSION[bt], n0 = steps.length; F[2](r, mk('ball', ri), ctx); for (let k = n0; k < steps.length; k++) if (!steps[k].label) steps[k].label = 'Fused: ' + F[0]; }
       if (bt === 'feather' && r.carry) bs.mult(r.carry, bname + ': ' + r.carry + ' carry');
       if (bt === 'bouncer' && r.ballBounces) bs.chips(6 * r.ballBounces, bname + ': ' + r.ballBounces + ' bounce');
       if (bt === 'golden' && r.pins) bs.money(r.pins, bname);
@@ -180,6 +181,15 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (ed === 'neon') s.xmult(GK.EDITIONS.neon.xmult, 'Neon');
     });
 
+    // 3a. combos: pairs of charms side by side
+    const combos = GK.activeCombos ? GK.activeCombos(charms, opts.stolen) : [];
+    combos.forEach(cb => {
+      const K = GK.COMBO[cb.id];
+      K.score(Object.assign({}, ctx, { run: Object.assign({}, run, { money: run.money + money }) }), mk('combo', cb.i), cb);
+      if (retrigger) K.score(Object.assign({}, ctx, { run }), mk('combo', cb.i), cb);
+    });
+    steps.forEach(st => { if (st.src === 'combo' && !st.label) { const cb = combos.find(x => x.i === st.idx); if (cb) st.label = 'Combo: ' + GK.COMBO[cb.id].name; } });
+
     // 3b. boss trophies: their own shelf, never stolen
     (run.trophies || []).forEach((inst, i) => {
       const d = GK.TROPHIES[inst.id]; if (!d || !d.score) return;
@@ -202,7 +212,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (f.echo && chips * mult <= f.echo) bs.xmult(0.5, 'The Echo (' + Math.round(f.echo).toLocaleString('en-US') + ' to beat)');
     mult = Math.max(0, mult); chips = Math.max(0, chips);
     const score = Math.floor(chips * mult);
-    return { steps, chips, mult, score, money, breaks, retrigger, ctx };
+    return { steps, chips, mult, score, money, breaks, retrigger, ctx, combos: combos.map(c => c.id) };
   };
 
   // Scaling charms update after the frame is scored (once, even with retriggers).

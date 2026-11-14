@@ -55,7 +55,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       const d = inst ? GK.charmDef(inst) : GK.CHARMS[id];
       return { name: d.name, k: GK.RARITY[d.rarity].name + ' charm', desc: inst ? GK.charmDesc(inst) : GK.charmDesc(GK.charmInst(id)), col: GK.RARITY[d.rarity].col, glyph: GK.TAG_GLYPH[d.tag], ed };
     }
-    if (kind === 'ball') { const b = GK.BALLS[id], dr = inst && inst.drill && inst.drill !== 'stock' ? GK.DRILLS[inst.drill] : null; return { name: b.full, k: 'Ball', desc: b.desc + (dr ? ' Drilled: ' + dr.name + ' (' + dr.desc + ')' : ''), col: b.col, ed }; }
+    if (kind === 'ball') { const b = GK.BALLS[id], dr = inst && inst.drill && inst.drill !== 'stock' ? GK.DRILLS[inst.drill] : null, F = inst && inst.fused && GK.FUSION ? GK.FUSION[id] : null; return { name: F ? F[0] : b.full, k: F ? 'Fused ball' : 'Ball', desc: (F ? 'FUSED ' + b.full + (inst.donor && GK.BALLS[inst.donor] ? ' (with ' + GK.BALLS[inst.donor].name + ')' : '') + ': ' + F[1] + ' Rolls like a ' + b.name + ': ' : '') + b.desc + (dr ? ' Drilled: ' + dr.name + ' (' + dr.desc + ')' : ''), col: b.col, ed }; }
     if (kind === 'cons') { const c = GK.CONS[id]; return { name: c.name, k: GK.CONS_KIND[c.kind].name, desc: c.desc, col: GK.CONS_KIND[c.kind].col }; }
     if (kind === 'equip') { const e = GK.EQUIP[id]; return { name: e.name, k: 'Equipment · ' + e.slot, desc: e.desc + ' Replaces your current ' + e.slot + '.', col: '#c88f6a' }; }
     if (kind === 'member') { const m = GK.MEMBERSHIPS[id]; return { name: m.name, k: 'Alley Membership', desc: m.desc, col: '#f2c94c' }; }
@@ -93,7 +93,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   UI.charms = function (run, onTap) {
     const el = $('charms'); el.innerHTML = '';
     const n = run.maxCharms; el.style.setProperty('--n', n);
-    const stolen = run.rs ? run.rs.stolen : -1;
+    const stolen = run.rs ? run.rs.stolen : -1, combosOn = GK.activeCombos ? GK.activeCombos(run.charms, stolen) : [];
     for (let i = 0; i < n; i++) {
       const c = run.charms[i], b = document.createElement('button');
       b.type = 'button'; b.className = 'charm'; b.setAttribute('role', 'listitem');
@@ -106,6 +106,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         if (c.corrupt) b.classList.add('corrupt');
         if (c.curse) b.classList.add('cursed');
         if (stolen === i) b.classList.add('stolen');
+        if (combosOn.some(cb => cb.i === i || cb.i + 1 === i)) b.classList.add('combo');
         b.innerHTML = '<span class="g">' + esc(GK.TAG_GLYPH[d.tag]) + '</span><span class="nm">' + esc(d.name) + '</span>';
         b.setAttribute('aria-label', d.name + ': ' + GK.charmDesc(c));
         b.addEventListener('click', () => onTap(i));
@@ -126,7 +127,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       const d = GK.BALLS[b.type], btn = document.createElement('button');
       btn.type = 'button'; btn.className = 'slot' + (b.ed ? ' ed-' + b.ed : '');
       btn.setAttribute('aria-pressed', String(i === sel)); btn.disabled = !enabled;
-      btn.innerHTML = '<span class="sw" style="background:' + d.col + '"></span><span>' + esc(d.name) + '</span>';
+      btn.innerHTML = '<span class="sw" style="background:' + d.col + '"></span><span>' + esc(GK.fusedName(b) || d.name) + '</span>';
+      if (b.fused) btn.classList.add('fused');
       btn.title = d.full + ': ' + d.desc;
       btn.addEventListener('click', () => onPick(i));
       el.appendChild(btn);
@@ -215,9 +217,13 @@ var GK = globalThis.GK = globalThis.GK || {};
         <div class="row2"><button class="btn alt small" data-a="locker">Locker · Lv ${GK.levelOf(meta.xp || 0).level}</button><button class="btn alt small" data-a="book">Collection · ${Math.floor(GK.collectionProgress(meta).have / Math.max(1, GK.collectionProgress(meta).total) * 100)}%</button></div>
         <div class="row2"><button class="btn alt small" data-a="how">How to play</button><button class="btn alt small" data-a="sound">${GK.sfx.muted ? 'Sound off' : 'Sound on'}</button></div>
       </div>
+      <button class="tip" data-tip><small>TIP</small> <span>${esc(GK.pickTip(meta))}</span></button>
       ${UI.levelBar(meta)}
       <p class="dim">Runs ${meta.runs} · Wins ${meta.wins} · Best alley ${meta.bestAlley ? (meta.bestAlley > 8 ? 'Champion' : meta.bestAlley) : '–'} · Best frame ${fmt(meta.bestFrame)}${meta.bestEndless ? ' · Endless ' + meta.bestEndless : ''}${GK.VERSION ? ' · v' + GK.VERSION : ''}</p>
-    </div>`, r => UI.on(r, '[data-a]', el => h[el.dataset.a](el)));
+    </div>`, r => {
+      UI.on(r, '[data-a]', el => h[el.dataset.a](el));
+      UI.on(r, '[data-tip]', el => { el.querySelector('span').textContent = GK.pickTip(meta); });
+    });
   };
 
   UI.rushBest = function (meta) {
@@ -232,18 +238,20 @@ var GK = globalThis.GK = globalThis.GK || {};
       <div class="lbl">Head to Head · ${GK.H2H_ROUNDS} rounds of ${GK.H2H_FRAMES} frames</div>
       <h2>Pick your opponent</h2>
       <p class="dim">Before each round you take turns drafting charms, balls and items from one shared pool. Then you bowl a frame, they bowl theirs, on the same lane. Highest total after ${GK.H2H_ROUNDS} rounds wins.</p>
-      <div class="choices">${Object.entries(GK.H2H).map(([id, o]) => `<button class="choice opp" data-o="${id}"><canvas width="${GK.PORTRAIT.W}" height="${GK.PORTRAIT.H}" data-who="${id}"></canvas><div><b>${esc(o.name)}</b><span>${esc(o.blurb)}</span><small>${rec[id] ? 'You ' + rec[id].w + ' · ' + o.name + ' ' + rec[id].l : 'Never played'}</small></div></button>`).join('')}</div>
+      <div class="choices">${Object.entries(GK.H2H).map(([id, o]) => { const top = (meta.h2hRank || {})[id] || 0; return `<div class="choice opp"><canvas width="${GK.PORTRAIT.W}" height="${GK.PORTRAIT.H}" data-who="${id}"></canvas><div><b>${esc(o.name)}</b><span>${esc(o.blurb)}</span><small>${rec[id] ? 'You ' + rec[id].w + ' · ' + o.name + ' ' + rec[id].l : 'Never played'}</small>
+        <div class="ranks">${GK.H2H_RANKS.map((R, ri) => `<button class="btn small rank" style="--rk:${R.col}" data-o="${id}" data-r="${ri}" ${ri > top ? 'disabled title="Beat ' + esc(o.name) + ' at ' + GK.H2H_RANKS[ri - 1].name + ' first"' : ''}>${ri > top ? '🔒 ' : ''}${R.name}</button>`).join('')}</div></div></div>`; }).join('')}</div>
+      <p class="dim">Silver: bowls better and starts with a charm. Gold: bowls even better, starts with a rare charm and takes 4 picks per draft to your 3. Beat a rank to unlock the next.</p>
       <button class="btn alt" data-a="back">Back</button>
     </div>`, r => {
       r.querySelectorAll('canvas[data-who]').forEach(c => GK.drawPortrait(c.getContext('2d'), c.dataset.who));
-      UI.on(r, '[data-o]', el => onPick(el.dataset.o)); UI.on(r, '[data-a=back]', onBack);
+      UI.on(r, '[data-o]', el => onPick(el.dataset.o, +(el.dataset.r || 0))); UI.on(r, '[data-a=back]', onBack);
     });
   };
   UI.h2hEnd = function (run, meta, xp, h) {
     const H = run.h2h, O = GK.H2H[H.opp], me = H.myTotal, won = me > H.total, tie = me === H.total;
     const theirs = r => H.frames.filter(f => f.round === r).reduce((a, f) => a + f.score, 0);
     UI.layer(`<div class="panel h2h">
-      <div class="lbl">Head to Head · ${esc(O.name)}</div>
+      <div class="lbl">Head to Head · ${esc(O.name)} · ${GK.H2H_RANKS[H.rank | 0].name}</div>
       <h2>${won ? 'You win!' : tie ? 'A tie!' : esc(O.name) + ' wins'}</h2>
       <div class="vs"><div><b>You</b><span>${fmt(me)}</span></div><canvas width="${GK.PORTRAIT.W}" height="${GK.PORTRAIT.H}" data-who="${H.opp}"></canvas><div><b>${esc(O.name)}</b><span>${fmt(H.total)}</span></div></div>
       <div class="lines">${H.myRounds.map((s, i) => `<div><span>Round ${i + 1}</span><b>${fmt(s)} · ${fmt(theirs(i + 1))}</b></div>`).join('')}</div>
@@ -254,6 +262,15 @@ var GK = globalThis.GK = globalThis.GK || {};
       r.querySelectorAll('canvas[data-who]').forEach(c => GK.drawPortrait(c.getContext('2d'), c.dataset.who));
       UI.on(r, '[data-a=again]', h.again); UI.on(r, '[data-a=title]', h.title);
     });
+  };
+  // A speech bubble from one of the Regulars, with their portrait.
+  UI.speech = function (who, name, text, ms = 3600) {
+    let el = document.getElementById('speech');
+    if (!el) { el = document.createElement('div'); el.id = 'speech'; el.setAttribute('role', 'status'); document.body.appendChild(el); }
+    el.innerHTML = `<canvas width="${GK.PORTRAIT.W}" height="${GK.PORTRAIT.H}"></canvas><div><b>${esc(name)}</b><span>${esc(text)}</span></div>`;
+    GK.drawPortrait(el.querySelector('canvas').getContext('2d'), who);
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+    clearTimeout(UI._speechT); UI._speechT = setTimeout(() => el.classList.remove('show'), ms);
   };
   // Head to Head draft: the shared pool, whose turn it is, and both builds.
   UI.draft = function (run, d, onPick) {
@@ -275,6 +292,28 @@ var GK = globalThis.GK = globalThis.GK || {};
       <div class="builds"><div><div class="lbl">Your build</div>${build(run.charms, run.bag, run.cons)}</div>
         <div><div class="lbl">${esc(O.name)}'s build</div>${build(A.charms, A.bag, A.cons)}</div></div>
     </div>`, r => UI.on(r, '[data-pick]', el => onPick(+el.dataset.pick)));
+  };
+  // The Tape Shelf: your 10 best frames, kept as replays.
+  UI.tapeShelf = function () {
+    const list = GK.loadTapes ? GK.loadTapes() : [];
+    UI.modal(`<div class="panel tapes">
+      <h2>Tape shelf</h2>
+      <p class="dim">Your ${GK.TAPE_MAX} best frames, recorded automatically. A better frame pushes the weakest tape off the shelf.</p>
+      <div class="lines">${list.length ? list.map((t, i) => `<div class="tape"><span><b>${i + 1}. ${esc(GK.SHOTS[t.kind] ? GK.SHOTS[t.kind].name : t.kind)} · ${fmt(t.score)}</b><small>${esc(t.where || '')} · ${esc(t.date || '')}</small></span><button class="btn small" data-tape="${i}">Play</button></div>`).join('') : '<p class="dim">No tapes yet. Bowl something worth keeping.</p>'}</div>
+      <button class="btn alt" data-a="ok">Close</button>
+    </div>`, r => { UI.on(r, '[data-a=ok]', UI.hideModal); UI.on(r, '[data-tape]', el => GK.playTape(+el.dataset.tape)); });
+  };
+  // The Combo Book: every pair of charms that works better side by side.
+  UI.comboBook = function (meta) {
+    const got = meta.combos || {}, n = GK.COMBOS.filter(c => got[c.id]).length;
+    UI.modal(`<div class="panel combos">
+      <h2>Combo book</h2>
+      <p class="dim">${n} of ${GK.COMBOS.length} found. Put the right two charms next to each other in your row and they unlock a hidden bonus. Order doesn't matter.</p>
+      <div class="lines">${GK.COMBOS.map(c => got[c.id]
+        ? `<div class="combo-row"><b>${esc(c.name)}</b><span>${esc(GK.CHARMS[c.a].name)} + ${esc(GK.CHARMS[c.b].name)}: ${esc(c.desc)}</span></div>`
+        : `<div class="combo-row unk"><b>???</b><span>${esc(GK.comboHint(c))}</span></div>`).join('')}</div>
+      <button class="btn" data-a="ok">Close</button>
+    </div>`, r => UI.on(r, '[data-a=ok]', UI.hideModal));
   };
   // Achievement cards: one per feat, collected in a gallery.
   UI.cards = function (meta) {
@@ -388,6 +427,8 @@ var GK = globalThis.GK = globalThis.GK || {};
     UI.modal(`<div class="panel" style="text-align:left">
       <h2>Feats &amp; unlocks</h2>
       <button class="btn alt small" data-a="cards">Card gallery</button>
+      <button class="btn alt small" data-a="combos">Combo book · ${Object.keys(meta.combos || {}).length}/${GK.COMBOS.length}</button>
+      <button class="btn alt small" data-a="tapes">Tape shelf · ${GK.loadTapes ? GK.loadTapes().length : 0}/${GK.TAPE_MAX}</button>
       <p class="dim">Most balls, charms, equipment, Lane Tricks and Black Market items start locked. Each feat unlocks the items that match its theme for future runs.</p>
       <div class="bar unlockbar"><i style="width:${pct}%"></i></div>
       <p class="dim">${prog.have} of ${prog.total} items unlocked · ${nDone} of ${GK.FEATS.length} feats</p>
@@ -398,7 +439,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       <h3>Your daily runs</h3>
       ${log.length ? '<div class="story">' + log.map(x => `<div><span>${esc(x.date)}</span><b>${esc(x.label)} · best frame ${fmt(x.best || 0)}</b></div>`).join('') + '</div>' : '<p class="dim">No daily runs yet.</p>'}
       <button class="btn" data-a="ok">Close</button>
-    </div>`, r => { UI.on(r, '[data-a=ok]', UI.hideModal); UI.on(r, '[data-a=cards]', () => UI.cards(meta)); UI.on(r, '[data-a=wall]', () => { UI.hideModal(); UI.wallOfFame(null, UI.hideLayer, 'Back'); }); });
+    </div>`, r => { UI.on(r, '[data-a=ok]', UI.hideModal); UI.on(r, '[data-a=cards]', () => UI.cards(meta)); UI.on(r, '[data-a=combos]', () => UI.comboBook(meta)); UI.on(r, '[data-a=tapes]', () => UI.tapeShelf()); UI.on(r, '[data-a=wall]', () => { UI.hideModal(); UI.wallOfFame(null, UI.hideLayer, 'Back'); }); });
   };
 
   UI.how = function (onBack) {
@@ -433,6 +474,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       <div class="lbl">${run.h2h ? 'Head to Head' : GK.isChamp(run) ? 'Final' : GK.isEndless(run) ? 'Endless' : 'Alley ' + (run.alley + 1) + ' of 8'} · ${esc(def.name)}${tags ? ' · ' + esc(tags) : ''}</div>
       <h2>${esc(GK.roundName(run))}</h2>
       ${run.h2h ? `<p>Round ${run.h2h.round} of ${GK.H2H_ROUNDS} against <b style="color:var(--marquee)">${esc(GK.H2H[run.h2h.opp].name)}</b>: ${rs.framesMax} frames each, alternating (${esc(GK.H2H[run.h2h.opp].name)} ${run.h2h.ai.framesMax}) · you ${fmt(run.h2h.myTotal)}, ${esc(GK.H2H[run.h2h.opp].name)} ${fmt(run.h2h.total)} · ${rs.reracks} re-rack${rs.reracks === 1 ? '' : 's'}</p>` : `<p>Target <b style="color:var(--marquee)">${fmt(rs.target)}</b> in ${rs.framesMax} frames · ${rs.reracks} re-rack${rs.reracks === 1 ? '' : 's'}</p>`}
+      ${run.bounty && run.bounty.alley === run.alley ? `<div class="bounties"><div class="lbl">Bounties this alley</div>${run.bounty.list.map(b => `<div class="bounty${b.done ? ' done' : b.failed ? ' failed' : ''}"><span>${esc(GK.bountyText(b))}</span><b>${b.done ? 'DONE' : b.failed ? 'FAILED' : (GK.BOUNTIES[b.id].alley ? '' : Math.min(b.have, b.n) + '/' + b.n + ' · ') + (b.reward === 'trick' ? 'Trick card' : '$' + GK.BOUNTIES[b.id].pay)}</b></div>`).join('')}</div>` : ''}
       ${first || GK.isChamp(run) ? '<p class="dim">' + esc(def.laneDesc) + '</p>' : ''}
       <p class="dim"><b style="color:var(--chips)">Oil: ${esc(oil.name)}.</b> ${esc(oil.desc)}</p>
       ${boss ? `<div class="boss"><b>${esc(GK.bossDef(run).name)}</b><p>${esc(GK.bossDef(run).desc)}</p>${rs.stolen >= 0 && run.charms[rs.stolen] ? '<p class="dim">Stolen: ' + esc(GK.charmName(run.charms[rs.stolen])) + '</p>' : ''}</div>` : ''}
@@ -451,6 +493,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     if (ev.id === 'vending') { offer = '<p class="dim">You never know what\'s in there until it drops.</p>'; take = 'Pay $3'; }
     if (ev.id === 'shady') { const c = GK.CHARMS[ev.charm]; offer = '<div class="boss"><b>' + esc(c.name) + '</b><p>' + esc(GK.charmDesc(GK.charmInst(ev.charm))) + '</p></div>'; take = 'Take the charm'; }
     if (ev.id === 'lane_mech') { take = 'Re-drill a ball'; }
+    if (ev.id === 'fusion_lab') { take = 'Fuse two balls (free)'; }
     const T2 = { sale: 'Nice!', fountain: 'Toss in $5', lost_bowler: 'Trade a ball', regulars_bet: 'Deal!', card_game: 'Stake a charm' };
     if (T2[ev.id]) take = T2[ev.id];
     if (ev.id === 'regular') {
@@ -465,7 +508,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     }
     if (ev.id === 'lost_found') {
       const full = run.bag.length >= GK.maxBag(run);
-      owned = `<div class="sect">Your bag ${run.bag.length}/${GK.maxBag(run)}${full ? ' · full, sell one or swap one out' : ' · tap to sell'}</div><div class="owned">${run.bag.map((b, i) => `<button class="chip" data-ball="${i}" style="--rc:${GK.BALLS[b.type].col}"><i class="sw" style="background:${GK.BALLS[b.type].col}"></i>${esc(GK.BALLS[b.type].name)}${b.ed ? ' <small>' + GK.EDITIONS[b.ed].name + '</small>' : ''} <small>$${GK.ballSell(b)}</small></button>`).join('')}</div>`;
+      owned = `<div class="sect">Your bag ${run.bag.length}/${GK.maxBag(run)}${full ? ' · full, sell one or swap one out' : ' · tap to sell'}</div><div class="owned">${run.bag.map((b, i) => `<button class="chip" data-ball="${i}" style="--rc:${GK.BALLS[b.type].col}"><i class="sw" style="background:${GK.BALLS[b.type].col}"></i>${esc(GK.fusedName(b) || GK.BALLS[b.type].name)}${b.ed ? ' <small>' + GK.EDITIONS[b.ed].name + '</small>' : ''} <small>$${GK.ballSell(b)}</small></button>`).join('')}</div>`;
     }
     GK._run = run;
     UI.layer(`<div class="panel solid">
@@ -577,6 +620,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       <h3>Your run</h3>
       <div class="story">${hist.map(x => `<div><span>${esc(roundLabel(x))}</span><b class="${x.skipped ? 's' : x.won ? 'w' : 'l'}">${x.skipped ? 'skipped' : fmt(x.total) + ' / ' + fmt(x.target)}</b></div>`).join('')}</div>
       ${b ? `<p class="dim">Best frame: <b>${esc(GK.SHOTS[b.kind].name)}</b> for ${fmt(b.score)} in ${esc(roundLabel(b))}, frame ${b.frame + 1}.</p>` : ''}
+      <h3>Run stats</h3>
+      <div class="statgrid">${GK.runStats(run).map(([k, v, sub]) => `<div><small>${esc(k)}</small><b>${esc(v)}</b>${sub ? '<span>' + esc(sub) + '</span>' : ''}</div>`).join('')}</div>
       <div class="lines">
         <div><span>Strikes / Spares / Splits</span><b>${s.strikes} / ${s.spares} / ${s.splits}</b></div>
         <div><span>PERFECT throws (best streak)</span><b>${s.perfects || 0} (${s.bestPStreak || 0})</b></div>
@@ -632,6 +677,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       <h3>Shot levels</h3>${UI.levelsHtml(run)}
       <h3>Pin rack</h3>${UI.rackHtml(run.rack, null, false)}
       ${kinds.length ? '<p class="dim">' + kinds.map(t => '<b>' + esc(GK.PINS[t].name) + ':</b> ' + esc(GK.PINS[t].desc)).join('<br>') + '</p>' : '<p class="dim">All standard pins.</p>'}
+      ${run.bounty && run.bounty.alley === run.alley ? `<div class="bounties"><div class="lbl">Bounties this alley</div>${run.bounty.list.map(b => `<div class="bounty${b.done ? ' done' : b.failed ? ' failed' : ''}"><span>${esc(GK.bountyText(b))}</span><b>${b.done ? 'DONE' : b.failed ? 'FAILED' : (GK.BOUNTIES[b.id].alley ? '' : Math.min(b.have, b.n) + '/' + b.n + ' · ') + (b.reward === 'trick' ? 'Trick card' : '$' + GK.BOUNTIES[b.id].pay)}</b></div>`).join('')}</div>` : ''}
       <h3>Equipment</h3><p class="dim">${esc(eq)}</p>
       <h3>Memberships</h3><p class="dim">${esc(mem)}</p>
       <p class="dim">Seed ${GK.seedCode(run.seed)}${run.daily ? ' (daily)' : ''} · Throws ${run.stats.throws}</p>
@@ -681,7 +727,7 @@ var GK = globalThis.GK = globalThis.GK || {};
   UI.ballPicker = function (run, title, desc, onDone, onCancel) {
     UI.modal(`<div class="panel">
       <h2>${esc(title)}</h2><p class="dim">${esc(desc)}</p>
-      <div class="choices">${run.bag.map((b, i) => `<button class="choice" data-b="${i}"><b><i class="sw" style="display:inline-block;vertical-align:-2px;background:${GK.BALLS[b.type].col}"></i> ${esc(GK.BALLS[b.type].full)}${b.ed ? ' · ' + GK.EDITIONS[b.ed].name : ''}</b><span>${esc(GK.BALLS[b.type].desc)}${b.drill && b.drill !== 'stock' ? ' · ' + esc(GK.DRILLS[b.drill].name) : ''}</span></button>`).join('')}</div>
+      <div class="choices">${run.bag.map((b, i) => `<button class="choice" data-b="${i}"><b><i class="sw" style="display:inline-block;vertical-align:-2px;background:${GK.BALLS[b.type].col}"></i> ${esc(GK.fusedName(b) || GK.BALLS[b.type].full)}${b.ed ? ' · ' + GK.EDITIONS[b.ed].name : ''}</b><span>${esc(b.fused && GK.FUSION[b.type] ? GK.FUSION[b.type][1] : GK.BALLS[b.type].desc)}${b.drill && b.drill !== 'stock' ? ' · ' + esc(GK.DRILLS[b.drill].name) : ''}</span></button>`).join('')}</div>
       <button class="btn alt" data-a="no">Cancel</button>
     </div>`, r => { UI.on(r, '[data-b]', el => onDone(+el.dataset.b)); UI.on(r, '[data-a=no]', onCancel); });
   };
@@ -703,7 +749,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         <button class="btn small" data-a="member" ${GK.canAfford(run, price) ? '' : 'disabled'}>Buy $${price}</button></div>`;
     })() : '';
     const charms = run.charms.map((c, i) => { const d = GK.charmDef(c); return `<button class="chip" data-charm="${i}" style="--rc:${GK.RARITY[d.rarity].col}">${esc(d.name)}${c.ed ? ' <small>' + GK.EDITIONS[c.ed].name + '</small>' : ''}</button>`; }).join('') || '<span class="lbl">No charms yet</span>';
-    const balls = run.bag.map((b, i) => `<button class="chip" data-ball="${i}" style="--rc:${GK.BALLS[b.type].col}"><i class="sw" style="background:${GK.BALLS[b.type].col}"></i>${esc(GK.BALLS[b.type].name)}${b.ed ? ' <small>' + GK.EDITIONS[b.ed].name + '</small>' : ''}${b.drill && b.drill !== 'stock' ? ' <small>' + esc(GK.DRILLS[b.drill].name.split(' ')[0]) + '</small>' : ''}</button>`).join('');
+    const balls = run.bag.map((b, i) => `<button class="chip" data-ball="${i}" style="--rc:${GK.BALLS[b.type].col}"><i class="sw" style="background:${GK.BALLS[b.type].col}"></i>${esc(GK.fusedName(b) || GK.BALLS[b.type].name)}${b.ed ? ' <small>' + GK.EDITIONS[b.ed].name + '</small>' : ''}${b.drill && b.drill !== 'stock' ? ' <small>' + esc(GK.DRILLS[b.drill].name.split(' ')[0]) + '</small>' : ''}</button>`).join('');
     const cons = run.cons.map((id, i) => `<button class="chip" data-cons="${i}" style="--rc:${GK.CONS_KIND[GK.CONS[id].kind].col}">${esc(GK.CONS[id].name)}</button>`).join('') || '<span class="lbl">Empty</span>';
     const eq = Object.values(run.equip).filter(id => GK.EQUIP[id]).map(id => GK.EQUIP[id].name).join(', ');
     UI.layer(`<div class="shop">
@@ -712,6 +758,8 @@ var GK = globalThis.GK = globalThis.GK || {};
       <div class="grid">${shop.items.map(card).join('')}${mem}</div>
       <div class="item wide" style="--rc:#3fd0e0"><span class="k">Pro Shop service</span><span class="n">Re-drill a ball</span><span class="d">Change how a ball hooks: Strong, Control or Skid-flare layouts.</span>
         <button class="btn small alt" data-a="drill" ${GK.canAfford(run, GK.drillCost(run)) ? '' : 'disabled'}>${GK.drillCost(run) ? 'Re-drill $' + GK.drillCost(run) : 'Re-drill (free)'}</button></div>
+      <div class="item wide" style="--rc:#ff7ac8"><span class="k">Pro Shop service</span><span class="n">Fusion Lab</span><span class="d">Melt one ball into another. The second ball is gone; the first keeps how it rolls and becomes its fused form, with a bonus all its own. Every ball has a different fusion.</span>
+        <button class="btn small alt" data-a="fuse" ${run.bag.length >= 2 && run.bag.some(b => !b.fused) && GK.canAfford(run, GK.fuseCost(run)) ? '' : 'disabled'}>Fuse $${GK.fuseCost(run)}</button></div>
       <div class="row2"><button class="btn alt small" data-a="reroll" ${GK.canAfford(run, GK.rerollCost(run)) ? '' : 'disabled'}>Reroll $${GK.rerollCost(run)}</button><button class="btn alt small" data-a="info">Run info</button></div>
       <div class="sect">Charms ${run.charms.length}/${run.maxCharms} · tap to sell or reorder</div><div class="owned">${charms}</div>
       <div class="sect">Bag ${run.bag.length}/${GK.maxBag(run)}</div><div class="owned">${balls}</div>
@@ -722,6 +770,7 @@ var GK = globalThis.GK = globalThis.GK || {};
       UI.on(r, '[data-buy]', el => h.buy(+el.dataset.buy));
       UI.on(r, '[data-a=member]', h.member);
       UI.on(r, '[data-a=drill]', h.drill);
+      UI.on(r, '[data-a=fuse]', h.fuse);
       UI.on(r, '[data-a=reroll]', h.reroll);
       UI.on(r, '[data-a=info]', h.info);
       UI.on(r, '[data-a=next]', h.next);

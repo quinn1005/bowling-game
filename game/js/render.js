@@ -305,6 +305,22 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (t > 0.8) { px(cx, x - 1, y - 5 + 1, 3, 1, '#000'); if (Math.floor(t * 4) % 2) ptext(cx, 'OUCH', x, sy + 6, FONT_S, '#ffd447', 'center'); }
       caption(cx, sx, sy, sw, sh, 'SPLIT!', '#ff9ef0', t);
     },
+    // a named leave: the pins still standing on a little deck map, and the name on a marquee
+    leave(cx, sx, sy, sw, sh, t, v, self) {
+      const L = self && self.tvLeave; if (!L) return;
+      px(cx, sx, sy, sw, sh, '#1a1030');
+      const rows = [[7, 8, 9, 10], [4, 5, 6], [2, 3], [1]], up = new Set(L.nums);
+      rows.forEach((row, ri) => row.forEach((n, i) => {
+        const x = sx + sw / 2 - (row.length - 1) * 3.5 + i * 7, y = sy + 3 + ri * 4;
+        const on = up.has(n), blink = on && Math.floor(t * 4) % 2;
+        px(cx, x - 1, y, 3, 3, on ? (blink ? '#ffd447' : '#f2ebe0') : '#3a2f50');
+        if (on) px(cx, x - 1, y + 1, 3, 1, '#c4243a');
+      }));
+      cx.font = FONT_S;
+      const w = cx.measureText(L.name).width;
+      if (w <= sw - 2) caption(cx, sx, sy, sw, sh, L.name, '#ff9ef0', t);
+      else ptext(cx, L.name, sx + sw + 2 - (t * 34) % (sw + w + 6), sy + sh - 2, FONT_S, '#ff9ef0', 'left', '#000000');
+    },
     seven10(cx, sx, sy, sw, sh, t) {
       px(cx, sx, sy, sw, sh, '#140a2a');
       px(cx, sx, sy + 18, sw, 2, '#d8a56b');
@@ -771,7 +787,7 @@ var GK = globalThis.GK = globalThis.GK || {};
         ptext(cx, 'LANE', sx + sw / 2, sy + 11, FONT_S, tc, 'center'); ptext(cx, 'TV', sx + sw / 2, sy + 20, FONT_S, tc, 'center');
         if (Math.floor(time * 1.3) % 6 === 0) for (let k = 0; k < 60; k++) { cx.fillStyle = Math.random() < 0.5 ? '#fff' : '#555'; cx.fillRect(sx + Math.floor(Math.random() * sw), sy + Math.floor(Math.random() * sh), 1, 1); }
       } else {
-        this.tvReels = tv.reels || this.tvReels;
+        this.tvReels = tv.reels || this.tvReels; this.tvLeave = tv.leave || this.tvLeave;
         TV_SCENES[kind](cx, sx, sy, sw, sh, t, tv.v || 0, this);
       }
       // scanlines + glass glare
@@ -1205,12 +1221,12 @@ var GK = globalThis.GK = globalThis.GK || {};
   }
   GK.shade = shade;
   // Paint one frame of a TV cartoon (or the idle channel) into any context, scaled to fit w×h.
-  GK.drawTVScene = function (ctx, w, h, kind, t, v, theme) {
+  GK.drawTVScene = function (ctx, w, h, kind, t, v, theme, extra) {
     const k = Math.min(w / 38, h / 26), prevSnap = SNAP;
     SNAP = 2; ctx.imageSmoothingEnabled = false;
     ctx.save(); ctx.setTransform(k, 0, 0, k, (w - 38 * k) / 2, (h - 26 * k) / 2);
     ctx.beginPath(); ctx.rect(0, 0, 38, 26); ctx.clip();
-    if (kind && TV_SCENES[kind]) TV_SCENES[kind](ctx, 0, 0, 38, 26, t, v || 0);
+    if (kind && TV_SCENES[kind]) TV_SCENES[kind](ctx, 0, 0, 38, 26, t, v || 0, extra);
     else {
       ctx.fillStyle = '#1a2a3a'; ctx.fillRect(0, 0, 38, 26);
       ptext(ctx, 'LANE TV', 19, 12, '700 7px Rubik, system-ui, sans-serif', theme ? theme.sign : '#ffb547', 'center');

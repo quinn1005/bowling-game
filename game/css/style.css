@@ -419,3 +419,39 @@ canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: 
 /* canvases inside menus (cards, portraits, the Wall of Fame) are pictures: let swipes scroll past them */
 .panel canvas, .shop canvas, #modal canvas, #layer canvas { touch-action: pan-x pan-y; cursor: default; }
 .choice canvas, button canvas { cursor: pointer; }
+/* end-of-run stats */
+.statgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 6px 0 10px; }
+.statgrid div { background: var(--panel2); border-radius: 10px; padding: 7px 9px; box-shadow: inset 0 0 0 1px var(--line); display: grid; gap: 1px; }
+.statgrid small { color: var(--muted); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
+.statgrid b { font-size: 18px; color: var(--marquee); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.statgrid span { color: var(--muted); font-size: 11px; }
+/* title-screen tip: tap for another */
+.tip { display: block; width: 100%; margin: 10px 0 6px; padding: 9px 12px; text-align: left; border: 0; border-radius: 10px; background: var(--panel2); box-shadow: inset 0 0 0 1px var(--line), inset 3px 0 0 var(--marquee); color: var(--fg); font: inherit; font-size: 13px; font-style: italic; line-height: 1.35; cursor: pointer; }
+.tip small { font-style: normal; font-weight: 800; color: var(--marquee); letter-spacing: 0.08em; margin-right: 4px; }
+/* combo charms: a pair side by side glows gold */
+.charm.combo { box-shadow: inset 0 0 0 2px #ffd447, 0 0 10px rgba(255, 212, 71, 0.55); }
+.combo-row { display: grid !important; gap: 2px; }
+.combo-row span { color: var(--muted); font-size: 12px; font-weight: 500; text-align: left; }
+.combo-row.unk b { color: var(--muted); }
+.slot.fused { box-shadow: inset 0 0 0 2px #ff7ac8; }
+/* bounties */
+.bounties { margin: 8px 0; display: grid; gap: 4px; text-align: left; }
+.bounty { display: flex; justify-content: space-between; gap: 8px; background: var(--panel2); border-radius: 8px; padding: 6px 9px; font-size: 13px; box-shadow: inset 3px 0 0 #f2c94c; }
+.bounty b { color: var(--money, #f2c94c); white-space: nowrap; font-size: 12px; }
+.bounty.done { opacity: 0.7; box-shadow: inset 3px 0 0 var(--good, #6ad48a); }
+.bounty.done b { color: var(--good, #6ad48a); }
+.bounty.failed { opacity: 0.5; text-decoration: line-through; }
+/* tape shelf */
+.tape { display: flex !important; align-items: center; justify-content: space-between; gap: 8px; }
+.tape span { display: grid; text-align: left; }
+.tape small { color: var(--muted); font-size: 11px; }
+/* head to head ranks */
+.choice.opp .ranks { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.btn.rank { box-shadow: inset 0 0 0 2px var(--rk); min-width: 0; padding: 5px 10px; flex: 1; }
+.btn.rank:disabled { opacity: 0.45; }
+/* trash talk */
+#speech { position: fixed; left: 50%; top: 70px; transform: translate(-50%, -20px); opacity: 0; pointer-events: none; z-index: 60; display: flex; gap: 8px; align-items: center; max-width: min(92vw, 380px); background: #fff8ea; color: #1a1220; border-radius: 14px; padding: 8px 12px 8px 8px; box-shadow: 0 6px 18px rgba(0,0,0,0.5); transition: opacity 0.25s ease, transform 0.25s ease; }
+#speech.show { opacity: 1; transform: translate(-50%, 0); }
+#speech canvas { width: 40px; aspect-ratio: 64 / 80; image-rendering: pixelated; border-radius: 3px; border: 2px solid #c8932a; flex: none; }
+#speech b { display: block; font-size: 12px; color: #a8325a; }
+#speech span { font-size: 14px; font-weight: 600; line-height: 1.25; }

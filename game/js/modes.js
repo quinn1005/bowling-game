@@ -34,20 +34,33 @@ var GK = globalThis.GK = globalThis.GK || {};
   };
   GK.H2H_FRAMES = 5;
   GK.H2H_ROUNDS = 3;
-  GK.newH2HRun = function (opp, seed) {
+  // Ranks: Bronze is the opponent as they are. Silver bowls better and starts with a charm.
+  // Gold bowls better still, starts with a rare charm and takes 4 picks per draft to your 3.
+  GK.H2H_RANKS = [
+    { name: 'Bronze', col: '#d8884a', skill: 0, picks: 3, start: null },
+    { name: 'Silver', col: '#c8c8d8', skill: 0.05, picks: 3, start: 'uncommon' },
+    { name: 'Gold', col: '#ffd447', skill: 0.1, picks: 4, start: 'rare' }
+  ];
+  GK.newH2HRun = function (opp, seed, rank) {
     const run = GK.newRun({ seed, bag: 'classic' });
+    rank = Math.max(0, Math.min(2, rank | 0));
     run.h2h = {
-      opp, round: 0, total: 0, myTotal: 0, myRounds: [], frames: [], streak: 0,
+      opp, rank, round: 0, total: 0, myTotal: 0, myRounds: [], frames: [], streak: 0,
       ai: { charms: [], levels: {}, bag: [{ type: GK.H2H[opp].ball, ed: null }], cons: [], loadedNext: false, extraNext: 0, frameIdx: 0, framesMax: GK.H2H_FRAMES, kinds: { strike: 0, spare: 0, open: 0 }, spareBall: null }
     };
+    const R = GK.H2H_RANKS[rank];
+    if (R.start) {
+      const pool = GK.CHARM_LIST.filter(c => c.rarity === R.start && !c.copy && c.id !== 'regulars' && ['mult', 'xmult', 'chips'].includes(c.tag));
+      run.h2h.ai.charms.push(GK.charmInst(GK.stream(seed, 'rankstart').pick(pool).id));
+    }
     return run;
   };
   // The AI's build, in the shape scoring expects.
   GK.aiRun = run => { const A = run.h2h.ai; return { levels: A.levels, charms: A.charms, money: 0, rack: GK.padRack(), bag: A.bag, trophies: [], maxCharms: 5 }; };
   GK.h2hBall = (opp, ri, run) => ri === 0 ? GK.H2H[opp].ball : (run && run.h2h && run.h2h.ai.spareBall) || 'house';
   // The opponent's throw for roll `ri` of their frame.
-  GK.h2hThrow = function (opp, sim, rng, ri) {
-    const O = GK.H2H[opp], miss = (1 - O.skill) * 3;
+  GK.h2hThrow = function (opp, sim, rng, ri, rank) {
+    const O = GK.H2H[opp], R = GK.H2H_RANKS[rank | 0] || GK.H2H_RANKS[0], miss = (1 - Math.min(0.97, O.skill + R.skill)) * 3;
     const g = () => { let u = 0; for (let i = 0; i < 6; i++) u += rng(); return (u - 3) / Math.sqrt(0.5); };
     const st = sim.standing();
     if (ri > 0 && st.length) {
@@ -86,7 +99,7 @@ var GK = globalThis.GK = globalThis.GK || {};
     take(GK.CHARM_LIST.filter(c => !c.copy && c.id !== 'regulars' && !owned.has(c.id) && GK.isUnlocked('charm', c.id)).map(c => ({ kind: 'charm', id: c.id })), 4);
     take(Object.keys(GK.BALLS).filter(k => k !== 'house' && !GK.BALLS[k].regular && GK.isUnlocked('ball', k)).map(k => ({ kind: 'ball', id: k })), 2);
     take(GK.DRAFT_ITEMS.map(k => ({ kind: 'cons', id: k })), 2);
-    return { items: pool, turn: run.h2h.round % 2 === 1 ? 'me' : 'ai', picks: { me: 0, ai: 0 }, per: 3, log: [] };
+    return { items: pool, turn: run.h2h.round % 2 === 1 ? 'me' : 'ai', picks: { me: 0, ai: 0 }, per: 3, perAi: (GK.H2H_RANKS[run.h2h.rank | 0] || GK.H2H_RANKS[0]).picks, log: [] };
   };
   // Sample frames the AI uses to judge what an item is worth to its build.
   const R = (o) => Object.assign({ ball: 'house', edition: null, down: [], pins: 0, carry: 0, late: 0, walls: 0, pit: 0, ballBounces: 0, explosions: 0, blasted: 0, swallowed: 0, firstPin: 1, fast: 0, rubber: 0, perfect: true }, o);
@@ -193,8 +206,9 @@ var GK = globalThis.GK = globalThis.GK || {};
     } else GK.aiTake(run, it);
     draft.items.splice(idx, 1); draft.picks[who]++;
     draft.log.push({ who, item: it });
+    const lim = w => w === 'ai' ? (draft.perAi || draft.per) : draft.per;
     draft.turn = who === 'me' ? 'ai' : 'me';
-    if (draft.picks[draft.turn] >= draft.per) draft.turn = draft.picks.me >= draft.per && draft.picks.ai >= draft.per ? 'done' : (draft.turn === 'me' ? 'ai' : 'me');
+    if (draft.picks[draft.turn] >= lim(draft.turn)) draft.turn = draft.picks.me >= lim('me') && draft.picks.ai >= lim('ai') ? 'done' : (draft.turn === 'me' ? 'ai' : 'me');
     return { ok: true };
   };
   GK.aiTake = function (run, it) {
@@ -316,6 +330,57 @@ var GK = globalThis.GK = globalThis.GK || {};
       if (c.curse.have >= C.n) { c.curse = null; c.blessed = true; if (run.stats) run.stats.lifted = (run.stats.lifted || 0) + 1; out.push(GK.charmName(c) + ': ' + C.name + ' lifted! Its drawback is gone.'); }
     });
     return out;
+  };
+
+  // ---------- title-screen tips (with attitude) ----------
+  // Tips aimed at something you haven't done yet come up most; the rest are general disrespect.
+  const has = (m, id) => !!(m.feats && m.feats[id]);
+  GK.TIPS = [
+    [m => !has(m, 'custom'), 'You\'ve never re-drilled a ball. Bold of you to assume the factory got it right.'],
+    [m => !has(m, 'split'), 'Splits can be converted. We checked. It has been done. Just not by you.'],
+    [m => !has(m, 'turkey'), 'Three strikes in a row is called a Turkey. You\'d know that if you\'d ever done it.'],
+    [m => !has(m, 'skipper'), 'You can skip a round, you know. Not that you\'re in any position to be skipping things.'],
+    [m => !has(m, 'shady'), 'The Black Market exists. The shady guy is starting to take it personally.'],
+    [m => (m.runs || 0) >= 5 && !(m.wins || 0), m => (m.runs || 0) + ' runs and zero wins. Have you considered darts? Darts is nice.'],
+    [m => (m.wins || 0) > 0, 'You won once and now you think you\'re good. Adorable.'],
+    [m => !m.h2h, 'Quinn, Kaleb and Levi are waiting in Head to Head. They\'ve already started laughing.'],
+    [m => m.h2h && m.h2h.quinn && m.h2h.quinn.l > m.h2h.quinn.w, m => 'Quinn is ' + m.h2h.quinn.l + '–' + m.h2h.quinn.w + ' against you. Quinn isn\'t even trying anymore. Quinn is still winning.'],
+    [m => !m.rush || !Object.keys(m.rush).length, 'The Daily Boss Rush resets every day. So does your excuse for not playing it.'],
+    [m => !has(m, 'gutter'), 'You\'ve never bowled a gutter frame. Impressive. Statistically suspicious, but impressive.'],
+    [m => has(m, 'gutter'), 'Remember that gutter frame? The pins do. They talk about it.'],
+    [m => (m.bestFrame || 0) > 0 && m.bestFrame < 1000, m => 'Your best frame is ' + GK.fmt(m.bestFrame) + '. The pinsetter has scored more by accident.'],
+    [m => !has(m, 'perfectionist'), 'Ten PERFECT throws in a row. It\'s one bar going left and right. You can do this. You won\'t, but you can.'],
+    [m => !has(m, 'window'), 'Rerolling the shop costs money. That\'s a bold assumption about your money.'],
+    [m => GK.levelOf(m.xp || 0).level < 5, m => 'Bowler level ' + GK.levelOf(m.xp || 0).level + '. Everyone starts somewhere. You\'re still there.'],
+    [m => !has(m, 'big_hook'), 'The hook dial goes past 70%. It isn\'t decorative.'],
+    [m => !has(m, 'straight'), 'Try throwing it straight sometime. It\'s like a hook, minus the excuses.'],
+    [m => !has(m, 'champion'), 'The Gutter King has never heard of you. Let\'s keep it that way, apparently.'],
+    [m => !has(m, 'kraken_slayer'), 'The Kraken has eight arms and still bowls better than you.'],
+    [null, 'Pro tip: aim for the pins.'],
+    [null, 'The gutters are not part of the lane. We\'re telling you because nobody else will.'],
+    [null, 'Have you tried knocking down all ten pins? Players who do this report higher scores.'],
+    [null, 'Re-racks are free. Your dignity isn\'t.'],
+    [null, 'The power bar isn\'t a suggestion.'],
+    [null, 'Statistically, your next run will be your best. Statistically.'],
+    [null, 'Charms don\'t work if you don\'t buy them. Neither does hope.'],
+    [null, 'The lane TV plays cartoons when you do something good. It\'s been on the idle channel for a while.'],
+    [null, 'Levi lofts the ball on purpose. What\'s your excuse?'],
+    [null, 'Kaleb crosses 20 boards a throw. You cross your fingers.'],
+    [null, 'Glass pins break. So will you, around Alley 3.'],
+    [null, 'If you miss PERFECT, blame the frame rate. Everyone else does.'],
+    [null, 'The pins aren\'t moving. That\'s you.'],
+    [null, 'There\'s no shame in losing to The Mechanic. There\'s a little.'],
+    [null, 'Somewhere, a 10-pin is still standing because of you. It thinks about you every day.'],
+    [null, 'Tip: the ball goes the way you throw it. Groundbreaking, we know.'],
+    [null, 'Loading tip... never mind, you need more than a tip.'],
+    [null, 'Quinn bowls two-handed and still has a free hand to wave at your score.']
+  ];
+  GK.pickTip = function (meta, rng) {
+    const r = rng || Math.random, m = meta || {};
+    const aimed = GK.TIPS.filter(t => t[0] && (() => { try { return t[0](m); } catch (e) { return false; } })());
+    const pool = aimed.length && r() < 0.65 ? aimed : GK.TIPS.filter(t => !t[0]);
+    const t = pool[Math.floor(r() * pool.length)];
+    return typeof t[1] === 'function' ? t[1](m) : t[1];
   };
 
   // ---------- hard feats ----------

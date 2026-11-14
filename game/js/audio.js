@@ -66,7 +66,15 @@ GK.sfx = (() => {
       if (kind === 'squeak') tone(1300 + Math.random() * 300, 0, 0.08, 'square', 0.025, 1900);
       if (kind === 'clank') { noise(0, 0.05, 3200, 6, 0.12); tone(900, 0, 0.05, 'square', 0.02); }
     },
-    gutter() { tone(90, 0, 0.35, 'sine', 0.25); tone(70, 0.08, 0.3, 'sine', 0.15); },
+    // n = gutter balls in a row: each one sounds sadder, and by the third it's a sad trombone
+    gutter(n = 1) {
+      const k = Math.min(n, 6), drop = Math.pow(0.88, k - 1);
+      tone(90 * drop, 0, 0.35 + 0.1 * k, 'sine', 0.25); tone(70 * drop, 0.08, 0.3 + 0.1 * k, 'sine', 0.15);
+      if (k >= 2) tone(220 * drop, 0.15, 0.45, 'triangle', 0.05, 160 * drop);
+      if (k >= 3) [392, 370, 349].forEach((f, i) => tone(f * drop, 0.35 + i * 0.32, 0.3, 'sawtooth', 0.045, f * drop * 0.97));
+      if (k >= 3) tone(330 * drop, 1.31, 0.9 + 0.15 * k, 'sawtooth', 0.05, 250 * drop);
+      if (k >= 5) tone(55, 2.2, 0.8, 'sine', 0.2, 30); // and a sigh
+    },
     strike() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, i * 0.07, 0.16)); },
     spare() { [523, 784, 1047].forEach((f, i) => tone(f, i * 0.08, 0.14)); },
     tick(f) { tone(f, 0, 0.05, 'square', 0.035); },
@@ -196,6 +204,28 @@ GK.haptic = (() => {
     } catch (e) {}
   };
   fn.setOn = v => { on = v; };
+  // Patterns: [style, delay ms] pulses. Each family of balls feels different in your hand.
+  const PAT = {
+    launch_normal: [['medium', 0]],
+    launch_heavy: [['heavy', 0], ['medium', 110], ['light', 230]],
+    launch_light: [['light', 0], ['light', 70]],
+    launch_glass: [['light', 0], ['light', 45], ['light', 90], ['light', 135]],
+    launch_squeak: [['light', 0], ['medium', 90], ['light', 180]],
+    launch_clank: [['heavy', 0], ['light', 60], ['heavy', 140]],
+    hit_normal: [['light', 0]],
+    hit_heavy: [['heavy', 0], ['heavy', 90]],
+    hit_light: [['light', 0]],
+    hit_glass: [['light', 0], ['light', 30], ['light', 60]],
+    hit_squeak: [['medium', 0], ['light', 80]],
+    hit_clank: [['heavy', 0], ['medium', 50], ['heavy', 100]]
+  };
+  fn.pattern = name => {
+    const p = PAT[name]; if (!p || !on) return;
+    const H = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Haptics;
+    if (H) { p.forEach(([k, d]) => setTimeout(() => fn(k), d)); return; }
+    try { if (navigator.vibrate) { const seq = []; let t = 0; p.forEach(([k, d]) => { if (seq.length) seq.push(Math.max(0, d - t)); seq.push(ms[k]); t = d + ms[k]; }); navigator.vibrate(seq); } } catch (e) {}
+  };
+  fn.PATTERNS = PAT;
   Object.defineProperty(fn, 'on', { get: () => on });
   return fn;
 })();
